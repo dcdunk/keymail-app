@@ -340,4 +340,15 @@ final class ExtrasTests: XCTestCase {
         let got = freshArrivals(all, knownKeys: ["me@x.com|old"], me: ["me@x.com"], muted: ["me@x.com|quiet"], now: now)
         XCTAssertEqual(Set(got.map(\.id)), ["new", "other-account"])
     }
+
+    func testCacheKeysCapsAgeAndCount() {
+        let now = Date()
+        func msg(_ id: String, days: Double, thread: String = "t", account: String = "a@x.com") -> Message {
+            Message(id: id, threadId: thread, account: account, from: "b@y.com", date: now.addingTimeInterval(-days * 86400))
+        }
+        let all = [msg("new", days: 1), msg("old", days: 200), msg("oldInbox", days: 300, thread: "keep"),
+                   msg("n1", days: 2, account: "c@x.com"), msg("n2", days: 3, account: "c@x.com"), msg("n3", days: 4, account: "c@x.com")]
+        let keep = cacheKeys(all, keepThreads: ["a@x.com|keep"], now: now, maxPerAccount: 2)
+        XCTAssertEqual(keep, ["a@x.com|new", "a@x.com|oldInbox", "c@x.com|n1", "c@x.com|n2"])
+    }
 }

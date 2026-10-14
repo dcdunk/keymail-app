@@ -125,11 +125,15 @@ final class AppStore: ObservableObject {
     var knownCache: Set<String>?
     func invalidate() {
         convCache = nil; tabCache = nil; knownCache = nil
+        cacheDirty = true
         // Dock badge follows reads, archives and new mail; many changes in a row cost one update.
         badgeTask?.cancel()
         badgeTask = Task { try? await Task.sleep(for: .milliseconds(300)); if !Task.isCancelled { Notifier.shared.updateBadge() } }
     }
     var badgeTask: Task<Void, Never>?
+    var cacheDirty = false
+    var lastSavedFingerprint: Int?
+    var cacheWrite: Task<Void, Never>?
 
     /// Everyone you've written to. Their mail skips the brand-impersonation checks.
     var knownContacts: Set<String> {
@@ -256,9 +260,35 @@ final class AppStore: ObservableObject {
         Task { await tick() }
     }
 
+    /// Writes the encrypted cache, but only when mail actually changed since the last write (it used to rewrite
+    /// the whole file on every 30-second check). Old mail outside the cache limits is dropped first.
     func saveCache() {
+        guard cacheDirty else { return }
+        pruneCache()
+        cacheDirty = false
+        // Syncs often reassign mail without changing it; skip the write when the content is identical.
+        var h = Hasher(); h.combine(messages); h.combine(labelNames)
+        let fingerprint = h.finalize()
+        guard fingerprint != lastSavedFingerprint else { return }
+        lastSavedFingerprint = fingerprint
         let snapshot = Cache(messages: Array(messages.values), labelNames: labelNames)
-        Task.detached(priority: .utility) { Disk.save(snapshot, "cache2.json") }
+        let previous = cacheWrite
+        // One write at a time, in order, so an older snapshot can never land on top of a newer one.
+        cacheWrite = Task.detached(priority: .utility) { await previous?.value; Disk.save(snapshot, "cache2.json") }
+    }
+
+    /// Keeps inbox, snoozed and follow-up threads whole, plus each account's newest 5,000 messages from 90 days.
+    func pruneCache() {
+        var threads = Set(messages.values.filter { $0.labelIds.contains("INBOX") || $0.labelIds.contains("DRAFT") }.map { $0.account + "|" + $0.threadId })
+        threads.formUnion(state.snoozes.map { $0.account + "|" + $0.threadId })
+        threads.formUnion(state.followUps.map { $0.account + "|" + $0.threadId })
+        threads.formUnion(recentlyOpened) // never pull an email out from under you while you're reading it
+        if let s = selectedID { threads.insert(s) }
+        let keep = cacheKeys(Array(messages.values), keepThreads: threads)
+        if keep.count < messages.count {
+            log("cache: dropped \(messages.count - keep.count) old messages")
+            messages = messages.filter { keep.contains($0.key) }
+        }
     }
     func gmail(_ account: String) -> Gmail { Gmail(account: account, auth: auth) }
     func isICloud(_ a: String) -> Bool { state.icloud.contains(a) }

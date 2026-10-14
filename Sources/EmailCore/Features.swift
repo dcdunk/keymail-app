@@ -227,3 +227,21 @@ public func freshArrivals(_ messages: [Message], knownKeys: Set<String>, me: Set
     }
     .sorted { $0.date < $1.date }
 }
+
+// MARK: Cache size
+
+/// Which cached messages to keep, so the cache can't grow forever. Kept: every message in a thread you still
+/// need (`keepThreads`: inbox, snoozed, follow-ups, all as "account|threadId"), plus each account's newest
+/// `maxPerAccount` messages from the last `maxAge`. Everything else is still in Gmail/iCloud and comes back when needed.
+public func cacheKeys(_ messages: [Message], keepThreads: Set<String>, now: Date = Date(),
+                      maxAge: TimeInterval = 90 * 86400, maxPerAccount: Int = 5000) -> Set<String> {
+    var keep = Set<String>()
+    for (_, msgs) in Dictionary(grouping: messages, by: \.account) {
+        for (i, m) in msgs.sorted(by: { $0.date > $1.date }).enumerated() {
+            if keepThreads.contains(m.account + "|" + m.threadId) || (i < maxPerAccount && now.timeIntervalSince(m.date) < maxAge) {
+                keep.insert(m.key)
+            }
+        }
+    }
+    return keep
+}
