@@ -210,3 +210,20 @@ public func unsubscribeAction(header: String, oneClickPost: Bool) -> Unsubscribe
     if let mail = urls.first(where: { $0.scheme == "mailto" }) { return .open(mail) }
     return .none
 }
+
+// MARK: Notifications
+
+/// Mail that just arrived and deserves a notification: new since the last sync, in the inbox, unread,
+/// not from you, not in a muted thread (muted holds conversation ids, "account|threadId"), and recent (so mail synced after a long time offline doesn't flood you).
+public func freshArrivals(_ messages: [Message], knownKeys: Set<String>, me: Set<String>, muted: Set<String>,
+                          now: Date = Date(), maxAge: TimeInterval = 3600) -> [Message] {
+    messages.filter { m in
+        !knownKeys.contains(m.key) && m.labelIds.contains("INBOX") && m.labelIds.contains("UNREAD")
+            && !muted.contains(m.account + "|" + m.threadId) && now.timeIntervalSince(m.date) < maxAge
+            // Skip only your own copy of what you sent: Gmail marks it SENT, and mail from an inbox's own address is
+            // the same thing. Mail from your other accounts still notifies (Gmail → Work is a real arrival).
+            && !m.labelIds.contains("SENT")
+            && !parseAddresses(m.from).contains { $0.email.lowercased() == m.account.lowercased() }
+    }
+    .sorted { $0.date < $1.date }
+}

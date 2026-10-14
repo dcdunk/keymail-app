@@ -328,4 +328,16 @@ final class ExtrasTests: XCTestCase {
         let head = buildRaw(d).components(separatedBy: "\r\n\r\n")[0]
         XCTAssertFalse(head.replacingOccurrences(of: "\r\n", with: "").contains("\r"))
     }
+
+    func testFreshArrivals() {
+        let now = Date()
+        func msg(_ id: String, from: String = "bob@y.com", labels: [String] = ["INBOX", "UNREAD"], age: TimeInterval = 60, thread: String = "t") -> Message {
+            Message(id: id, threadId: thread, account: "me@x.com", from: from, to: "me@x.com", date: now.addingTimeInterval(-age), labelIds: labels)
+        }
+        let all = [msg("old"), msg("new"), msg("read", labels: ["INBOX"]), msg("mine", from: "Me <me@x.com>"),
+                   msg("sent", from: "work@y.com", labels: ["INBOX", "UNREAD", "SENT"]), msg("other-account", from: "Work <work@y.com>"),
+                   msg("stale", age: 7200), msg("muted", thread: "quiet"), msg("archived", labels: ["UNREAD"])]
+        let got = freshArrivals(all, knownKeys: ["me@x.com|old"], me: ["me@x.com"], muted: ["me@x.com|quiet"], now: now)
+        XCTAssertEqual(Set(got.map(\.id)), ["new", "other-account"])
+    }
 }

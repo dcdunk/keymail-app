@@ -123,7 +123,13 @@ final class AppStore: ObservableObject {
     private var convCache: [Conversation]?
     private var tabCache: [String: [Conversation]]?
     private var knownCache: Set<String>?
-    private func invalidate() { convCache = nil; tabCache = nil; knownCache = nil }
+    private func invalidate() {
+        convCache = nil; tabCache = nil; knownCache = nil
+        // Dock badge follows reads, archives and new mail; many changes in a row cost one update.
+        badgeTask?.cancel()
+        badgeTask = Task { try? await Task.sleep(for: .milliseconds(300)); if !Task.isCancelled { Notifier.shared.updateBadge() } }
+    }
+    private var badgeTask: Task<Void, Never>?
 
     /// Everyone you've written to. Their mail skips the brand-impersonation checks.
     var knownContacts: Set<String> {
@@ -238,6 +244,7 @@ final class AppStore: ObservableObject {
         }
         setAppearance(state.appearance)
         AppStore.current = self
+        Notifier.shared.start(self)
         GoogleNet.purgeOldCache()
         mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown) { [weak self] e in
             MainActor.assumeIsolated { self?.rightClick(e) == true ? nil : e }
@@ -382,6 +389,7 @@ final class AppStore: ObservableObject {
         ticking = true; syncing = true
         defer { ticking = false; syncing = false }
         await processDue()
+        let known = Set(messages.keys)
         for a in state.accounts {
             if let until = cooldown[a], until > Date() { continue }
             do { try await sync(a); quotaHits[a] = 0 }
@@ -397,6 +405,25 @@ final class AppStore: ObservableObject {
         }
         applyInboxRules()
         saveCache()
+        notifyArrivals(known: known)
+        Notifier.shared.updateBadge() // also covers launches where nothing changed in this sync
+    }
+
+    /// Notifications for mail that arrived in this sync (still in the inbox after Mute and Auto Archive ran).
+    private func notifyArrivals(known: Set<String>) {
+        guard !known.isEmpty, Notifier.notifyMode != "off" else { return } // first sync ever: everything is "new"
+        let fresh = freshArrivals(Array(messages.values), knownKeys: known, me: me, muted: Set(state.muted))
+        guard !fresh.isEmpty else { return }
+        let all = allConversations, ctx = context(all)
+        let byId = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let picked = fresh.compactMap { m -> (message: Message, conversationId: String)? in
+            let id = m.account + "|" + m.threadId
+            guard let c = byId[id], c.inInbox else { return nil }
+            if Notifier.notifyMode == "important", !isImportant(c, ctx) { return nil }
+            return (m, id)
+        }
+        if !picked.isEmpty { log("notify: \(picked.count) notification(s) sent") }
+        Notifier.shared.notify(picked)
     }
 
     /// Mute and Auto Archive: quietly archive matching new mail after each sync.

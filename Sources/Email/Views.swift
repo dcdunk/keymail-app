@@ -1562,6 +1562,9 @@ struct GeneralSettings: View {
     @AppStorage("writingToolsButton") private var writingToolsButton = false
     @AppStorage("threadNewestFirst") private var newestFirst = false
     @AppStorage("emailContentTheme") private var contentTheme = "auto"
+    @AppStorage("notifyMode") private var notifyMode = "important"
+    @AppStorage("badgeMode") private var badgeMode = "important"
+    @ObservedObject private var notifier = Notifier.shared
     var body: some View {
         Form {
             Picker("Email content", selection: $contentTheme) {
@@ -1610,6 +1613,30 @@ struct GeneralSettings: View {
             }
             Text("Lower values let the glass show through emails. Emails that paint their own white backgrounds stay white in those areas.")
                 .font(.caption).foregroundStyle(.secondary)
+            Section("Notifications") {
+                Picker("Notify me about", selection: $notifyMode) {
+                    Text("Important mail").tag("important"); Text("All new mail").tag("all"); Text("Nothing").tag("off")
+                }
+                .onChange(of: notifyMode) { _, v in if v != "off" { notifier.requestPermission() } }
+                Picker("Dock badge counts", selection: $badgeMode) {
+                    Text("Unread important").tag("important"); Text("All unread").tag("all"); Text("Nothing").tag("off")
+                }
+                .onChange(of: badgeMode) { _, v in if v != "off" { notifier.requestPermission() }; notifier.updateBadge() }
+                if (notifier.denied && notifyMode != "off") || (notifier.badgeBlocked && badgeMode != "off") {
+                    HStack {
+                        Text(notifier.denied ? "Notifications are turned off for Lightmail in System Settings."
+                                             : "Turn on \"Badge app icon\" for Lightmail in System Settings → Notifications to see the Dock count.")
+                            .font(.caption).foregroundStyle(.orange)
+                        Button("Open System Settings") {
+                            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!)
+                        }.controlSize(.small)
+                    }
+                }
+                Button("Send a test notification") { notifier.sendTest() }.controlSize(.small)
+                Text("Banners show only while you're in another app. Muted threads never notify. Click a notification to open the email.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            .onAppear { notifier.refreshStatus() }
             Section("Privacy") {
                 Toggle("Load remote images", isOn: $loadRemoteImages)
                 Text("Senders can use remote images to see when, where and on what device you opened an email. Turning this off blocks all outside content in emails; images attached to the email still show.")
