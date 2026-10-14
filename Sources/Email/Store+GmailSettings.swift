@@ -120,7 +120,7 @@ extension AppStore {
 
     func setImportance(_ key: String, important: Bool) {
         state.importance[key] = important
-        banner = "Moved \(key.contains("|") ? "conversation" : key) to \(important ? importantTab : otherTab)."
+        flash("Moved \(key.contains("|") ? "conversation" : key) to \(important ? importantTab : otherTab).")
     }
 
     func open(_ c: Conversation) {
