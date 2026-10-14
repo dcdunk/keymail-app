@@ -64,15 +64,22 @@ public func buildRaw(_ d: Draft, date: Date = Date()) -> String {
         h.append(("Content-Type", "multipart/mixed; boundary=\"\(boundary)\""))
         var parts = [content]
         for f in d.files {
-            let name = encodeHeader(f.name).replacingOccurrences(of: "\"", with: "")
-            parts.append("Content-Type: \(f.mimeType); name=\"\(name)\"\r\nContent-Disposition: attachment; filename=\"\(name)\"\r\n"
+            let name = headerSafe(encodeHeader(f.name)).replacingOccurrences(of: "\"", with: "")
+            let mime = headerSafe(f.mimeType).replacingOccurrences(of: ";", with: "")
+            parts.append("Content-Type: \(mime); name=\"\(name)\"\r\nContent-Disposition: attachment; filename=\"\(name)\"\r\n"
                          + "Content-Transfer-Encoding: base64\r\n\r\n" + f.data.base64EncodedString(options: .lineLength76Characters))
         }
         body = parts.map { "--\(boundary)\r\n" + $0 + "\r\n" }.joined() + "--\(boundary)--"
     }
-    let head = h.map { "\($0.0): \($0.1.replacingOccurrences(of: "\n", with: " "))" }.joined(separator: "\r\n")
+    let head = h.map { "\($0.0): \(headerSafe($0.1))" }.joined(separator: "\r\n")
     // Single part: the content part's own headers become top-level headers.
     return head + "\r\n" + (d.files.isEmpty ? body : "\r\n" + body) + "\r\n"
+}
+
+/// Header values must be one line: CR, LF and other control characters (which can arrive in quoted
+/// subjects and addresses from received mail) are replaced with spaces.
+func headerSafe(_ s: String) -> String {
+    String(String.UnicodeScalarView(s.unicodeScalars.map { $0.value < 0x20 || $0.value == 0x7f ? " " : $0 }))
 }
 
 private func base64Part(_ type: String, _ text: String) -> String {

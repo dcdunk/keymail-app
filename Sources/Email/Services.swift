@@ -11,6 +11,27 @@ enum AppFlavor {
     static let isDemo = Bundle.main.bundleIdentifier?.hasSuffix(".demo") == true
 }
 
+// MARK: Network
+
+/// Google calls carry bearer tokens and full message bodies, so they never touch the shared on-disk URL cache
+/// (~/Library/Caches/<app>/Cache.db), which isn't encrypted. Ephemeral = memory only.
+enum GoogleNet {
+    static let session = URLSession(configuration: .ephemeral)
+
+    /// Older builds used the shared cache: wipe whatever it stored, once.
+    static func purgeOldCache() {
+        guard !UserDefaults.standard.bool(forKey: "purgedSharedURLCacheV1") else { return }
+        URLCache.shared.removeAllCachedResponses()
+        if let id = Bundle.main.bundleIdentifier {
+            let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent(id)
+            for name in ["Cache.db", "Cache.db-wal", "Cache.db-shm", "fsCachedData"] {
+                try? FileManager.default.removeItem(at: dir.appendingPathComponent(name))
+            }
+        }
+        UserDefaults.standard.set(true, forKey: "purgedSharedURLCacheV1")
+    }
+}
+
 // MARK: Disk
 
 enum Disk {
@@ -35,7 +56,14 @@ enum Disk {
             }
             data = d
         } else {
-            data = raw // plain file from before encryption; it's encrypted on the next save
+            // Plain files exist only from before encryption, and are accepted just once: on the launch that
+            // created the key. After that a plain file was planted (it would skip the tamper check), so it's set aside.
+            _ = CacheKey.key // make sure the Keychain check has run
+            guard CacheKey.createdThisLaunch else {
+                try? FileManager.default.moveItem(at: url, to: url.appendingPathExtension("unencrypted-\(Int(Date().timeIntervalSince1970))"))
+                return nil
+            }
+            data = raw
         }
         let dec = JSONDecoder(); dec.dateDecodingStrategy = .secondsSince1970
         return try? dec.decode(T.self, from: data)
@@ -60,6 +88,8 @@ enum Disk {
 /// The 256-bit key for Email's files: created once, kept in the Keychain, read once per launch.
 /// Nil only if the Keychain refuses access; a new key is made only when none exists at all.
 enum CacheKey {
+    /// True only on the first launch after installing (or upgrading from a build without encryption).
+    private(set) static var createdThisLaunch = false
     static let key: SymmetricKey? = {
         let account = "cache-encryption-key"
         var out: AnyObject?
@@ -70,6 +100,7 @@ enum CacheKey {
             guard let d = out as? Data, let b = Data(base64Encoded: d), b.count == 32 else { return nil }
             return SymmetricKey(data: b)
         case errSecItemNotFound:
+            createdThisLaunch = true
             let k = SymmetricKey(size: .bits256)
             Keychain.set(k.withUnsafeBytes { Data($0) }.base64EncodedString(), for: account)
             return k
@@ -154,7 +185,7 @@ final class GoogleAuth {
     func grantedScopes(_ account: String) async -> Set<String> {
         guard let token = try? await accessToken(for: account),
               let url = URL(string: "https://oauth2.googleapis.com/tokeninfo?access_token=\(token)"),
-              let (data, _) = try? await URLSession.shared.data(from: url),
+              let (data, _) = try? await GoogleNet.session.data(from: url),
               let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [] }
         return Set((j["scope"] as? String ?? "").split(separator: " ").map(String.init))
     }
@@ -184,7 +215,7 @@ final class GoogleAuth {
         }
         var req = URLRequest(url: URL(string: "https://gmail.googleapis.com/gmail/v1/users/me/profile")!)
         req.setValue("Bearer \(access)", forHTTPHeaderField: "Authorization")
-        let (data, _) = try await URLSession.shared.data(for: req)
+        let (data, _) = try await GoogleNet.session.data(for: req)
         guard let email = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["emailAddress"] as? String else {
             throw AppError("Couldn't read the Gmail profile. Is the Gmail API enabled in your Google Cloud project?")
         }
@@ -199,7 +230,7 @@ final class GoogleAuth {
         req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         var c = URLComponents(); c.queryItems = form.map { URLQueryItem(name: $0.key, value: $0.value) }
         req.httpBody = c.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B").data(using: .utf8)
-        let (data, _) = try await URLSession.shared.data(for: req)
+        let (data, _) = try await GoogleNet.session.data(for: req)
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
 
@@ -267,7 +298,7 @@ struct Gmail {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = try JSONSerialization.data(withJSONObject: json)
         }
-        let (data, resp) = try await URLSession.shared.data(for: req)
+        let (data, resp) = try await GoogleNet.session.data(for: req)
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         if status == 401, retry {
             await auth.invalidate(account)
@@ -329,7 +360,7 @@ struct Gmail {
         req.httpMethod = method
         req.setValue("Bearer \(try await auth.accessToken(for: account))", forHTTPHeaderField: "Authorization")
         req.setValue("multipart/related; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-        let (data, resp) = try await URLSession.shared.upload(for: req, from: body)
+        let (data, resp) = try await GoogleNet.session.upload(for: req, from: body)
         let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else { throw HTTPError(status: status, body: String(decoding: data, as: UTF8.self)) }
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]

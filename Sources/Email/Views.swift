@@ -78,7 +78,7 @@ enum Theme {
     static let selection = Color(red: 0.29, green: 0.40, blue: 0.93).opacity(0.13)
     static let muted = Color.secondary.opacity(0.75)
     static let chipPalette: [Color] = [.green, .red, .purple, .brown, .blue, .orange, .teal, .pink]
-    static func chip(_ name: String) -> Color { chipPalette[abs(name.unicodeScalars.reduce(0) { $0 &* 31 &+ Int($1.value) }) % chipPalette.count] }
+    static func chip(_ name: String) -> Color { chipPalette[paletteIndex(name.unicodeScalars.reduce(0) { $0 &* 31 &+ Int($1.value) }, count: chipPalette.count)] }
 }
 
 struct RootView: View {
@@ -854,13 +854,14 @@ struct EmailWebView: NSViewRepresentable {
             }
         }
         func webView(_ w: WKWebView, decidePolicyFor a: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            guard let url = a.request.url, a.navigationType != .other || a.targetFrame == nil,
-                  url.scheme != "about", url.scheme != "data" else { decisionHandler(.allow); return }
+            // Only our own initial page load renders inside the view; every click goes through openChecked.
+            guard let url = a.request.url, a.navigationType != .other || a.targetFrame == nil else { decisionHandler(.allow); return }
             decisionHandler(.cancel)
             openChecked(url)
         }
 
-        /// Flagged links get one confirmation showing where they really go; everything else opens directly.
+        /// Web links open directly unless flagged; flagged links, and anything that isn't http(s) or mailto,
+        /// get one confirmation showing where they really go (linkWarning is an allowlist).
         func openChecked(_ url: URL) {
             let reason = suspicious[url.absoluteString] ?? suspicious.first { URL(string: $0.key) == url }?.value
                 ?? linkWarning(href: url.absoluteString, shown: "")

@@ -4,9 +4,12 @@ import Foundation
 public func parseMessage(_ j: [String: Any], account: String) -> Message? {
     guard let id = j["id"] as? String, let threadId = j["threadId"] as? String else { return nil }
     let payload = j["payload"] as? [String: Any] ?? [:]
-    var headers: [String: String] = [:]
+    var headers: [String: String] = [:], authResults: [String] = []
     for h in payload["headers"] as? [[String: Any]] ?? [] {
-        if let n = h["name"] as? String, let v = h["value"] as? String { headers[n.lowercased()] = v }
+        guard let n = h["name"] as? String, let v = h["value"] as? String else { continue }
+        let key = n.lowercased()
+        if key == "authentication-results" { authResults.append(v) }
+        if headers[key] == nil { headers[key] = v } // first wins: later duplicates are the sender's, not the server's
     }
     var html: String?, text: String?
     var files: [AttachmentRef] = []
@@ -54,7 +57,7 @@ public func parseMessage(_ j: [String: Any], account: String) -> Message? {
                    listUnsubscribe: headers["list-unsubscribe"] ?? "",
                    listUnsubscribePost: headers["list-unsubscribe-post"] != nil, html: html, text: text, attachments: files)
     msg.replyTo = headers["reply-to"]
-    msg.authFailed = authenticationFailed(headers["authentication-results"])
+    msg.authFailed = authenticationFailed(providerAuthResults(authResults, server: "mx.google.com"))
     return msg
 }
 

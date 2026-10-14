@@ -43,12 +43,34 @@ public struct Message: Codable, Identifiable, Hashable {
 }
 
 /// Strips tags, scripts and styles; keeps line breaks.
+/// Linear-time on hostile input: no backtracking regex, and the input is capped (an email's text is never this long).
 public func plainFromHTML(_ html: String) -> String {
-        var s = html.replacingOccurrences(of: "(?is)<(style|script|head)[^>]*>.*?</\\1>", with: "", options: .regularExpression)
+        var s = removeBlocks(String(html.prefix(2_000_000)), tags: ["style", "script", "head"])
         s = s.replacingOccurrences(of: "(?i)<br\\s*/?>|</p>|</div>|</tr>", with: "\n", options: .regularExpression)
-        s = s.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        s = s.replacingOccurrences(of: "<[^<>]*>", with: "", options: .regularExpression)
         s = s.replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
         return decodeEntities(s).trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+/// Removes <tag ...>...</tag> blocks with plain substring searches. An unclosed block drops the rest of the text.
+func removeBlocks(_ html: String, tags: [String]) -> String {
+    var s = html
+    for tag in tags {
+        var out = "", rest = s[...]
+        while let open = rest.range(of: "<" + tag, options: .caseInsensitive) {
+            // "<head" must not match "<header": the tag name has to end there.
+            if open.upperBound < rest.endIndex, let c = rest[open.upperBound].unicodeScalars.first,
+               !(c == ">" || c == "/" || CharacterSet.whitespacesAndNewlines.contains(c)) {
+                out += rest[..<open.upperBound]; rest = rest[open.upperBound...]; continue
+            }
+            out += rest[..<open.lowerBound]
+            guard let close = rest[open.upperBound...].range(of: "</" + tag, options: .caseInsensitive) else { rest = rest[rest.endIndex...]; break }
+            let end = rest[close.upperBound...].firstIndex(of: ">").map { rest.index(after: $0) } ?? rest.endIndex
+            rest = rest[end...]
+        }
+        s = out + rest
+    }
+    return s
 }
 
 public struct AttachmentRef: Codable, Hashable {
@@ -66,11 +88,23 @@ public func linkify(_ escaped: String) -> String {
 }
 
 /// Swaps `cid:` image references for data URLs. `images` maps content id → data URL.
-public func inlineImages(_ html: String, _ images: [String: String]) -> String {
-    var out = html
-    for (cid, url) in images { out = out.replacingOccurrences(of: "cid:" + cid, with: url) }
+/// Bounded: only image data URLs and plain-token ids are used, and an image is skipped when inlining it
+/// would grow the email past `limit` bytes (a tiny email repeating one reference could otherwise need gigabytes).
+public func inlineImages(_ html: String, _ images: [String: String], limit: Int = 30_000_000) -> String {
+    var out = html, size = html.utf8.count
+    let token = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._@$%+-=")
+    for (cid, url) in images.sorted(by: { $0.key.count > $1.key.count }) { // longest first, so "a" never eats "ab"
+        guard !cid.isEmpty, cid.unicodeScalars.allSatisfy(token.contains), url.hasPrefix("data:image/") else { continue }
+        let uses = out.components(separatedBy: "cid:" + cid).count - 1
+        guard uses > 0, size + uses * url.utf8.count <= limit else { continue }
+        out = out.replacingOccurrences(of: "cid:" + cid, with: url)
+        size += uses * url.utf8.count
+    }
     return out
 }
+
+/// Index into a palette from any hash, including Int.min (abs(Int.min) would crash).
+public func paletteIndex(_ hash: Int, count: Int) -> Int { Int(UInt(bitPattern: hash) % UInt(max(count, 1))) }
 
 public struct Conversation: Identifiable, Hashable {
     public var account: String
@@ -123,12 +157,21 @@ public func parseAddresses(_ header: String) -> [Address] {
     return parts.compactMap { raw in
         let p = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !p.isEmpty else { return nil }
-        if let lt = p.lastIndex(of: "<"), let gt = p.lastIndex(of: ">"), lt < gt {
-            let email = String(p[p.index(after: lt)..<gt]).trimmingCharacters(in: .whitespaces)
-            let name = String(p[..<lt]).trimmingCharacters(in: CharacterSet(charactersIn: " \""))
-            return Address(name: name, email: email)
+        // RFC 5322: the address is the <...> outside quotes and (comments). A "<x@y>" inside a quoted name or a
+        // comment is display text, the same way Gmail and DMARC read it, so it can't stand in for the real sender.
+        var plain = "", angle: String?, inQ = false, depth = 0, cur: String?
+        for ch in p {
+            if ch == "\"" && depth == 0 { inQ.toggle(); plain.append(ch); continue }
+            if !inQ && ch == "(" { depth += 1; continue }
+            if !inQ && ch == ")" && depth > 0 { depth -= 1; continue }
+            if depth > 0 { continue }
+            if !inQ && ch == "<" { cur = ""; continue }
+            if !inQ && ch == ">", let c = cur { angle = c; cur = nil; continue }
+            if cur != nil { cur!.append(ch) } else { plain.append(ch) }
         }
-        return Address(name: "", email: p)
+        let name = plain.trimmingCharacters(in: CharacterSet(charactersIn: " \""))
+        if let a = angle { return Address(name: name, email: a.trimmingCharacters(in: .whitespaces)) }
+        return Address(name: "", email: name)
     }
 }
 

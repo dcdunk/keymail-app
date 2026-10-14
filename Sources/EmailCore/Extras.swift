@@ -301,13 +301,20 @@ public func encryptFile(_ plain: Data, key: SymmetricKey) throws -> Data {
     return encryptedFileMagic + sealed
 }
 
-/// Decrypts Email's files; plain JSON from before encryption passes through unchanged so it can be migrated.
+/// Decrypts Lightmail's files. Anything without the encryption header is rejected, so a planted plain file
+/// can't slip past the tamper check. (Old plain files are migrated once, in Disk.load.)
 public func decryptFile(_ data: Data, key: SymmetricKey) throws -> Data {
-    guard data.starts(with: encryptedFileMagic) else { return data }
+    guard data.starts(with: encryptedFileMagic) else { throw CocoaError(.fileReadCorruptFile) }
     return try AES.GCM.open(AES.GCM.SealedBox(combined: data.dropFirst(encryptedFileMagic.count)), using: key)
 }
 
 // MARK: Phishing checks
+
+/// The Authentication-Results header the provider's own receiving server added, or nil.
+/// Senders can add their own fake "dmarc=pass" headers lower down, so only the server's own one counts.
+public func providerAuthResults(_ headers: [String], server: String) -> String? {
+    headers.first { $0.trimmingCharacters(in: .whitespaces).lowercased().hasPrefix(server) }
+}
 
 /// True when the receiving server recorded a failed DMARC, or a failed SPF and DKIM together.
 public func authenticationFailed(_ header: String?) -> Bool? {
@@ -379,8 +386,13 @@ public struct SuspiciousLink: Equatable { public var href: String; public var re
 /// Why a single link looks wrong, or nil. `shown` is the visible link text.
 public func linkWarning(href: String, shown: String) -> String? {
     let lower = href.lowercased().trimmingCharacters(in: .whitespaces)
-    if lower.hasPrefix("javascript:") || lower.hasPrefix("data:text") { return "This link runs code instead of opening a page." }
-    guard let url = URL(string: href), let host = url.host?.lowercased(), url.scheme?.hasPrefix("http") == true else { return nil }
+    if lower.hasPrefix("javascript:") || lower.hasPrefix("data:") { return "This link runs code instead of opening a page." }
+    guard let url = URL(string: href), let scheme = url.scheme?.lowercased() else { return "This link isn't a normal web address." }
+    // Allowlist: only web pages and new emails open directly. Anything else (files, network shares,
+    // remote login, other apps' links) can act on this Mac, so it always asks first.
+    if scheme == "mailto" { return nil }
+    guard scheme == "http" || scheme == "https" else { return "This link opens something on your Mac (\(scheme):), not a web page." }
+    guard let host = url.host?.lowercased() else { return "This link has no website in it." }
     if host.range(of: #"^\d{1,3}(\.\d{1,3}){3}$"#, options: .regularExpression) != nil { return "This link goes to a bare IP address (\(host)), not a named website." }
     if host.contains("xn--") { return "This link uses a disguised international domain (\(host))." }
     if let real = lookalikeBrand(host) { return "\(registrableDomain(host)) imitates \(real)." }
@@ -395,15 +407,26 @@ public func linkWarning(href: String, shown: String) -> String? {
     return nil
 }
 
-/// All suspicious links in an HTML body.
+/// All suspicious links in an HTML body. One linear pass over the tags (no backtracking on hostile input),
+/// capped at the first 2 MB and 2,000 links.
 public func suspiciousLinks(_ html: String) -> [SuspiciousLink] {
-    guard let re = try? NSRegularExpression(pattern: #"<a\s[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)</a>"#, options: .caseInsensitive) else { return [] }
-    let ns = html as NSString
-    var out: [SuspiciousLink] = []
-    for m in re.matches(in: html, range: NSRange(location: 0, length: ns.length)) {
-        let href = decodeEntities(ns.substring(with: m.range(at: 1)))
-        let shown = plainFromHTML(ns.substring(with: m.range(at: 2)))
-        if let why = linkWarning(href: href, shown: shown), !out.contains(where: { $0.href == href }) { out.append(SuspiciousLink(href: href, reason: why)) }
+    let text = String(html.prefix(2_000_000))
+    guard let tags = try? NSRegularExpression(pattern: #"<a\s[^<>]*>|</a\s*>"#, options: .caseInsensitive),
+          let hrefRe = try? NSRegularExpression(pattern: #"href\s*=\s*["']([^"']+)["']"#, options: .caseInsensitive) else { return [] }
+    let ns = text as NSString
+    var out: [SuspiciousLink] = [], open: (href: String, end: Int)?, seen = 0
+    for m in tags.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+        let tag = ns.substring(with: m.range)
+        if tag.hasPrefix("</") {
+            guard let o = open else { continue }
+            open = nil
+            let shown = plainFromHTML(ns.substring(with: NSRange(location: o.end, length: m.range.location - o.end)))
+            if let why = linkWarning(href: o.href, shown: shown), !out.contains(where: { $0.href == o.href }) { out.append(SuspiciousLink(href: o.href, reason: why)) }
+        } else if let h = hrefRe.firstMatch(in: tag, range: NSRange(location: 0, length: (tag as NSString).length)) {
+            seen += 1
+            if seen > 2000 { break }
+            open = (decodeEntities((tag as NSString).substring(with: h.range(at: 1))), m.range.location + m.range.length)
+        }
     }
     return out
 }

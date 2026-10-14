@@ -90,15 +90,17 @@ func decodeBody(_ body: String, encoding: String?) -> Data {
 public func parseRaw(_ raw: Data) -> ParsedMail {
     var mail = ParsedMail()
     var counter = 0
-    func walk(_ s: String, top: Bool) {
+    // Real mail nests a handful of levels; hostile mail can nest thousands to crash the parser.
+    func walk(_ s: String, top: Bool, depth: Int = 0) {
+        guard depth < 24, counter < 500 else { return }
         let (h, body) = splitHeaders(s)
-        if top { mail.headers = h.mapValues(decodeEncodedWords) }
+        if top { mail.headers = h.mapValues { decodeEncodedWords($0).replacingOccurrences(of: "\r", with: " ").replacingOccurrences(of: "\n", with: " ") } }
         let ctype = h["content-type"] ?? "text/plain"
         let mime = ctype.components(separatedBy: ";")[0].trimmingCharacters(in: .whitespaces).lowercased()
         if mime.hasPrefix("multipart/"), let b = headerParam(ctype, "boundary") {
             let sections = body.components(separatedBy: "--" + b)
             for sec in sections.dropFirst() where !sec.hasPrefix("--") {
-                walk(sec.hasPrefix("\r\n") ? String(sec.dropFirst(2)) : sec.hasPrefix("\n") ? String(sec.dropFirst()) : sec, top: false)
+                walk(sec.hasPrefix("\r\n") ? String(sec.dropFirst(2)) : sec.hasPrefix("\n") ? String(sec.dropFirst()) : sec, top: false, depth: depth + 1)
             }
             return
         }
@@ -176,8 +178,11 @@ public func messageFromRaw(_ raw: Data, uid: Int, flags: [String], account: Stri
 
 // MARK: IMAP response helpers
 
+/// Quotes a value for an IMAP command. Line breaks and NUL are removed: inside a command they would end it
+/// and let the rest of the value run as a new command (values like Message-ID come from received mail).
 public func imapQuote(_ s: String) -> String {
-    "\"" + s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
+    let clean = s.unicodeScalars.filter { $0 != "\r" && $0 != "\n" && $0 != "\0" }
+    return "\"" + String(String.UnicodeScalarView(clean)).replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
 }
 
 /// `* SEARCH 4 9 12` → [4, 9, 12]

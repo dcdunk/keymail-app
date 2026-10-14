@@ -201,7 +201,7 @@ final class ExtrasTests: XCTestCase {
         XCTAssertTrue(enc.starts(with: encryptedFileMagic))
         XCTAssertNil(String(data: enc, encoding: .utf8)?.range(of: "Contract")) // not readable on disk
         XCTAssertEqual(try decryptFile(enc, key: key), plain)
-        XCTAssertEqual(try decryptFile(plain, key: key), plain) // old unencrypted files still load
+        XCTAssertThrowsError(try decryptFile(plain, key: key)) // F12: unencrypted data is rejected (no tamper-check bypass)
         XCTAssertThrowsError(try decryptFile(enc, key: SymmetricKey(size: .bits256))) // wrong key
         var tampered = enc; tampered[tampered.count - 1] ^= 0xFF
         XCTAssertThrowsError(try decryptFile(tampered, key: key)) // edited on disk
@@ -258,5 +258,74 @@ final class ExtrasTests: XCTestCase {
         XCTAssertEqual(Vacation(json: ["enableAutoReply": false]).enabled, false)
         XCTAssertNotNil(gmailSignatureProblem("<img src=\"data:image/png;base64,AA\">"))
         XCTAssertNil(gmailSignatureProblem("<img src=\"https://x.com/logo.png\">"))
+    }
+
+    // MARK: Security fixes (scan of 2026-10-14). Each test fails if its fix is undone.
+
+    func testLinkAllowlist() { // F1, F13
+        XCTAssertNil(linkWarning(href: "https://example.com/a", shown: "Read more"))
+        XCTAssertNil(linkWarning(href: "mailto:bob@example.com", shown: "Email Bob"))
+        for bad in ["file:///Applications/Calculator.app", "smb://evil.example/share", "ssh://root@evil.example",
+                    "vnc://evil.example", "x-apple-helpviewer://x", "data:text/html,hi", "javascript:alert(1)"] {
+            XCTAssertNotNil(linkWarning(href: bad, shown: "Click"), bad)
+        }
+    }
+
+    func testPaletteIndexNeverCrashes() { // F2
+        for h in [Int.min, Int.max, -1, 0, 12345] { XCTAssertTrue((0..<7).contains(paletteIndex(h, count: 7))) }
+    }
+
+    func testInlineImagesIsBounded() { // F4
+        let img = "data:image/png;base64," + String(repeating: "A", count: 10_000)
+        let bomb = String(repeating: "<img src=\"cid:a\">", count: 10_000)
+        XCTAssertEqual(inlineImages(bomb, ["a": img], limit: 1_000_000), bomb) // would be 100 MB: skipped
+        XCTAssertEqual(inlineImages("<img src=\"cid:a\">", ["a": "data:text/html,<b>x</b>"]), "<img src=\"cid:a\">") // not an image
+        XCTAssertEqual(inlineImages("cid:ab cid:a", ["a": "data:image/png;base64,A", "ab": "data:image/png;base64,B"]),
+                       "data:image/png;base64,B data:image/png;base64,A") // "a" doesn't eat "ab"
+    }
+
+    func testIMAPQuoteStripsLineBreaks() { // F5, F8
+        let q = imapQuote("<id@x>\r\nA1 DELETE INBOX\r\n")
+        XCTAssertFalse(q.contains("\r") || q.contains("\n"))
+        XCTAssertEqual(imapQuote("a\"b\\c"), "\"a\\\"b\\\\c\"")
+    }
+
+    func testDeepMIMENestingDoesNotCrash() { // F6
+        var raw = "Content-Type: text/plain\r\n\r\nhi"
+        for i in 0..<3000 { raw = "Content-Type: multipart/mixed; boundary=\"b\(i)\"\r\n\r\n--b\(i)\r\n" + raw + "\r\n--b\(i)--" }
+        _ = parseRaw(Data(raw.utf8)) // returns instead of overflowing the stack
+    }
+
+    func testOnlyGooglesOwnAuthResultsCount() { // F7, F11
+        func msg(_ auth: [String]) -> Message? {
+            parseMessage(["id": "m", "threadId": "t", "payload": ["mimeType": "text/plain",
+                "headers": auth.map { ["name": "Authentication-Results", "value": $0] } + [["name": "From", "value": "a@b.com"]],
+                "body": ["data": ""]]], account: "me@x.com")
+        }
+        // Google's header (top) says fail; the sender's fake one below says pass.
+        XCTAssertEqual(msg(["mx.google.com; dmarc=fail header.from=bank.com", "evil.example; dmarc=pass"])?.authFailed, true)
+        // Only fake headers: no verdict at all.
+        XCTAssertNil(msg(["evil.example; dmarc=pass"])?.authFailed)
+    }
+
+    func testFastOnHostileHTML() { // F9, F14
+        let start = Date()
+        _ = plainFromHTML(String(repeating: "<style x", count: 50_000) + String(repeating: "<", count: 50_000))
+        _ = suspiciousLinks(String(repeating: "<a href=\"https://x.com\">", count: 20_000) + String(repeating: "<a ", count: 20_000))
+        XCTAssertLessThan(Date().timeIntervalSince(start), 5)
+        XCTAssertEqual(plainFromHTML("<header>Hi</header><style>p{}</style>there"), "Hithere")
+        XCTAssertEqual(suspiciousLinks("<a href=\"https://evil.example\">paypal.com</a>").count, 1) // detection still works
+    }
+
+    func testFromHeaderCantHideRealAddress() { // F10
+        XCTAssertEqual(parseAddresses("attacker@evil.example (<ceo@corp.com>)").first?.email, "attacker@evil.example")
+        XCTAssertEqual(parseAddresses("\"CEO <ceo@corp.com>\" <attacker@evil.example>").first?.email, "attacker@evil.example")
+        XCTAssertEqual(parseAddresses("Sam Patel <sam@x.com>, bob@y.com").map(\.email), ["sam@x.com", "bob@y.com"])
+    }
+
+    func testHeadersStayOneLine() { // F16
+        var d = Draft(from: "me@x.com"); d.to = "bob@y.com"; d.subject = "Re: hi\rBcc: victim@z.com"; d.body = "x"
+        let head = buildRaw(d).components(separatedBy: "\r\n\r\n")[0]
+        XCTAssertFalse(head.replacingOccurrences(of: "\r\n", with: "").contains("\r"))
     }
 }

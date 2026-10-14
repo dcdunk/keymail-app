@@ -130,7 +130,8 @@ final class AppStore: ObservableObject {
         if let k = knownCache { return k }
         let mine = me
         var out = Set<String>()
-        for m in messages.values where parseAddresses(m.from).contains(where: { mine.contains($0.email.lowercased()) }) {
+        // Only mail you actually sent (Gmail's SENT label). A received email can claim to be from you in its From line.
+        for m in messages.values where m.labelIds.contains("SENT") && m.authFailed != true && parseAddresses(m.from).contains(where: { mine.contains($0.email.lowercased()) }) {
             for a in parseAddresses(m.to + "," + m.cc) { out.insert(a.email.lowercased()) }
         }
         knownCache = out
@@ -237,6 +238,7 @@ final class AppStore: ObservableObject {
         }
         setAppearance(state.appearance)
         AppStore.current = self
+        GoogleNet.purgeOldCache()
         mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown) { [weak self] e in
             MainActor.assumeIsolated { self?.rightClick(e) == true ? nil : e }
         }
