@@ -1,0 +1,69 @@
+import AppKit
+import SwiftUI
+import EmailCore
+import CryptoKit
+
+extension AppStore {
+    // MARK: Derived lists
+
+    var allConversations: [Conversation] {
+        if let c = convCache { return c }
+        let a = state.activeAccount
+        let c = conversations(from: a == nil ? Array(messages.values) : messages.values.filter { $0.account == a }, bumped: state.bumped)
+        convCache = c
+        return c
+    }
+
+    /// Like Superhuman: one account's inbox at a time. ⌘1…⌘9 picks an account, ⌘0 shows all.
+    func switchAccount(_ a: String?) {
+        state.activeAccount = a
+        goTab(importantTab)
+    }
+
+    /// Threads a reminder brought back that have no newer message since.
+    func reminded(_ all: [Conversation]) -> Set<String> {
+        Set(all.filter { c in state.bumped[c.id].map { c.latest.date <= $0 } ?? false }.map(\.id))
+    }
+
+    func context(_ all: [Conversation]) -> QueryContext {
+        let freeMail: Set<String> = ["gmail.com", "googlemail.com"]
+        let domains = Set(state.accounts.compactMap { $0.lowercased().split(separator: "@").last.map(String.init) }).subtracting(freeMail)
+        return QueryContext(labelNames: labelNames, teamDomains: domains, reminded: reminded(all), importance: state.importance)
+    }
+
+    /// Inbox conversations grouped by tab, computed once per render.
+    var tabMembers: [String: [Conversation]] {
+        if let t = tabCache { return t }
+        let all = allConversations, ctx = context(all)
+        var out: [String: [Conversation]] = [:]
+        let snoozed = Set(state.snoozes.map(\.conversationId))
+        for c in all where c.inInbox && !snoozed.contains(c.id) {
+            for t in tabs(for: c, splits: state.splits, ctx: ctx) { out[t, default: []].append(c) }
+        }
+        tabCache = out
+        return out
+    }
+
+    var shownTabs: [String] {
+        let members = tabMembers
+        return state.splits.filter { $0.enabled && !($0.hideWhenEmpty && members[$0.name] == nil && $0.name != tabName) }.map(\.name)
+            + [importantTab, otherTab]
+    }
+
+    var visible: [Conversation] {
+        var list: [Conversation]
+        if let r = searchResults { list = allConversations.filter { r.contains($0.id) } }
+        else { list = tabMembers[tabName] ?? [] }
+        return unreadOnly ? list.filter(\.isUnread) : list
+    }
+
+    func count(_ name: String, in members: [String: [Conversation]]) -> String {
+        let n = members[name]?.count ?? 0
+        return n == 0 || n > 999 ? "" : "\(n)"
+    }
+
+    var selected: Conversation? {
+        let v = visible
+        return v.first { $0.id == selectedID } ?? v.first
+    }
+}
