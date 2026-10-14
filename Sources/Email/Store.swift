@@ -343,10 +343,21 @@ final class AppStore: ObservableObject {
         if e is CancellationError || (e as? URLError)?.code == .cancelled { return } // -999: we stopped the request ourselves
         banner = friendlyNetworkError(e) ?? e.localizedDescription
     }
+    /// A confirmation that closes itself after 5 seconds, unless another banner has replaced it.
+    func flash(_ text: String) {
+        banner = text
+        bannerToken += 1
+        let token = bannerToken
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            if bannerToken == token, banner == text { banner = nil }
+        }
+    }
 
 
     // Stored state that the extensions in Store+*.swift use
     var ticking = false
+    var bannerToken = 0
     var cooldown: [String: Date] = [:]
     var quotaHits: [String: Int] = [:]
     var undoStack: [(c: Conversation, kind: UndoKind)] = []
