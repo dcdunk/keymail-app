@@ -1403,6 +1403,9 @@ final class AppStore: ObservableObject {
         }
         list.append(Command(title: unreadOnly ? "Filter: show all" : "Filter: unread only") { self.unreadOnly.toggle() })
         list.append(Command(title: "Split Inbox settings") { self.splitSettingsOpen = true })
+        for (tag, name) in [("auto", "match app"), ("light", "light"), ("dark", "dark")] {
+            list.append(Command(title: "Email content: \(name)") { UserDefaults.standard.set(tag, forKey: "emailContentTheme") })
+        }
         for lib in splitLibrary where !state.splits.contains(where: { $0.name == lib.name }) {
             list.append(Command(title: "Turn on split: \(lib.name)") { self.addSplit(lib) })
         }

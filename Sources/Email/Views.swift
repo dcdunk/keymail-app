@@ -18,6 +18,12 @@ struct EmailApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1240, height: 780)
+        .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Lightmail") { UserDefaults.standard.set("about", forKey: "settingsTab"); store.openSettings() }
+                if Updates.shared.enabled { Button("Check for Updates…") { Updates.shared.check() } }
+            }
+        }
         Settings { SettingsView().environmentObject(store).environmentObject(store.calendar) }
     }
 }
@@ -606,6 +612,9 @@ struct MessageCard: View {
     let collapse: () -> Void
     @State private var showQuoted = false
     @AppStorage("cardOpacity") private var cardOpacity = 1.0
+    @AppStorage("emailContentTheme") private var contentTheme = "auto"   // auto (match app), light, dark
+    @Environment(\.colorScheme) private var scheme
+    var contentDark: Bool { contentTheme == "dark" || (contentTheme == "auto" && scheme == .dark) }
 
     var body: some View {
         let from = parseAddresses(message.from).first
@@ -695,18 +704,21 @@ struct MessageCard: View {
         if let html = message.html {
             // HTML emails are designed for a light page, so they sit on a white "paper" card, like Apple Mail does.
             EmailWebView(html: inlineImages(html, store.inlineData[message.key] ?? [:]), cardOpacity: cardOpacity,
+                         dark: contentDark,
                          suspicious: Dictionary(suspiciousLinks(html).map { ($0.href, $0.reason) }, uniquingKeysWith: { a, _ in a }))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
         } else {
             let parts = splitQuoted(message.text ?? message.snippet)
             VStack(alignment: .leading, spacing: 8) {
-                EmailWebView(html: plainToHTML(parts.body), themed: true)
+                // Match app: plain text sits on the card in app colors. Forced light/dark: it gets the same "paper" as HTML emails.
+                EmailWebView(html: plainToHTML(parts.body), dark: contentDark, themed: contentTheme == "auto")
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
                 if let q = parts.quoted {
                     Button { showQuoted.toggle() } label: {
                         Text("•••").font(.system(size: 12, weight: .bold)).padding(.horizontal, 8).padding(.vertical, 1)
                             .background(Capsule().fill(Color.primary.opacity(0.08)))
                     }.buttonStyle(.plain).handCursor().help(showQuoted ? "Hide quoted text" : "Show quoted text")
-                    if showQuoted { EmailWebView(html: plainToHTML(q), themed: true).opacity(0.7) }
+                    if showQuoted { EmailWebView(html: plainToHTML(q), dark: contentDark, themed: contentTheme == "auto").opacity(0.7) }
                 }
             }
         }
@@ -728,6 +740,7 @@ struct EmailWebView: NSViewRepresentable {
     let html: String
     var padding = "16px 20px"
     var cardOpacity = 1.0   // < 1 lets the window glass show through the email's background
+    var dark = false        // HTML emails: invert colors (keeping photos as-is) to read on dark mode
     var themed = false      // plain-text emails: app font and light/dark colors, transparent background
     var suspicious: [String: String] = [:]   // href → why it looks like phishing; clicking asks first
     @State private var height: CGFloat = 120
@@ -739,6 +752,7 @@ struct EmailWebView: NSViewRepresentable {
         if !UserDefaults.standard.bool(forKey: "loadRemoteImages", default: true), let blocker = RemoteContent.blocker {
             config.userContentController.add(blocker)
         }
+        config.userContentController.addUserScript(WKUserScript(source: Coordinator.darkScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         let v = PassThroughWebView(frame: .zero, configuration: config)
         v.navigationDelegate = context.coordinator
         v.uiDelegate = context.coordinator
@@ -749,7 +763,7 @@ struct EmailWebView: NSViewRepresentable {
     }
     func updateNSView(_ v: PassThroughWebView, context: Context) {
         context.coordinator.suspicious = suspicious
-        let page = themed ? Self.wrapThemed(html) : Self.wrap(html, padding: padding, opacity: cardOpacity)
+        let page = themed ? Self.wrapThemed(html) : Self.wrap(html, padding: padding, opacity: cardOpacity, dark: dark)
         guard context.coordinator.last != page else { return }
         context.coordinator.last = page
         v.loadHTMLString(page, baseURL: nil)
@@ -759,11 +773,15 @@ struct EmailWebView: NSViewRepresentable {
     }
 
     /// Minimal reset only; never override the sender's layout (forcing image heights broke sprites and banners).
-    static func wrap(_ html: String, padding: String = "16px 20px", opacity: Double = 1) -> String {
-        """
-        <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+    static func wrap(_ html: String, padding: String = "16px 20px", opacity: Double = 1, dark: Bool = false) -> String {
+        // Dark: the page starts dark and darkScript recolors the email element by element (images untouched).
+        let darkCSS = dark ? "img.lm-plate { background-color: #fff; border-radius: 3px; }" : ""
+        let bg = dark ? "30,30,32" : "255,255,255"
+        return """
+        <!doctype html><html\(dark ? " class=\"lm-dark\"" : "")><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
         <style>
-        html, body { margin: 0; padding: 0; background: rgba(255,255,255,\(String(format: "%.2f", opacity))); color: #1d1d1f; }
+        html, body { margin: 0; padding: 0; background: rgba(\(bg),\(String(format: "%.2f", opacity))); color: \(dark ? "#e8e8ea" : "#1d1d1f"); }
+        \(darkCSS)
         body { padding: \(padding); font: 15px -apple-system, Helvetica, sans-serif; line-height: 1.45; overflow-wrap: anywhere; }
         img { max-width: 100%; }
         a, a * { cursor: pointer; }
@@ -786,6 +804,40 @@ struct EmailWebView: NSViewRepresentable {
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+        /// Dark mode: logos with see-through backgrounds (black ink) would vanish on the dark page, so images get a
+        /// white backing. Photos cover it completely. Skips tracking pixels and thin spacer images used for layout.
+        /// Runs in the app's own script world; the email's scripts stay disabled. The class only has a style in dark mode.
+        /// Dark mode rules, applied to every element of the email:
+        ///  1. Images are never changed.
+        ///  2. Light backgrounds become dark, keeping their hue.
+        ///  3. Dark text and borders become light, keeping their hue (links stay blue).
+        ///  4. Mid-tone and dark backgrounds (buttons, banners) stay as designed.
+        ///  5. Anything drawn on a background image is left alone.
+        /// Safe to run more than once: already-dark backgrounds and light text are skipped.
+        static let darkScript = """
+        (function(){if(!document.documentElement.classList.contains('lm-dark'))return;
+        function rgb(c){var m=/rgba?\\(([\\d.]+),\\s*([\\d.]+),\\s*([\\d.]+)(?:,\\s*([\\d.]+))?/.exec(c);return m?[+m[1]/255,+m[2]/255,+m[3]/255,m[4]===undefined?1:+m[4]]:null}
+        function lum(c){return .299*c[0]+.587*c[1]+.114*c[2]}
+        function setL(c,L){var r=c[0],g=c[1],b=c[2],mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn,l=(mx+mn)/2,h=0,s=0;
+        if(d){s=l>.5?d/(2-mx-mn):d/(mx+mn);h=mx==r?(g-b)/d+(g<b?6:0):mx==g?(b-r)/d+2:(r-g)/d+4;h/=6}
+        function f(t){t=(t%1+1)%1;var q=L<.5?L*(1+s):L+s-L*s,p=2*L-q;return t<1/6?p+(q-p)*6*t:t<.5?q:t<2/3?p+(q-p)*(2/3-t)*6:p}
+        return 'rgba('+Math.round(f(h+1/3)*255)+','+Math.round(f(h)*255)+','+Math.round(f(h-1/3)*255)+','+c[3]+')'}
+        var art='[style*="background-image"],[style*="background:url"],[style*="background: url"],[background]';
+        document.querySelectorAll('body *').forEach(function(el){
+        if(/^(IMG|PICTURE|VIDEO|SVG|svg)$/.test(el.tagName)||el.closest(art))return;
+        var cs=getComputedStyle(el),bg=rgb(cs.backgroundColor),fg=rgb(cs.color);
+        if(bg&&bg[3]>0&&lum(bg)>.6)el.style.setProperty('background-color',setL(bg,.12+(1-lum(bg))*.5),'important');
+        if(fg&&lum(fg)<.5)el.style.setProperty('color',setL(fg,.86-lum(fg)*.4),'important');
+        ['top','right','bottom','left'].forEach(function(side){var w=parseFloat(cs['border-'+side+'-width']),bc=rgb(cs['border-'+side+'-color']);
+        if(w>0&&bc&&lum(bc)<.35)el.style.setProperty('border-'+side+'-color',setL(bc,.45),'important')})});})();0
+        """
+
+        static let plateScript = """
+        if(document.documentElement.classList.contains('lm-dark'))document.querySelectorAll('img').forEach(function(i){var w=i.clientWidth,h=i.clientHeight;
+        if(!i.complete||!i.naturalWidth||w<=12||h<=12||w/h>=12||h/w>=12)return;
+        for(var p=i.parentElement,n=0;p&&n<6;p=p.parentElement,n++){if(getComputedStyle(p).backgroundImage!=='none')return;}
+        i.classList.add('lm-plate')});0
+        """
         var last = ""
         var suspicious: [String: String] = [:]
         var onHeight: (CGFloat) -> Void = { _ in }
@@ -793,6 +845,8 @@ struct EmailWebView: NSViewRepresentable {
             // Images keep loading after "finish", so measure a few times as they arrive.
             for delay in [0.0, 0.4, 1.2, 3.0] {
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak w] in
+                    if delay == 0 { w?.evaluateJavaScript(Self.darkScript) }
+                    w?.evaluateJavaScript(Self.plateScript)
                     w?.evaluateJavaScript("Math.ceil(document.body.getBoundingClientRect().height)") { r, _ in
                         if let h = r as? CGFloat { self?.onHeight(h) } else if let h = r as? Double { self?.onHeight(CGFloat(h)) }
                     }
@@ -1478,15 +1532,17 @@ struct ICloudSheet: View {
 // MARK: Settings window (⌘,)
 
 struct SettingsView: View {
+    @AppStorage("settingsTab") private var tab = "general"
     var body: some View {
-        TabView {
-            GeneralSettings().tabItem { Label("General", systemImage: "gearshape") }
-            AccountsSettings().tabItem { Label("Accounts", systemImage: "person.crop.circle") }
-            GmailSettings().tabItem { Label("Gmail", systemImage: "envelope.badge") }
-            AIProviderSettings().tabItem { Label("AI Providers", systemImage: "sparkles") }
-            SplitSettingsView(embedded: true).tabItem { Label("Split Inbox", systemImage: "rectangle.split.3x1") }
-            SignatureSettings().tabItem { Label("Signatures", systemImage: "signature") }
-            SnippetSettings().tabItem { Label("Snippets", systemImage: "text.quote") }
+        TabView(selection: $tab) {
+            GeneralSettings().tabItem { Label("General", systemImage: "gearshape") }.tag("general")
+            AccountsSettings().tabItem { Label("Accounts", systemImage: "person.crop.circle") }.tag("accounts")
+            GmailSettings().tabItem { Label("Gmail", systemImage: "envelope.badge") }.tag("gmail")
+            AIProviderSettings().tabItem { Label("AI Providers", systemImage: "sparkles") }.tag("ai")
+            SplitSettingsView(embedded: true).tabItem { Label("Split Inbox", systemImage: "rectangle.split.3x1") }.tag("splits")
+            SignatureSettings().tabItem { Label("Signatures", systemImage: "signature") }.tag("signatures")
+            SnippetSettings().tabItem { Label("Snippets", systemImage: "text.quote") }.tag("snippets")
+            AboutSettings().tabItem { Label("About", systemImage: "info.circle") }.tag("about")
         }
         .frame(width: 700, height: 560)
         .glassButtons()
@@ -1504,8 +1560,12 @@ struct GeneralSettings: View {
     @AppStorage("smartQuotes") private var smartQuotes = false
     @AppStorage("writingToolsButton") private var writingToolsButton = false
     @AppStorage("threadNewestFirst") private var newestFirst = false
+    @AppStorage("emailContentTheme") private var contentTheme = "auto"
     var body: some View {
         Form {
+            Picker("Email content", selection: $contentTheme) {
+                Text("Match app").tag("auto"); Text("Light").tag("light"); Text("Dark").tag("dark")
+            }.pickerStyle(.segmented)
             Picker("Messages in a thread", selection: $newestFirst) {
                 Text("Oldest first").tag(false); Text("Newest first").tag(true)
             }.pickerStyle(.segmented)
@@ -1643,7 +1703,7 @@ struct AccountsSettings: View {
         }
         .padding(24)
         .card(isPresented: $showICloud) { ICloudSheet() }
-        .card(isPresented: $showGoogleSetup, closeButton: true) { SetupView().frame(width: 640, height: 560) }
+        .card(isPresented: $showGoogleSetup, closeButton: true) { SetupView().frame(width: 640, height: 500) }
         .confirmCard(removing.map { "Remove \($0)?" }, message: "This signs Lightmail out of the account and clears its cached mail from this Mac. Nothing is deleted from the server.",
                      confirm: "Remove account", icon: "person.crop.circle.badge.minus", cancel: { removing = nil }) {
             if let r = removing { store.removeAccount(r) }; removing = nil
@@ -3351,5 +3411,72 @@ extension View {
             }
         }
         .animation(.easeOut(duration: 0.16), value: isPresented.wrappedValue)
+    }
+}
+
+// MARK: Settings → About
+
+struct AboutSettings: View {
+    @ObservedObject private var updates = Updates.shared
+    var body: some View {
+        VStack(spacing: 18) {
+            VStack(spacing: 6) {
+                Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 88, height: 88)
+                Text("Lightmail").font(.system(size: 24, weight: .semibold))
+                Text("Version \(Updates.version) (\(Updates.build))").font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+                Text("Fast, keyboard-first email for Gmail and iCloud.").font(.callout).foregroundStyle(.secondary)
+            }
+            .padding(.top, 8)
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Updates").font(.headline)
+                        Text(updateStatus).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Check for Updates") { updates.check() }.disabled(!updates.enabled || !updates.canCheck)
+                }
+                if updates.enabled {
+                    Toggle("Check for updates automatically", isOn: Binding(get: { updates.automatic }, set: { updates.automatic = $0 }))
+                }
+            }
+            .padding(16).frame(maxWidth: 460)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.04)))
+
+            VStack(alignment: .leading, spacing: 8) {
+                info("Privacy", "Mail goes straight between this Mac and Google or Apple. Lightmail has no servers.")
+                info("AI", "Runs through the AI app you choose in AI Providers, signed in on this Mac.")
+                info("Requires", "macOS 14 or later")
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text("Your data").foregroundStyle(.secondary).frame(width: 80, alignment: .trailing)
+                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([Disk.dir]) }.buttonStyle(.link).handCursor()
+                }
+            }
+            .font(.callout).frame(maxWidth: 460, alignment: .leading)
+
+            HStack(spacing: 16) {
+                Link("GitHub", destination: URL(string: "https://github.com/dcdunk/lightmail-app")!)
+                Link("Release notes", destination: URL(string: "https://github.com/dcdunk/lightmail-app/releases")!)
+                Link("Report a problem", destination: URL(string: "https://github.com/dcdunk/lightmail-app/issues/new")!)
+            }
+            .font(.callout).handCursor()
+            Spacer()
+            Text("© 2026 Danny Chait. Updates by Sparkle (MIT license).").font(.caption2).foregroundStyle(.tertiary)
+        }
+        .padding(24).frame(maxWidth: .infinity)
+    }
+
+    var updateStatus: String {
+        guard updates.enabled else { return "This is a development build. Release builds update themselves." }
+        guard let d = updates.lastChecked else { return "Not checked yet" }
+        return "Last checked \(d.formatted(.relative(presentation: .named)))"
+    }
+
+    func info(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(label).foregroundStyle(.secondary).frame(width: 80, alignment: .trailing)
+            Text(value).fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
