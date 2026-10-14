@@ -4,6 +4,22 @@ import EmailCore
 import CryptoKit
 
 extension AppStore {
+    /// When a panel covering the inbox goes away, macOS doesn't tell the rows underneath where the mouse is until
+    /// something like a click, so hover highlights stay dead. Rebuild the window's mouse tracking and replay a
+    /// mouse move at the current position.
+    func refreshHover(after delay: Double) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            guard let w = NSApp.keyWindow ?? NSApp.mainWindow, let root = w.contentView else { return }
+            func walk(_ v: NSView) { v.updateTrackingAreas(); v.subviews.forEach(walk) }
+            walk(root)
+            let p = w.mouseLocationOutsideOfEventStream
+            guard root.bounds.contains(root.convert(p, from: nil)),
+                  let e = NSEvent.mouseEvent(with: .mouseMoved, location: p, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                             windowNumber: w.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0) else { return }
+            w.sendEvent(e)
+        }
+    }
+
     // MARK: Derived lists
 
     var allConversations: [Conversation] {

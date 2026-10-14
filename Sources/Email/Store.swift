@@ -151,7 +151,10 @@ final class AppStore: ObservableObject {
     @Published var tabName = importantTab
     @Published var folder: String?          // "Starred", "Search: …" etc. replaces the split tabs
     @Published var unreadOnly = false
-    @Published var sidebarOpen = false { didSet { if sidebarOpen && !oldValue { panelIndex = currentPanelIndex } } }
+    @Published var sidebarOpen = false { didSet {
+        if sidebarOpen && !oldValue { panelIndex = currentPanelIndex }
+        if !sidebarOpen && oldValue { refreshHover(after: 0.4) } // after the slide-out animation
+    } }
     @Published var panelIndex = 0   // keyboard highlight in the folder panel
 
     static let panelFolders = ["Inbox", "Starred", "Drafts", "Sent", "Done", "Auto Archived", "Scheduled",
@@ -184,7 +187,7 @@ final class AppStore: ObservableObject {
     @Published var inlineData: [String: [String: String]] = [:]   // message key → content id → data URL
     @Published var instantReplies: [String: [String]] = [:]        // conversation id → options
     @Published var previewURL: URL?
-    @Published var popup: Popup?
+    @Published var popup: Popup? { didSet { if popup == nil && oldValue != nil { refreshHover(after: 0.15) } } }
     @Published var popupIndex: Int?
     @Published var linkPrompt: LinkPrompt?
     static weak var current: AppStore?        // for AppKit code (web view delegates) that has no environment
@@ -198,13 +201,13 @@ final class AppStore: ObservableObject {
     var pendingG: Date?
     @Published var selectedID: String?
     @Published var threadOpen = false
-    @Published var paletteOpen = false
+    @Published var paletteOpen = false { didSet { if !paletteOpen && oldValue { refreshHover(after: 0.1) } } }
     @Published var paletteText = ""
     @Published var paletteIndex = 0
     @Published var searchOpen = false
     @Published var searchText = ""
     @Published var searchResults: Set<String>?   // conversation ids
-    @Published var composing: ComposeModel?
+    @Published var composing: ComposeModel? { didSet { if composing == nil && oldValue != nil { refreshHover(after: 0.25) } } }
     @Published var editingSnippet: Snippet?
     @Published var banner: String?
     @Published var summary: String?

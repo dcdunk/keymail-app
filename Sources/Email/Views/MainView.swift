@@ -36,12 +36,17 @@ struct MainView: View {
             if store.contextOpen, layout.width >= 1100, let c = store.selected { ContextPanel(conversation: c) }
         }
         .overlay(alignment: .leading) {
-            if store.sidebarOpen {
-                ZStack(alignment: .leading) {
-                    // Click anywhere outside the panel to close it.
-                    Color.black.opacity(0.12).ignoresSafeArea().onTapGesture { store.sidebarOpen = false }
-                    FolderPanel().transition(.move(edge: .leading).combined(with: .opacity))
-                }
+            // Always in place, driven by live state: a closing overlay that was removed could keep catching the
+            // mouse while it animated away, leaving the inbox with no hover until you clicked.
+            let open = store.sidebarOpen
+            ZStack(alignment: .leading) {
+                // Click anywhere outside the panel to close it.
+                Color.black.opacity(open ? 0.12 : 0).ignoresSafeArea()
+                    .onTapGesture { store.sidebarOpen = false }
+                    .allowsHitTesting(open)
+                FolderPanel()
+                    .offset(x: open ? 0 : -320).opacity(open ? 1 : 0)
+                    .allowsHitTesting(open)
             }
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: store.sidebarOpen)

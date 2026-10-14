@@ -11,6 +11,7 @@ import QuickLook
 /// Slide-out folder panel, modeled on Superhuman's: account at top, folders, then labels.
 struct FolderPanel: View {
     @EnvironmentObject var store: AppStore
+    @State private var hovered: String?   // mouse highlight; separate from the ↑/↓ highlight so hovering never scrolls
     var body: some View {
         let account = store.state.activeAccount
         let inboxCount = store.allConversations.filter(\.inInbox).count
@@ -77,7 +78,9 @@ struct FolderPanel: View {
             .padding(.leading, indent ? 30 : 18).padding(.trailing, 18).padding(.vertical, 8)
             .background(alignment: .leading) {
                 // Keyboard highlight (↑/↓): a soft fill, separate from the current-folder bar.
-                if highlighted && !on { RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.08)).padding(.horizontal, 8) }
+                if (highlighted || hovered == title) && !on {
+                    RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(highlighted ? 0.08 : 0.05)).padding(.horizontal, 8)
+                }
                 if on {
                     ZStack(alignment: .leading) {
                         Rectangle().fill(Theme.selection)
@@ -86,7 +89,12 @@ struct FolderPanel: View {
                 }
             }
             .contentShape(Rectangle())
-        }.buttonStyle(.plain)
+            .animation(.easeOut(duration: 0.12), value: hovered)
+        }
+        .buttonStyle(.plain).handCursor()
+        .onHover { inside in
+            if inside { hovered = title } else if hovered == title { hovered = nil }
+        }
     }
 }
 

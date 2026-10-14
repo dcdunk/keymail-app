@@ -56,7 +56,13 @@ struct ComposeView: View {
                 .font(.system(size: 15)).lineSpacing(3).scrollContentBackground(.hidden)
                 .focused($bodyFocused).padding(.horizontal, 19).padding(.vertical, 6)
                 .frame(minHeight: 140)
-                .onAppear { bodyFocused = true; showCc = !model.draft.cc.isEmpty; showBcc = !model.draft.bcc.isEmpty }
+                .onAppear {
+                    showCc = !model.draft.cc.isEmpty; showBcc = !model.draft.bcc.isEmpty
+                    // New email: start in To. Reply or forward with recipients filled in: start in the message.
+                    // Next run loop, so the card's fields exist before focus moves (it opens as an overlay now).
+                    let empty = model.draft.to.trimmingCharacters(in: .whitespaces).isEmpty
+                    DispatchQueue.main.async { if empty { focus = .to } else { bodyFocused = true } }
+                }
 
             VStack(alignment: .leading, spacing: 10) {
                 ComposeSignature(model: model)

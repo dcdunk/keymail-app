@@ -101,6 +101,7 @@ struct PopupLayer: View {
                         .offset(x: x, y: y)
                 }
             }
+            .allowsHitTesting(store.popup != nil)
             .transition(.opacity)
         }
     }
@@ -169,6 +170,7 @@ struct ModalLayer: View {
                 if store.modalOpen {
                     Color.black.opacity(0.28).ignoresSafeArea()
                         .onTapGesture { if store.summary != nil { store.summary = nil } else if store.linkPrompt != nil { store.linkPrompt = nil } }
+                        .allowsHitTesting(store.modalOpen)
                         .transition(.opacity)
                 }
                 if let m = store.composing {
