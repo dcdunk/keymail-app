@@ -154,3 +154,10 @@ public func inviteReply(_ inv: Invite, from me: String, name: String = "", answe
               "SUMMARY:\(icsEscape(inv.summary))", "END:VEVENT", "END:VCALENDAR"]
     return lines.joined(separator: "\r\n") + "\r\n"
 }
+
+/// noreply@, notifications@ and similar: never pre-selected as event guests.
+public func isAutomatedAddress(_ email: String) -> Bool {
+    let local = email.lowercased().split(separator: "@").first.map(String.init) ?? ""
+    return ["noreply", "no-reply", "donotreply", "do-not-reply", "notifications", "notification", "mailer-daemon", "bounce", "calendar-notification"]
+        .contains { local == $0 || local.hasPrefix($0 + "+") || local.hasPrefix($0 + "-") || local.hasPrefix($0 + ".") }
+}

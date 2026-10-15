@@ -95,3 +95,12 @@ final class InviteTests: XCTestCase {
         XCTAssertTrue(raw.contains("multipart/alternative")); XCTAssertTrue(raw.contains("Content-Type: text/calendar; method=REPLY; charset=UTF-8"))
     }
 }
+
+final class AutomatedAddressTests: XCTestCase {
+    func testAutomatedSendersAreNotGuests() {
+        for a in ["noreply@salesforce.com", "no-reply@x.com", "DoNotReply@email.trinet.com", "notifications@github.com", "calendar-notification@google.com"] {
+            XCTAssertTrue(isAutomatedAddress(a), a)
+        }
+        for a in ["pat@example.com", "powerofusdesk@salesforce.com", "nora@x.com"] { XCTAssertFalse(isAutomatedAddress(a), a) }
+    }
+}

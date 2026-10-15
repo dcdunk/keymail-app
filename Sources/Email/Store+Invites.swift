@@ -129,3 +129,24 @@ extension AppStore {
         } catch { report(error); return false }
     }
 }
+
+extension AppStore {
+    /// Creates an event on this Gmail account's Google Calendar. Guests get Google's invitation when `invite` is on.
+    /// Returns the event's web link.
+    func createGoogleEvent(_ d: EventDraft, account: String, guests: [String], invite: Bool, meet: Bool) async throws -> URL? {
+        let f = ISO8601DateFormatter()
+        let tz = TimeZone.current.identifier
+        var ev: [String: Any] = ["summary": d.title,
+                                 "start": ["dateTime": f.string(from: d.start), "timeZone": tz],
+                                 "end": ["dateTime": f.string(from: d.start.addingTimeInterval(Double(d.minutes) * 60)), "timeZone": tz]]
+        if !d.location.isEmpty { ev["location"] = d.location }
+        if !d.notes.isEmpty { ev["description"] = d.notes }
+        if !guests.isEmpty { ev["attendees"] = guests.map { ["email": $0] } }
+        if meet { ev["conferenceData"] = ["createRequest": ["requestId": UUID().uuidString, "conferenceSolutionKey": ["type": "hangoutsMeet"]]] }
+        do {
+            let j = try await GoogleCalendar(account: account, auth: auth).call("events", method: "POST", query: [
+                .init(name: "conferenceDataVersion", value: "1"), .init(name: "sendUpdates", value: invite && !guests.isEmpty ? "all" : "none")], json: ev)
+            return (j["htmlLink"] as? String).flatMap(URL.init(string:))
+        } catch let e as HTTPError where e.needsMorePermission { throw NeedsCalendarAccess() }
+    }
+}

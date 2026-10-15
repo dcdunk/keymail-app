@@ -48,16 +48,21 @@ extension AppStore {
     func createEventFromEmail() {
         guard let c = selected else { return }
         Task {
-            if !calendar.authorized, !(await calendar.requestAccess()) {
+            // Gmail accounts can add straight to Google Calendar, so the Mac's Calendar access is only needed for iCloud.
+            if !calendar.authorized, isICloud(c.account) || gmailAccounts.isEmpty, !(await calendar.requestAccess()) {
                 banner = "Keymail needs Calendar access: System Settings → Privacy & Security → Calendars."
                 return
             }
+            if !calendar.authorized { _ = await calendar.requestAccess() }
             let mentioned = parseWhen(String(c.latest.plainText.prefix(4000)))
             let nextHour = Calendar.current.nextDate(after: Date(), matching: DateComponents(minute: 0), matchingPolicy: .nextTime) ?? Date()
-            let people = Set(c.messages.flatMap { parseAddresses($0.from + "," + $0.to + "," + $0.cc) }
-                .map(\.email).filter { !me.contains($0.lowercased()) })
+            var seen = Set<String>()
+            let people = c.messages.flatMap { parseAddresses($0.from + "," + $0.to + "," + $0.cc) }
+                .filter { !me.contains($0.email.lowercased()) && seen.insert($0.email.lowercased()).inserted }
             eventDraft = EventDraft(title: c.latest.subject, start: mentioned ?? nextHour, minutes: 30,
-                                    notes: "From email: \(c.latest.subject)\nWith: \(people.sorted().joined(separator: ", "))")
+                                    notes: "From email: \(c.latest.subject)", account: c.account,
+                                    people: people, timeFromEmail: mentioned != nil,
+                                    suggestGuests: c.latest.listUnsubscribe.isEmpty && !parseAddresses(c.latest.from).contains { isAutomatedAddress($0.email) })
         }
     }
 
