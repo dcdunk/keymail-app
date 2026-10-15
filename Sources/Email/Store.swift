@@ -361,6 +361,9 @@ final class AppStore: ObservableObject {
     }
     func gmail(_ account: String) -> Gmail { Gmail(account: account, auth: auth) }
     func isICloud(_ a: String) -> Bool { state.icloud.contains(a) }
+    /// Logo key and display name for an account's provider (iCloud-type accounts may be Yahoo).
+    func brand(_ a: String) -> String { isICloud(a) ? (imapServer(for: a).name == "Yahoo" ? "yahoo" : "icloud") : isMicrosoft(a) ? "microsoft" : "gmail" }
+    func providerName(_ a: String) -> String { ["yahoo": "Yahoo Mail", "icloud": "iCloud Mail", "microsoft": "Outlook"][brand(a)] ?? "Gmail" }
     func isMicrosoft(_ a: String) -> Bool { state.microsoft.contains(a) }
     /// Gmail-only features (labels, server search, Gmail settings, Google Calendar) check this, never "not iCloud".
     func isGmail(_ a: String) -> Bool { !isICloud(a) && !isMicrosoft(a) }

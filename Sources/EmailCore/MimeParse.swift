@@ -219,3 +219,17 @@ public func imapSpecialUse(_ lines: [String]) -> [String: String] {
     }
     return out
 }
+
+/// Which IMAP/SMTP servers an app-password account uses. Yahoo is picked by address; everything else is iCloud.
+public struct IMAPServer: Equatable {
+    public let name: String, imapHost: String, smtpURL: String
+}
+
+// ponytail: Yahoo detected by domain only; custom domains on Yahoo (Business Mail) fall through to iCloud.
+public func imapServer(for email: String) -> IMAPServer {
+    let domain = email.split(separator: "@").last.map { $0.lowercased() } ?? ""
+    if domain.hasPrefix("yahoo.") || ["ymail.com", "rocketmail.com"].contains(domain) {
+        return IMAPServer(name: "Yahoo", imapHost: "imap.mail.yahoo.com", smtpURL: "smtp://smtp.mail.yahoo.com:587")
+    }
+    return IMAPServer(name: "iCloud", imapHost: "imap.mail.me.com", smtpURL: "smtp://smtp.mail.me.com:587")
+}

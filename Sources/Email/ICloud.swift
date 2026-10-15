@@ -12,7 +12,7 @@ final class IMAPConnection {
     private var buffer = Data()
     private var tagN = 0
 
-    init(host: String = "imap.mail.me.com", port: UInt16 = 993) {
+    init(host: String, port: UInt16 = 993) {
         conn = NWConnection(host: .init(host), port: .init(rawValue: port)!, using: .tls)
     }
 
@@ -48,7 +48,7 @@ final class IMAPConnection {
             conn.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) { data, _, complete, err in
                 if let err { c.resume(throwing: err) }
                 else if let data, !data.isEmpty { c.resume(returning: data) }
-                else if complete { c.resume(throwing: AppError("iCloud closed the connection.")) }
+                else if complete { c.resume(throwing: AppError("The mail server closed the connection.")) }
                 else { c.resume(returning: Data()) }
             }
         }
@@ -90,7 +90,7 @@ final class IMAPConnection {
         if let literal {
             try await send(Data("\(tag) \(cmd) {\(literal.count)}\r\n".utf8))
             let cont = try await readResponse()
-            guard cont.line.hasPrefix("+") else { throw AppError("iCloud refused: \(cont.line.prefix(120))") }
+            guard cont.line.hasPrefix("+") else { throw AppError("The mail server refused: \(cont.line.prefix(120))") }
             try await send(literal + Data("\r\n".utf8))
         } else {
             try await send(Data("\(tag) \(cmd)\r\n".utf8))
@@ -100,29 +100,32 @@ final class IMAPConnection {
             let r = try await readResponse()
             if r.line.hasPrefix(tag + " ") {
                 if r.line.hasPrefix(tag + " OK") { return out }
-                throw AppError("iCloud: \(r.line.dropFirst(tag.count + 1).prefix(160))")
+                throw AppError("Mail server: \(r.line.dropFirst(tag.count + 1).prefix(160))")
             }
             out.append(r)
         }
     }
 }
 
-/// iCloud Mail over IMAP (imap.mail.me.com) and SMTP (smtp.mail.me.com) with an app-specific password.
+/// iCloud or Yahoo Mail over IMAP and SMTP with an app-specific password. Servers come from `imapServer(for:)`.
 struct ICloud {
     let account: String
     var login: String   // IMAP username: usually the part before @, sometimes the full address
+    var server: IMAPServer { imapServer(for: account) }
     static func keychainKey(_ a: String) -> String { "icloud:" + a }
 
     /// Tries the username/password forms Apple accepts and returns the first that works.
     /// Throws with iCloud's own reply if none do.
     static func findLogin(email: String, password: String) async throws -> (login: String, password: String) {
-        let local = String(email.split(separator: "@").first ?? "")
+        let server = imapServer(for: email)
+        // Yahoo only takes the full address; Apple usually takes the part before @.
+        let local = server.name == "Yahoo" ? "" : String(email.split(separator: "@").first ?? "")
         let trimmed = password.trimmingCharacters(in: .whitespacesAndNewlines)
         let compact = trimmed.replacingOccurrences(of: "-", with: "").replacingOccurrences(of: " ", with: "")
         var lastReply = ""
         for user in [local, email] where !user.isEmpty {
             for pw in Array(NSOrderedSet(array: [trimmed, compact])) as! [String] {
-                let c = IMAPConnection()
+                let c = IMAPConnection(host: server.imapHost)
                 defer { c.close() }
                 try await c.open() // a network failure here is a real error, not a wrong password
                 do {
@@ -131,7 +134,7 @@ struct ICloud {
                 } catch { lastReply = error.localizedDescription }
             }
         }
-        throw AppError("iCloud rejected the sign-in (\(lastReply)). Check the address, and create a fresh app-specific password at account.apple.com if this one was revoked.")
+        throw AppError("\(server.name) rejected the sign-in (\(lastReply)). Check the address, and create a fresh app password\(server.name == "Yahoo" ? " in Yahoo Account Security" : " at account.apple.com") if this one was revoked.")
     }
 
     private func password() throws -> String {
@@ -140,11 +143,11 @@ struct ICloud {
     }
 
     func session<T>(_ body: (IMAPConnection) async throws -> T) async throws -> T {
-        let c = IMAPConnection()
+        let c = IMAPConnection(host: server.imapHost)
         defer { c.close() }
         try await c.open()
         do { try await c.command("LOGIN \(imapQuote(login)) \(imapQuote(try password()))") }
-        catch { throw AppError("iCloud sign-in failed for \(account): \(error.localizedDescription). Re-add it in Settings → Accounts.") }
+        catch { throw AppError("\(server.name) sign-in failed for \(account): \(error.localizedDescription). Re-add it in Settings → Accounts.") }
         return try await body(c)
     }
 
@@ -230,7 +233,7 @@ struct ICloud {
             try await c.command("EXAMINE INBOX")
             let raw = try await c.command("UID FETCH \(uid) (UID BODY.PEEK[])").compactMap(\.literals.first).first
             guard let raw, let a = parseRaw(raw).attachments.first(where: { $0.ref.id == id }) else {
-                throw AppError("That email is no longer in the iCloud inbox, so its attachment can't be downloaded here.")
+                throw AppError("That email is no longer in the \(server.name) inbox, so its attachment can't be downloaded here.")
             }
             return a.data
         }
@@ -274,17 +277,18 @@ struct ICloud {
                                        attributes: [.posixPermissions: 0o600])
         defer { try? FileManager.default.removeItem(at: cfg) }
         let sender = parseAddresses(draft.from).first?.email ?? account
+        let smtp = server.smtpURL, name = server.name
         try await Task.detached {
             let p = Process(), input = Pipe(), err = Pipe()
             p.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
-            p.arguments = ["--silent", "--show-error", "--url", "smtp://smtp.mail.me.com:587", "--ssl-reqd",
+            p.arguments = ["--silent", "--show-error", "--url", smtp, "--ssl-reqd",
                            "--mail-from", sender] + rcpts.flatMap { ["--mail-rcpt", $0] } + ["--upload-file", "-", "-K", cfg.path]
             p.standardInput = input; p.standardError = err; p.standardOutput = Pipe()
             try p.run()
             input.fileHandleForWriting.write(raw); try? input.fileHandleForWriting.close()
             p.waitUntilExit()
             guard p.terminationStatus == 0 else {
-                throw AppError("iCloud couldn't send: \(String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).prefix(200))")
+                throw AppError("\(name) couldn't send: \(String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).prefix(200))")
             }
         }.value
         try? await session { c in

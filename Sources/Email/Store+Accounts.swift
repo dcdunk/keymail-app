@@ -75,7 +75,7 @@ extension AppStore {
         if AppFlavor.isDemo { return }
         // iCloud has no photo API: use the Mac's own "Me" card in Contacts, which usually carries the Apple Account photo.
         if state.accounts.contains(where: isICloud), let data = await meCardPhoto() {
-            for a in state.accounts where isICloud(a) { SenderLogos.shared.setPhoto(a, data) }
+            for a in state.accounts where brand(a) == "icloud" { SenderLogos.shared.setPhoto(a, data) }
         }
         for a in state.accounts where !isICloud(a) {
             do {

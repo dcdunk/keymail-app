@@ -418,6 +418,7 @@ struct GeneralSettings: View {
 struct AccountsSettings: View {
     @EnvironmentObject var store: AppStore
     @State private var showICloud = false
+    @State private var showYahoo = false
     @State private var showGoogleSetup = false
     @State private var removing: String?
     var body: some View {
@@ -430,18 +431,18 @@ struct AccountsSettings: View {
                 ForEach(Array(store.state.accounts.enumerated()), id: \.element) { i, acct in
                     let cloud = store.isICloud(acct)
                     HStack(spacing: 12) {
-                        BrandLogo(brand: cloud ? "icloud" : store.isMicrosoft(acct) ? "microsoft" : "gmail", size: 22)
+                        BrandLogo(brand: store.brand(acct), size: 22)
                         VStack(alignment: .leading, spacing: 4) {
                             TextField("Name (e.g. Work, Personal)", text: Binding(
                                 get: { store.state.accountNames[acct] ?? "" },
                                 set: { store.state.accountNames[acct] = $0 }))
                                 .textFieldStyle(.plain).font(.scaled(.headline))
-                            Text("\(acct) · \(cloud ? "iCloud Mail" : store.isMicrosoft(acct) ? "Outlook" : "Gmail")").font(.scaled(.caption)).foregroundStyle(.secondary)
+                            Text("\(acct) · \(store.providerName(acct))").font(.scaled(.caption)).foregroundStyle(.secondary)
                             TextField("Send-as aliases, comma-separated", text: Binding(
                                 get: { (store.state.aliases[acct] ?? []).joined(separator: ", ") },
                                 set: { store.setAliases($0, for: acct) }))
                                 .textFieldStyle(.roundedBorder).font(.scaled(.caption))
-                                .help(cloud ? "Aliases from icloud.com → Mail settings → Accounts" : store.isMicrosoft(acct) ? "Must already be set up in Outlook on the web" : "Must already be set up under Gmail → Settings → Accounts → Send mail as")
+                                .help(store.brand(acct) == "yahoo" ? "Must already be set up in Yahoo Mail → Settings → Mailboxes" : cloud ? "Aliases from icloud.com → Mail settings → Accounts" : store.isMicrosoft(acct) ? "Must already be set up in Outlook on the web" : "Must already be set up under Gmail → Settings → Accounts → Send mail as")
                             if !(store.state.aliases[acct] ?? []).isEmpty {
                                 Picker("Send from by default", selection: Binding(
                                     get: { store.sendAddress(acct) },
@@ -464,6 +465,7 @@ struct AccountsSettings: View {
 
                 Button { showICloud = true } label: { Label { Text("Add iCloud account") } icon: { BrandLogo(brand: "icloud", size: 14) } }
                 Button { store.connectMicrosoft() } label: { Label { Text("Add Microsoft account") } icon: { BrandLogo(brand: "microsoft", size: 14) } }
+                Button { showYahoo = true } label: { Label { Text("Add Yahoo account") } icon: { BrandLogo(brand: "yahoo", size: 14) } }
             }
             if let b = store.busy { Text(b).font(.scaled(.callout)).foregroundStyle(.secondary) }
             if !GoogleClient.isBuiltIn { // developer builds only; customers never see Google Cloud
@@ -481,6 +483,7 @@ struct AccountsSettings: View {
         }
         .padding(24)
         .card(isPresented: $showICloud) { ICloudSheet() }
+        .card(isPresented: $showYahoo) { ICloudSheet(yahoo: true) }
         .card(isPresented: $showGoogleSetup, closeButton: true) { SetupView().frame(width: 520, height: 500) }
         .confirmCard(removing.map { "Remove \($0)?" }, message: "This signs Keymail out of the account and clears its cached mail from this Mac. Nothing is deleted from the server.",
                      confirm: "Remove account", icon: "person.crop.circle.badge.minus", cancel: { removing = nil }) {

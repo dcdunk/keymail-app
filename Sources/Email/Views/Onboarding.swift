@@ -13,6 +13,7 @@ struct OnboardingView: View {
     enum Step { case welcome, connect, google, accounts, ai, done }
     @State private var step: Step = .welcome
     @State private var showICloud = false
+    @State private var showYahoo = false
     @State private var installedAI: Set<String> = []   // checked once in the background (it can launch a shell)
 
     var body: some View {
@@ -39,6 +40,7 @@ struct OnboardingView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.spring(response: 0.4, dampingFraction: 0.88), value: step)
         .card(isPresented: $showICloud) { ICloudSheet() }
+        .card(isPresented: $showYahoo) { ICloudSheet(yahoo: true) }
         // Each new account moves you to the accounts step.
         .onChange(of: store.state.accounts.count) { old, new in if new > old { store.banner = nil; step = .accounts } }
         .onAppear { if !store.state.accounts.isEmpty { step = .accounts } }
@@ -95,6 +97,7 @@ struct OnboardingView: View {
                 }
                 providerCard("icloud.fill", .blue, "iCloud Mail", "With an app-specific password") { showICloud = true }
                 providerCard("tray.full.fill", Color(red: 0.0, green: 0.47, blue: 0.84), "Outlook", "Outlook.com, Hotmail or Microsoft 365") { store.connectMicrosoft() }
+                providerCard("envelope.open.fill", Color(red: 0.38, green: 0.0, blue: 0.82), "Yahoo Mail", "With an app password") { showYahoo = true }
             }
             if !store.state.accounts.isEmpty { Button("Back") { step = .accounts }.quiet() }
         }
@@ -129,7 +132,7 @@ struct OnboardingView: View {
             VStack(spacing: 8) {
                 ForEach(store.state.accounts, id: \.self) { a in
                     HStack(spacing: 12) {
-                        BrandLogo(brand: store.isICloud(a) ? "icloud" : store.isMicrosoft(a) ? "microsoft" : "gmail", size: 16)
+                        BrandLogo(brand: store.brand(a), size: 16)
                         Text(a)
                         Spacer()
                         Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)

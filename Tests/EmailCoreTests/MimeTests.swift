@@ -81,4 +81,12 @@ final class MimeTests: XCTestCase {
                        ["\\Archive": "Archive", "\\Trash": "Deleted Messages"])
         XCTAssertEqual(imapQuote("pa\"ss\\"), "\"pa\\\"ss\\\\\"")
     }
+
+    func testIMAPServerByDomain() {
+        XCTAssertEqual(imapServer(for: "me@yahoo.com").imapHost, "imap.mail.yahoo.com")
+        XCTAssertEqual(imapServer(for: "me@Yahoo.co.uk").smtpURL, "smtp://smtp.mail.yahoo.com:587")
+        XCTAssertEqual(imapServer(for: "me@ymail.com").name, "Yahoo")
+        XCTAssertEqual(imapServer(for: "me@icloud.com").imapHost, "imap.mail.me.com")
+        XCTAssertEqual(imapServer(for: "me@notyahoo.com").name, "iCloud")
+    }
 }

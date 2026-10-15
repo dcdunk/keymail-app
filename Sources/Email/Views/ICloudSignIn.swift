@@ -9,6 +9,7 @@ import QuickLook
 // MARK: iCloud sign-in
 
 struct ICloudSheet: View {
+    var yahoo = false
     @EnvironmentObject var store: AppStore
     @Environment(\.closeCard) private var dismiss
     @State private var email = ""
@@ -19,6 +20,21 @@ struct ICloudSheet: View {
     var body: some View {
         VStack(spacing: 0) {
         VStack(alignment: .leading, spacing: 14) {
+            if yahoo {
+                Text("Add Yahoo Mail").font(.scaled(.title2).weight(.semibold))
+                Text("Yahoo needs an **app password**, not your Yahoo password. It's saved only in your Mac's Keychain.")
+                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("1. Go to Yahoo Account Security → Generate app password.")
+                    Text("2. Name it \"Keymail\" and paste the password below.")
+                }.font(.scaled(.callout))
+                Button("Open Yahoo Account Security") { NSWorkspace.shared.open(URL(string: "https://login.yahoo.com/account/security")!) }.quiet()
+                TextField("Yahoo email (you@yahoo.com)", text: $email).textFieldStyle(.roundedBorder)
+                SecureField("App password", text: $password).textFieldStyle(.roundedBorder)
+                if !email.isEmpty, email.contains("@"), imapServer(for: email).name != "Yahoo" {
+                    Text("Use a yahoo.com, ymail.com or rocketmail.com address.").foregroundStyle(.red).font(.scaled(.callout))
+                }
+            } else {
             Text("Add iCloud Mail").font(.scaled(.title2).weight(.semibold))
             Text("iCloud needs an **app-specific password**, not your Apple Account password. It's saved only in your Mac's Keychain.")
                 .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -29,9 +45,12 @@ struct ICloudSheet: View {
             Button("Open account.apple.com") { NSWorkspace.shared.open(URL(string: "https://account.apple.com/account/manage")!) }.quiet()
             TextField("Primary iCloud email (you@icloud.com)", text: $email).textFieldStyle(.roundedBorder)
             SecureField("App-specific password (xxxx-xxxx-xxxx-xxxx)", text: $password).textFieldStyle(.roundedBorder)
+            }
             TextField("Aliases to send as (optional, comma-separated)", text: $aliases).textFieldStyle(.roundedBorder)
+            if !yahoo {
             Text("Sign in with your **primary** iCloud address; aliases can't sign in. Add aliases here to send from them.")
                 .font(.scaled(.callout)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
             if let error { Text(error).foregroundStyle(.red).font(.scaled(.callout)) }
             }
             .padding(28)
@@ -47,7 +66,7 @@ struct ICloudSheet: View {
                     }
                 }
                 .keyboardShortcut(.defaultAction).primaryAction()
-                .disabled(working || !email.contains("@") || password.count < 8)
+                .disabled(working || !email.contains("@") || password.count < 8 || (yahoo && imapServer(for: email).name != "Yahoo"))
             }
             .actionBar()
         }

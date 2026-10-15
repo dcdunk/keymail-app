@@ -4,12 +4,15 @@ import SwiftUI
 /// Official brand marks (Simple Icons, CC0: simpleicons.org), drawn in each brand's color.
 /// Single-path 24×24 SVGs, kept inline so the app needs no resource bundle.
 struct BrandLogo: View {
-    let brand: String   // gmail, icloud, google, microsoft, claude, codex, gemini
+    let brand: String   // gmail, icloud, yahoo, google, microsoft, claude, codex, gemini
     var size: CGFloat = 20
     var body: some View {
         if let (svg, color) = Self.logos[brand], let img = NSImage(data: Data(svg.utf8)) {
             Image(nsImage: { img.isTemplate = true; return img }()).resizable().scaledToFit()
                 .foregroundStyle(color).frame(width: size, height: size).accessibilityHidden(true)
+        } else if brand == "yahoo" {
+            Text("Y!").font(.system(size: size * 0.62, weight: .heavy)).foregroundStyle(Color(red: 0.38, green: 0.0, blue: 0.82))
+                .frame(width: size, height: size).accessibilityHidden(true)
         }
     }
     static let logos: [String: (String, Color)] = [
