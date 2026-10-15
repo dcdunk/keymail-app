@@ -30,7 +30,7 @@ struct TextChecking: NSViewRepresentable {
                     tv.isAutomaticSpellingCorrectionEnabled = a
                     tv.isAutomaticQuoteSubstitutionEnabled = q
                     tv.isAutomaticDashSubstitutionEnabled = q
-                    // Apple Intelligence's floating Writing Tools button. Off by default: Lightmail has its own Write button.
+                    // Apple Intelligence's floating Writing Tools button. Off by default: Keymail has its own Write button.
                     if #available(macOS 15.1, *) { tv.writingToolsBehavior = wt ? .default : .none }
                 }
             }

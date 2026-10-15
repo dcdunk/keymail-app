@@ -200,8 +200,8 @@ struct GeneralSettings: View {
                 .onChange(of: badgeMode) { _, v in if v != "off" { notifier.requestPermission() }; notifier.updateBadge() }
                 if (notifier.denied && notifyMode != "off") || (notifier.badgeBlocked && badgeMode != "off") {
                     HStack {
-                        Text(notifier.denied ? "Notifications are turned off for Lightmail in System Settings."
-                                             : "Turn on \"Badge app icon\" for Lightmail in System Settings → Notifications to see the Dock count.")
+                        Text(notifier.denied ? "Notifications are turned off for Keymail in System Settings."
+                                             : "Turn on \"Badge app icon\" for Keymail in System Settings → Notifications to see the Dock count.")
                             .font(.caption).foregroundStyle(.orange)
                         Button("Open System Settings") {
                             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!)
@@ -310,7 +310,7 @@ struct AccountsSettings: View {
         .padding(24)
         .card(isPresented: $showICloud) { ICloudSheet() }
         .card(isPresented: $showGoogleSetup, closeButton: true) { SetupView().frame(width: 520, height: 500) }
-        .confirmCard(removing.map { "Remove \($0)?" }, message: "This signs Lightmail out of the account and clears its cached mail from this Mac. Nothing is deleted from the server.",
+        .confirmCard(removing.map { "Remove \($0)?" }, message: "This signs Keymail out of the account and clears its cached mail from this Mac. Nothing is deleted from the server.",
                      confirm: "Remove account", icon: "person.crop.circle.badge.minus", cancel: { removing = nil }) {
             if let r = removing { store.removeAccount(r) }; removing = nil
         }

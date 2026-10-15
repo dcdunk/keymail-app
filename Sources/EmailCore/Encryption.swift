@@ -13,7 +13,7 @@ public func encryptFile(_ plain: Data, key: SymmetricKey) throws -> Data {
     return encryptedFileMagic + sealed
 }
 
-/// Decrypts Lightmail's files. Anything without the encryption header is rejected, so a planted plain file
+/// Decrypts Keymail's files. Anything without the encryption header is rejected, so a planted plain file
 /// can't slip past the tamper check. (Old plain files are migrated once, in Disk.load.)
 public func decryptFile(_ data: Data, key: SymmetricKey) throws -> Data {
     guard data.starts(with: encryptedFileMagic) else { throw CocoaError(.fileReadCorruptFile) }

@@ -41,7 +41,7 @@ extension AppStore {
         p.entries = prev; popup = p; popupIndex = nil
     }
 
-    /// Right-click on an email row opens Lightmail's menu at the mouse. Elsewhere (text, links) the normal Mac menu stays.
+    /// Right-click on an email row opens Keymail's menu at the mouse. Elsewhere (text, links) the normal Mac menu stays.
     func rightClick(_ e: NSEvent) -> Bool {
         guard let c = rightClickTarget, !modalOpen, let h = e.window?.contentView?.bounds.height else { return false }
         let p = CGPoint(x: e.locationInWindow.x - mainFrame.minX, y: h - e.locationInWindow.y - mainFrame.minY)

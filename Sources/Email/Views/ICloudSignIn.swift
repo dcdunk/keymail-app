@@ -23,7 +23,7 @@ struct ICloudSheet: View {
                 .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 6) {
                 Text("1. Go to account.apple.com → Sign-In and Security → App-Specific Passwords.")
-                Text("2. Create one named \"Lightmail\" and paste it below.")
+                Text("2. Create one named \"Keymail\" and paste it below.")
             }.font(.callout)
             Button("Open account.apple.com") { NSWorkspace.shared.open(URL(string: "https://account.apple.com/account/manage")!) }
             TextField("Primary iCloud email (you@icloud.com)", text: $email).textFieldStyle(.roundedBorder)

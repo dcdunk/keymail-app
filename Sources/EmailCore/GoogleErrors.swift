@@ -17,11 +17,11 @@ public func friendlyGoogleError(status: Int, body: String) -> String {
     case 401:
         return "Your Google sign-in expired. Re-add the account in Settings → Accounts."
     case 403 where lower.contains("ratelimit") || lower.contains("quota"):
-        return "Gmail is asking Lightmail to slow down. It will retry automatically."
+        return "Gmail is asking Keymail to slow down. It will retry automatically."
     case 403 where lower.contains("accessnotconfigured") || lower.contains("has not been used") || lower.contains("disabled"):
-        return "Gmail isn't available to Lightmail right now. Try again in a few minutes."
+        return "Gmail isn't available to Keymail right now. Try again in a few minutes."
     case 403 where lower.contains("insufficient") || lower.contains("scope"):
-        return "Lightmail doesn't have permission for that. Remove the account and add it again to grant access."
+        return "Keymail doesn't have permission for that. Remove the account and add it again to grant access."
     case 403:
         return "Google blocked that request" + (message.isEmpty ? "." : ": \(message)")
     case 404:
@@ -33,7 +33,7 @@ public func friendlyGoogleError(status: Int, body: String) -> String {
     case 429:
         return "Gmail is asking Email to slow down. It will retry automatically."
     case 500...599:
-        return "Gmail is having a temporary problem. Lightmail will try again shortly."
+        return "Gmail is having a temporary problem. Keymail will try again shortly."
     default:
         return "Gmail returned an unexpected error (\(status))" + (message.isEmpty ? "." : ": \(message)")
     }
@@ -49,10 +49,10 @@ public func isTransientGoogleError(status: Int, body: String) -> Bool {
 public func friendlyNetworkError(_ e: Error) -> String? {
     guard let u = e as? URLError else { return nil }
     switch u.code {
-    case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed: return "You're offline. Lightmail will catch up when you reconnect."
-    case .timedOut: return "The connection timed out. Lightmail will try again."
+    case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed: return "You're offline. Keymail will catch up when you reconnect."
+    case .timedOut: return "The connection timed out. Keymail will try again."
     case .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed: return "Couldn't reach the mail server. Check your connection."
     case .secureConnectionFailed, .serverCertificateUntrusted: return "A secure connection couldn't be made. If you're on public Wi-Fi, try another network."
-    default: return "A network error occurred (\(u.code.rawValue)). Lightmail will try again."
+    default: return "A network error occurred (\(u.code.rawValue)). Keymail will try again."
     }
 }

@@ -15,13 +15,13 @@ struct SetupView: View {
     @State private var clientSecret = ""
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Connect Lightmail to Google").font(.system(size: 26, weight: .semibold))
-            Text("One-time setup, about 5 minutes. Lightmail talks to Gmail directly from your Mac; nothing goes through a server.")
+            Text("Connect Keymail to Google").font(.system(size: 26, weight: .semibold))
+            Text("One-time setup, about 5 minutes. Keymail talks to Gmail directly from your Mac; nothing goes through a server.")
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 10) {
                 step(1, "Open console.cloud.google.com, create a project (any name), and select it.")
                 step(2, "Search the top bar for **Gmail API** → Enable.")
-                step(3, "Search for **Google Auth Platform** → **Get started**. App name: Lightmail. Audience: **External**. Add your email as contact → Create.")
+                step(3, "Search for **Google Auth Platform** → **Get started**. App name: Keymail. Audience: **External**. Add your email as contact → Create.")
                 step(4, "Google Auth Platform → **Audience** → Test users → **Add users** → add every Gmail address you'll use.")
                 step(5, "Google Auth Platform → **Clients** → **Create client** → type **Desktop app** → Create.")
                 step(6, "In the popup, click **Download JSON** and choose it below. Missed it? Paste the Client ID and secret instead.")
@@ -71,7 +71,7 @@ struct SignInView: View {
     @State private var showICloud = false
     var body: some View {
         VStack(spacing: 16) {
-            Text("Lightmail").font(.system(size: 34, weight: .semibold))
+            Text("Keymail").font(.system(size: 34, weight: .semibold))
             Text("Fast, keyboard-first Gmail.").foregroundStyle(.secondary)
             Button { store.addAccount() } label: { Text("Sign in with Google").padding(.horizontal, 12).padding(.vertical, 4) }
                 .prominentGlassButton().controlSize(.large)

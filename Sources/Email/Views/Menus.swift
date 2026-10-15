@@ -62,13 +62,13 @@ extension AppStore {
     }
 }
 
-// MARK: Lightmail menus, cards and confirmations (replace the stock Mac menus, sheets and alerts)
+// MARK: Keymail menus, cards and confirmations (replace the stock Mac menus, sheets and alerts)
 
 struct CloseCard { var run: () -> Void = {}; func callAsFunction() { run() } }
 private struct CloseCardKey: EnvironmentKey { static let defaultValue = CloseCard() }
 extension EnvironmentValues { var closeCard: CloseCard { get { self[CloseCardKey.self] } set { self[CloseCardKey.self] = newValue } } }
 
-/// A button that opens a Lightmail menu below itself. Works anywhere inside the main window.
+/// A button that opens a Keymail menu below itself. Works anywhere inside the main window.
 struct MenuButton<Label: View>: View {
     @EnvironmentObject var store: AppStore
     var width: CGFloat = 290
@@ -248,7 +248,7 @@ struct LinkWarningCard: View {
 }
 
 extension View {
-    /// A Lightmail confirmation card over this view (any window). Shows while `title` is non-nil.
+    /// A Keymail confirmation card over this view (any window). Shows while `title` is non-nil.
     func confirmCard(_ title: String?, message: String, confirm: String, icon: String, cancel: @escaping () -> Void, action: @escaping () -> Void) -> some View {
         overlay {
             if let title {
@@ -276,7 +276,7 @@ extension View {
 }
 
 extension View {
-    /// Shows `content` as a Lightmail card over this view (works in any window, e.g. onboarding or Settings).
+    /// Shows `content` as a Keymail card over this view (works in any window, e.g. onboarding or Settings).
     func card<C: View>(isPresented: Binding<Bool>, closeButton: Bool = false, @ViewBuilder _ content: @escaping () -> C) -> some View {
         overlay {
             if isPresented.wrappedValue {

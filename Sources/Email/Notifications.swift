@@ -28,7 +28,7 @@ final class Notifier: NSObject, ObservableObject, UNUserNotificationCenterDelega
         }
     }
 
-    /// Reads what the user allowed in System Settings → Notifications → Lightmail.
+    /// Reads what the user allowed in System Settings → Notifications → Keymail.
     func refreshStatus() {
         UNUserNotificationCenter.current().getNotificationSettings { s in
             let denied = s.authorizationStatus == .denied, badge = s.badgeSetting != .enabled
@@ -61,10 +61,10 @@ final class Notifier: NSObject, ObservableObject, UNUserNotificationCenterDelega
         }
     }
 
-    /// Settings → "Send a test notification". Shows even while Lightmail is in front.
+    /// Settings → "Send a test notification". Shows even while Keymail is in front.
     func sendTest() {
         let c = UNMutableNotificationContent()
-        c.title = "Lightmail"; c.body = "Notifications are working."; c.sound = .default
+        c.title = "Keymail"; c.body = "Notifications are working."; c.sound = .default
         c.userInfo = ["test": true]
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "test-\(UUID())", content: c, trigger: nil)) { err in
             if let err { Task { @MainActor in self.store?.log("notify: test failed: \(err.localizedDescription)") } }
@@ -86,7 +86,7 @@ final class Notifier: NSObject, ObservableObject, UNUserNotificationCenterDelega
         if NSApp.dockTile.badgeLabel != label { NSApp.dockTile.badgeLabel = label }
     }
 
-    // Banners only when you're not already looking at Lightmail.
+    // Banners only when you're not already looking at Keymail.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                             withCompletionHandler done: @escaping (UNNotificationPresentationOptions) -> Void) {
         let test = notification.request.content.userInfo["test"] != nil

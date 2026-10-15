@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Runs the tests, then builds Lightmail.app next to this script.
+# Runs the tests, then builds Keymail.app next to this script.
 #   ./build.sh          → Email.app
 #   ./build.sh --demo   → "Email Demo.app": separate data and Keychain, starts at onboarding like a new user
 #   ./build.sh --release → signed with Developer ID, hardened runtime, notarized by Apple, zipped for download.
@@ -7,13 +7,13 @@
 #                          xcrun notarytool store-credentials email-notary --apple-id YOU --team-id TEAM
 set -euo pipefail
 cd "$(dirname "$0")"
-NAME=Lightmail; BUNDLE_ID=local.email.app  # dev bundle id kept so settings and Keychain carry over
+NAME=Keymail; BUNDLE_ID=local.email.app  # dev bundle id kept so settings and Keychain carry over
 MODE="${1:-}"
-if [[ "$MODE" == "--demo" ]]; then NAME="Lightmail Demo"; BUNDLE_ID=local.email.app.demo; fi
+if [[ "$MODE" == "--demo" ]]; then NAME="Keymail Demo"; BUNDLE_ID=local.email.app.demo; fi
 if [[ "$MODE" == "--release" ]]; then
-  BUNDLE_ID="${RELEASE_BUNDLE_ID:-com.dannychait.lightmail}"   # permanent once people install the app
-  # Sign only with Danny Chait's personal team, never another team's certificate that happens to be installed.
-  RELEASE_TEAM="${RELEASE_TEAM:-PERSONAL_TEAM_ID}"
+  BUNDLE_ID="${RELEASE_BUNDLE_ID:-com.dannychait.keymail}"   # permanent once people install the app
+  # Sign only with the publishing team (True Competitors, Inc.), never another certificate that happens to be installed.
+  RELEASE_TEAM="${RELEASE_TEAM:-SL5NZ49S43}"
   RELEASE_ID=$(security find-identity -v -p codesigning | grep "Developer ID Application" | grep -m1 "($RELEASE_TEAM)" | awk '{print $2}' || true)
   if [[ -z "$RELEASE_ID" ]]; then
     echo "No 'Developer ID Application' certificate for team $RELEASE_TEAM. In Xcode → Settings → Accounts, pick your personal team → Manage Certificates → + → Developer ID Application, then rerun."
@@ -57,7 +57,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSHighResolutionCapable</key><true/>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>NSAppTransportSecurity</key><dict><key>NSAllowsArbitraryLoadsInWebContent</key><true/></dict>
-  <key>NSCalendarsFullAccessUsageDescription</key><string>Lightmail shows your schedule next to your inbox and turns emails into calendar events.</string>
+  <key>NSCalendarsFullAccessUsageDescription</key><string>Keymail shows your schedule next to your inbox and turns emails into calendar events.</string>
 </dict></plist>
 PLIST
 if [[ "$MODE" == "--release" ]]; then

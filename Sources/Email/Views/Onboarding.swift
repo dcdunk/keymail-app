@@ -69,7 +69,7 @@ struct OnboardingView: View {
     var welcome: some View {
         VStack(spacing: 28) {
             Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 96, height: 96)
-            title("Welcome to Lightmail", "Fast, keyboard-first email for Gmail and iCloud.")
+            title("Welcome to Keymail", "Fast, keyboard-first email for Gmail and iCloud.")
             VStack(alignment: .leading, spacing: 14) {
                 feature("bolt.fill", "Fly through your inbox", "Every action has a shortcut. ⌘K finds any of them.")
                 feature("rectangle.split.3x1.fill", "An inbox that sorts itself", "Split Inbox groups people, newsletters and tools apart.")
@@ -146,7 +146,7 @@ struct OnboardingView: View {
 
     var ai: some View {
         VStack(spacing: 24) {
-            title("Writing help (optional)", "Lightmail can draft replies, write quick responses and summarize long threads using an AI tool already signed in on this Mac.")
+            title("Writing help (optional)", "Keymail can draft replies, write quick responses and summarize long threads using an AI tool already signed in on this Mac.")
             VStack(spacing: 8) {
                 ForEach(AIProvider.all) { p in
                     HStack(spacing: 12) {

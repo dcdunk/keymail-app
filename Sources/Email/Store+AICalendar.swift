@@ -49,7 +49,7 @@ extension AppStore {
         guard let c = selected else { return }
         Task {
             if !calendar.authorized, !(await calendar.requestAccess()) {
-                banner = "Lightmail needs Calendar access: System Settings → Privacy & Security → Calendars."
+                banner = "Keymail needs Calendar access: System Settings → Privacy & Security → Calendars."
                 return
             }
             let mentioned = parseWhen(String(c.latest.plainText.prefix(4000)))

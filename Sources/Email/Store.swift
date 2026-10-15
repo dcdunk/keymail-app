@@ -3,7 +3,7 @@ import SwiftUI
 import EmailCore
 import CryptoKit
 
-/// One row in a Lightmail menu. Headers and dividers are rows too, so menus are plain arrays.
+/// One row in a Keymail menu. Headers and dividers are rows too, so menus are plain arrays.
 struct MenuEntry: Identifiable {
     enum Kind { case item, header, divider }
     let id = UUID()

@@ -14,7 +14,7 @@ struct AboutSettings: View {
         VStack(spacing: 18) {
             VStack(spacing: 6) {
                 Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 88, height: 88)
-                Text("Lightmail").font(.system(size: 24, weight: .semibold))
+                Text("Keymail").font(.system(size: 24, weight: .semibold))
                 Text("Version \(Updates.version) (\(Updates.build))").font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
                 Text("Fast, keyboard-first email for Gmail and iCloud.").font(.callout).foregroundStyle(.secondary)
             }
@@ -37,7 +37,7 @@ struct AboutSettings: View {
             .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.04)))
 
             VStack(alignment: .leading, spacing: 8) {
-                info("Privacy", "Mail goes straight between this Mac and Google or Apple. Lightmail has no servers.")
+                info("Privacy", "Mail goes straight between this Mac and Google or Apple. Keymail has no servers.")
                 info("AI", "Runs through the AI app you choose in AI Providers, signed in on this Mac.")
                 info("Requires", "macOS 14 or later")
                 HStack(alignment: .firstTextBaseline, spacing: 12) {

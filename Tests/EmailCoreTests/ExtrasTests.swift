@@ -177,20 +177,20 @@ final class ExtrasTests: XCTestCase {
 
     func testFriendlyGoogleErrors() {
         let j500 = #"{"error":{"code":500,"message":"Internal error encountered.","errors":[{"message":"Internal error encountered.","domain":"global","reason":"backendError"}]}}"#
-        XCTAssertEqual(friendlyGoogleError(status: 500, body: j500), "Gmail is having a temporary problem. Lightmail will try again shortly.")
+        XCTAssertEqual(friendlyGoogleError(status: 500, body: j500), "Gmail is having a temporary problem. Keymail will try again shortly.")
         XCTAssertTrue(isTransientGoogleError(status: 503, body: ""))
         XCTAssertTrue(isTransientGoogleError(status: 403, body: "Quota exceeded"))
         XCTAssertFalse(isTransientGoogleError(status: 404, body: ""))
         XCTAssertTrue(friendlyGoogleError(status: 401, body: "").contains("sign-in expired"))
         XCTAssertTrue(friendlyGoogleError(status: 400, body: #"{"error":"invalid_grant"}"#).contains("sign-in expired"))
-        XCTAssertTrue(friendlyGoogleError(status: 403, body: #"{"error":{"message":"Gmail API has not been used in project 1"}}"#).contains("isn't available to Lightmail"))
+        XCTAssertTrue(friendlyGoogleError(status: 403, body: #"{"error":{"message":"Gmail API has not been used in project 1"}}"#).contains("isn't available to Keymail"))
         XCTAssertTrue(friendlyGoogleError(status: 403, body: #"{"error":{"message":"Request had insufficient authentication scopes."}}"#).contains("permission"))
         XCTAssertTrue(friendlyGoogleError(status: 400, body: #"{"error":{"message":"Invalid To header"}}"#).hasSuffix("Invalid To header"))
         for status in [400, 401, 403, 404, 409, 413, 429, 500, 502, 503, 418] {
             let msg = friendlyGoogleError(status: status, body: j500)
             XCTAssertFalse(msg.contains("{"), "raw JSON leaked for \(status)")
         }
-        XCTAssertEqual(friendlyNetworkError(URLError(.notConnectedToInternet)), "You're offline. Lightmail will catch up when you reconnect.")
+        XCTAssertEqual(friendlyNetworkError(URLError(.notConnectedToInternet)), "You're offline. Keymail will catch up when you reconnect.")
         XCTAssertNil(friendlyNetworkError(NSError(domain: "x", code: 1)))
     }
 

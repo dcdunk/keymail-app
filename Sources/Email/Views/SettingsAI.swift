@@ -16,7 +16,7 @@ struct AIProviderSettings: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("AI providers").font(.headline)
-            Text("Lightmail uses an AI command-line tool that's already signed in on this Mac, billed to that tool's own plan. It runs read-only: email content can only produce text, never run commands or change files.")
+            Text("Keymail uses an AI command-line tool that's already signed in on this Mac, billed to that tool's own plan. It runs read-only: email content can only produce text, never run commands or change files.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             List {
                 ForEach(AIProvider.all) { p in

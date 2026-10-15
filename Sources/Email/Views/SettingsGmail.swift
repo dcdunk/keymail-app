@@ -61,7 +61,7 @@ struct GmailSettings: View {
     var accessCallout: some View {
         Section {
             VStack(alignment: .leading, spacing: 8) {
-                Label("Allow Lightmail to manage these settings", systemImage: "lock.shield").font(.headline)
+                Label("Allow Keymail to manage these settings", systemImage: "lock.shield").font(.headline)
                 Text("To change out of office and signatures here, Google needs your OK. Click below and approve in your browser.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Button("Grant access") { store.grantSettingsAccess() }.prominentGlassButton().buttonBorderShape(.capsule)
@@ -187,18 +187,18 @@ struct SignatureSyncRow: View {
                 status(same: same, ours: oursHTML, theirs: theirs)
             }
             HStack(alignment: .center, spacing: 10) {
-                preview("In Lightmail", oursHTML, empty: "No signature in Lightmail")
+                preview("In Keymail", oursHTML, empty: "No signature in Keymail")
                 VStack(spacing: 8) {
                     Button { run { await store.pushSignature(sendAs.email, account: account) } } label: {
                         Label("Copy to Gmail", systemImage: "arrow.right").labelStyle(.titleAndIcon)
                     }
                     .disabled(oursHTML.isEmpty || same || blocked != nil || working)
-                    .help(blocked ?? "Replace Gmail's signature with Lightmail's")
+                    .help(blocked ?? "Replace Gmail's signature with Keymail's")
                     Button { run { await store.pullSignature(sendAs.email, account: account) } } label: {
-                        Label("Copy to Lightmail", systemImage: "arrow.left")
+                        Label("Copy to Keymail", systemImage: "arrow.left")
                     }
                     .disabled(theirs.isEmpty || same || working)
-                    .help("Replace Lightmail's signature with Gmail's")
+                    .help("Replace Keymail's signature with Gmail's")
                 }
                 .buttonBorderShape(.capsule).controlSize(.small).fixedSize()
                 preview("In Gmail", theirs, empty: "No signature in Gmail")

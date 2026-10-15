@@ -180,7 +180,7 @@ final class GoogleAuth {
     }
 }
 
-/// The page the browser shows after Google sign-in: Lightmail's icon, a clear message, light and dark mode.
+/// The page the browser shows after Google sign-in: Keymail's icon, a clear message, light and dark mode.
 enum SignInPage {
     static let iconDataURL: String = {
         let img = NSApp.applicationIconImage ?? NSImage()
@@ -192,13 +192,13 @@ enum SignInPage {
 
     static func html(ok: Bool, reason: String? = nil) -> String {
         let title = ok ? "You're signed in" : "Sign-in didn't finish"
-        let detail = ok ? "Lightmail has what it needs. You can close this tab and head back to your inbox."
-            : reason == "access_denied" ? "Access wasn't approved. Go back to Lightmail and try again when you're ready."
-            : "Something interrupted the sign-in. Go back to Lightmail and try again."
+        let detail = ok ? "Keymail has what it needs. You can close this tab and head back to your inbox."
+            : reason == "access_denied" ? "Access wasn't approved. Go back to Keymail and try again when you're ready."
+            : "Something interrupted the sign-in. Go back to Keymail and try again."
         let mark = ok ? "<path d='M7 12.5l3.2 3.2L17 9' />" : "<path d='M12 7.5v6' /><path d='M12 16.6v.1' />"
         return """
         <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-        <title>Lightmail · \(title)</title>
+        <title>Keymail · \(title)</title>
         <style>
         :root { color-scheme: light dark; --bg:#f5f5f7; --card:#fff; --text:#1d1d1f; --muted:#6e6e73; --line:rgba(0,0,0,.08); --accent:#4a66ed; }
         @media (prefers-color-scheme: dark) { :root { --bg:#141416; --card:#1e1e21; --text:#f2f2f4; --muted:#9a9aa1; --line:rgba(255,255,255,.08); --accent:#7a90ff; } }
@@ -222,7 +222,7 @@ enum SignInPage {
           <div class="icon"><img src="\(iconDataURL)" alt=""><span class="badge"><svg viewBox="0 0 24 24">\(mark)</svg></span></div>
           <h1>\(title)</h1>
           <p>\(detail)</p>
-          <div class="foot">Lightmail talks to Google directly from your Mac. Nothing goes through our servers.</div>
+          <div class="foot">Keymail talks to Google directly from your Mac. Nothing goes through our servers.</div>
         </main>
         </body></html>
         """

@@ -11,7 +11,7 @@ struct EmailApp: App {
     @StateObject private var store = AppStore()
     init() { NSApplication.shared.setActivationPolicy(.regular) }
     var body: some Scene {
-        WindowGroup("Lightmail") {
+        WindowGroup("Keymail") {
             RootView().environmentObject(store).environmentObject(store.calendar)
                 .frame(minWidth: 720, minHeight: 520)
                 .onAppear { store.start(); NSApp.activate(ignoringOtherApps: true) }
@@ -23,7 +23,7 @@ struct EmailApp: App {
                 Button("Settings…") { store.settingsOpen ? (store.settingsOpen = false) : store.openSettings() }.keyboardShortcut(",", modifiers: .command)
             }
             CommandGroup(replacing: .appInfo) {
-                Button("About Lightmail") { UserDefaults.standard.set("about", forKey: "settingsTab"); store.openSettings() }
+                Button("About Keymail") { UserDefaults.standard.set("about", forKey: "settingsTab"); store.openSettings() }
                 if Updates.shared.enabled { Button("Check for Updates…") { Updates.shared.check() } }
             }
         }
