@@ -25,11 +25,21 @@ struct SplitSettingsView: View {
                 .toggleStyle(.switch).settingAnchor("Important and Other")
                 Divider()
             }
-            HStack {
+            // Wide: title and buttons on one line. Narrow: buttons drop below the title.
+            ViewThatFits(in: .horizontal) {
+                HStack {
                 Text("Split Inbox").font(.scaled(.title2).weight(.semibold))
                 Spacer()
                 Button("Build your own") { store.state.splits.append(Split(name: "New split", query: "")) }.quiet()
                 Button { store.suggestSplits() } label: { Label("Suggest with \(store.ai.name)", systemImage: "sparkles") }.quiet()
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                Text("Split Inbox").font(.scaled(.title2).weight(.semibold))
+                HStack {
+                Button("Build your own") { store.state.splits.append(Split(name: "New split", query: "")) }.quiet()
+                Button { store.suggestSplits() } label: { Label("Suggest with \(store.ai.name)", systemImage: "sparkles") }.quiet()
+                    }
+                }
             }
             Text("Define each split with a search, e.g. `from:hubspot.com OR subject:\"new lead\"`. Also works: to:, cc:, label:, has:attachment, is:unread, is:starred, -term to exclude. Drag to reorder. Aim for 3 to 7.")
                 .font(.scaled(.callout)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)

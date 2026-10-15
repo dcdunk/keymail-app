@@ -201,6 +201,9 @@ final class CoreFlowsTests: XCTestCase {
         store.selectedID = store.visible[0].id
         press("j", code: 38); XCTAssertEqual(store.selectedID, store.visible[1].id, "J still works")
         XCTAssertFalse(store.commands.contains { $0.title.hasPrefix("Move to") }, "no Move to Important/Other in a single inbox")
+        store.goTab(otherTab); store.goFolder("Inbox")
+        XCTAssertEqual(store.tabName, inboxTab, "Go to Inbox lands on the one inbox, not an empty Important tab")
+        XCTAssertEqual(AppStore().tabName, inboxTab, "and the app opens on it after a relaunch")
     }
 
     func testMovingImportanceMatchesTheRightMail() {

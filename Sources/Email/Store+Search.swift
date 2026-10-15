@@ -32,7 +32,7 @@ extension AppStore {
 
     func goFolder(_ name: String) {
         switch name {
-        case "Inbox": goTab(importantTab)
+        case "Inbox": goTab(splitImportance ? importantTab : inboxTab)
         case "Starred": runQuery("is:starred", title: name)
         case "Sent": runQuery("in:sent", title: name)
         case "Done": runQuery("-in:inbox -in:sent -in:spam -in:trash -in:draft", title: name)

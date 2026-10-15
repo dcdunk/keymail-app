@@ -183,7 +183,7 @@ final class AppStore: ObservableObject {
         return out
     }
     @Published var hasClient = GoogleClient.load() != nil
-    @Published var tabName = importantTab
+    @Published var tabName = (UserDefaults.standard.object(forKey: "splitImportance") as? Bool ?? true) ? importantTab : inboxTab
     @Published var folder: String?          // "Starred", "Search: …" etc. replaces the split tabs
     @Published var unreadOnly = false
     @Published var sidebarOpen = false { didSet {

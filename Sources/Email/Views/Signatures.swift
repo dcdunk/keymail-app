@@ -20,7 +20,27 @@ struct SignatureSettings: View {
         binding.wrappedValue = extractBodyHTML(html); note = nil
     }
     var body: some View {
-        HStack(spacing: 0) {
+        // Narrow windows: the address list becomes a menu on top, so the signature keeps the full width.
+        GeometryReader { geo in
+            if geo.size.width < 640 {
+                VStack(alignment: .leading, spacing: 0) {
+                    Picker("Address", selection: $selection) {
+                        ForEach(store.fromAddresses, id: \.self) { a in Text(a).tag(Optional(a)) }
+                    }
+                    .padding(.horizontal, 16).padding(.top, 12)
+                    editor
+                }
+            } else {
+                HStack(spacing: 0) { addressList.frame(width: min(230, geo.size.width * 0.3)); Divider(); editor }
+            }
+        }
+        .onAppear {
+            if let f = store.signatureFocus { selection = f; store.signatureFocus = nil }
+            else if selection == nil { selection = store.fromAddresses.first }
+        }
+    }
+
+    var addressList: some View {
             List(selection: $selection) {
                 ForEach(store.fromAddresses, id: \.self) { a in
                     VStack(alignment: .leading, spacing: 2) {
@@ -28,12 +48,15 @@ struct SignatureSettings: View {
                         Text(store.state.accounts.contains(a) ? a : "Alias").font(.scaled(.caption)).foregroundStyle(.secondary).lineLimit(1)
                     }.tag(a)
                 }
-            }.frame(width: 230)
-            Divider()
+            }
+    }
+
+    /// Scrolls instead of squeezing: each part keeps a usable height however small the window gets.
+    @ViewBuilder var editor: some View {
             if let a = selection {
                 let binding = Binding(get: { store.state.signatures[a.lowercased()] ?? "" },
                                       set: { store.state.signatures[a.lowercased()] = $0 })
-                VStack(alignment: .leading, spacing: 10) {
+                ScrollView { VStack(alignment: .leading, spacing: 10) {
                     Picker("Add signature to", selection: $store.state.signatureUse) {
                         Text("All emails").tag("all"); Text("New emails only").tag("new")
                         Text("Replies & forwards only").tag("replies"); Text("Off").tag("off")
@@ -54,37 +77,31 @@ struct SignatureSettings: View {
                         if !binding.wrappedValue.isEmpty { Button("Clear", role: .destructive) { binding.wrappedValue = "" }.quiet().foregroundStyle(.red) }
                     }.controlSize(.small)
                     if htmlMode {
-                        TextEditor(text: binding).font(.scaled(size: 12, design: .monospaced))
+                        TextEditor(text: binding).font(.scaled(size: 12, design: .monospaced)).frame(height: 240)
                             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.primary.opacity(0.1)))
                     } else if isComplexHTML(binding.wrappedValue) {
                         // Tables, logos and rounded corners can't go through the rich-text editor unchanged,
                         // so show it exactly as recipients will see it instead.
-                        EmailWebView(html: binding.wrappedValue, dark: scheme == .dark, blockRemote: false).frame(minHeight: 100).clipShape(RoundedRectangle(cornerRadius: 10))
+                        EmailWebView(html: binding.wrappedValue, dark: scheme == .dark, blockRemote: false).frame(height: 220).clipShape(RoundedRectangle(cornerRadius: 10))
                         Text("This signature has a designed layout (table, logo or rounded corners). It's kept exactly as is. Edit it in HTML, or paste/import a new one.")
                             .font(.scaled(.caption)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                        Spacer()
                     } else {
-                        RichTextEditor(html: binding)
+                        RichTextEditor(html: binding).frame(height: 180)
                             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.primary.opacity(0.1)))
                     }
                     if !binding.wrappedValue.isEmpty && !isComplexHTML(binding.wrappedValue) {
                         // Live: how the signature lands under a real message, as recipients see it.
                         Text("In an email").font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary)
                         EmailWebView(html: "<p>Hi Maya,</p><p>Sounds good, talk Thursday.</p><br>" + binding.wrappedValue, padding: "10px 14px", dark: scheme == .dark, blockRemote: false)
-                            .frame(maxHeight: 180).clipShape(RoundedRectangle(cornerRadius: 10))
+                            .frame(height: 200).clipShape(RoundedRectangle(cornerRadius: 10))
                     }
                     if let note { Text(note).font(.scaled(.callout)).foregroundStyle(.orange) }
                     Text("Type with formatting (⌘B, ⌘I, ⌘K for links), paste a signature from Mail or Gmail (⌘V or Paste signature), or import an .html file. Logos embedded in the signature are sent as inline images so Gmail and Outlook show them.")
                         .font(.scaled(.callout)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                }.padding(16)
+                }.padding(16) }
             } else {
                 Text("Select an address").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-        }
-        .onAppear {
-            if let f = store.signatureFocus { selection = f; store.signatureFocus = nil }
-            else if selection == nil { selection = store.fromAddresses.first }
-        }
     }
 }
 

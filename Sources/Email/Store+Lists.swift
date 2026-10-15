@@ -33,7 +33,7 @@ extension AppStore {
     /// Like Superhuman: one account's inbox at a time. ⌘1…⌘9 picks an account, ⌘0 shows all.
     func switchAccount(_ a: String?) {
         state.activeAccount = a
-        goTab(importantTab)
+        goTab(splitImportance ? importantTab : inboxTab)
     }
 
     /// Threads a reminder brought back that have no newer message since.

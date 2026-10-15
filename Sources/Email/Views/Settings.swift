@@ -63,7 +63,8 @@ struct SettingsPanel: View {
         // A soft, unhurried glide: critically damped (no bounce), slower out of the gate than the inbox panels.
         let motion: Animation = reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.5, dampingFraction: 1)
         GeometryReader { geo in
-            let width = min(760, max(560, geo.size.width * 0.62))
+            // Narrow windows: Settings takes the whole window instead of squeezing every section.
+            let width = geo.size.width < 960 ? geo.size.width : min(760, max(560, geo.size.width * 0.62))
             ZStack(alignment: .trailing) {
                 Color.black.opacity(open ? 0.18 : 0).ignoresSafeArea()
                     .onTapGesture { store.settingsOpen = false }
@@ -446,6 +447,7 @@ struct AccountsSettings: View {
                                 set: { store.state.accountNames[acct] = $0 }))
                                 .textFieldStyle(.plain).font(.scaled(.headline))
                             Text("\(acct) · \(store.providerName(acct))").font(.scaled(.caption)).foregroundStyle(.secondary)
+                                .lineLimit(1).truncationMode(.middle)
                             TextField("Send-as aliases, comma-separated", text: Binding(
                                 get: { (store.state.aliases[acct] ?? []).joined(separator: ", ") },
                                 set: { store.setAliases($0, for: acct) }))
@@ -462,16 +464,20 @@ struct AccountsSettings: View {
                         }
                         Spacer()
                         KeyHint("⌘\(i + 1)")
-                        Button("Sign in again") { if store.brand(acct) == "yahoo" { showYahoo = true } else if cloud { showICloud = true } else { store.reauthenticate(acct) } }.quiet()
-                            .help(cloud ? "Enter a new app-specific password" : "Refresh this account's sign-in and permissions. Your mail stays as it is.")
-                        Button("Remove") { removing = acct }.quiet().foregroundStyle(.red)
+                        // Icons keep the row usable at any width; the names show on hover.
+                        Button { if store.brand(acct) == "yahoo" { showYahoo = true } else if cloud { showICloud = true } else { store.reauthenticate(acct) } } label: {
+                            Image(systemName: "arrow.clockwise.circle").font(.scaled(size: 15)).frame(width: 28, height: 28)
+                        }.buttonStyle(ToolStyle()).accessibilityLabel("Sign in again")
+                            .help(cloud ? "Sign in again: enter a new app-specific password" : "Sign in again: refresh this account's sign-in and permissions. Your mail stays as it is.")
+                        Button { removing = acct } label: { Image(systemName: "trash").font(.scaled(size: 14)).frame(width: 28, height: 28) }
+                            .buttonStyle(ToolStyle()).foregroundStyle(.red).accessibilityLabel("Remove").help("Remove this account")
                     }.padding(.vertical, 4)
                 }
                 // Order sets ⌘1, ⌘2… and the account switcher.
                 .onMove { store.state.accounts.move(fromOffsets: $0, toOffset: $1) }
             }
             .frame(minHeight: 200)
-            HStack {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), alignment: .leading)], alignment: .leading, spacing: 8) {
                 Button { store.addAccount() } label: { Label { Text("Add Google account") } icon: { BrandLogo(brand: "google", size: 14) } }
                     .disabled(!store.hasClient)
 
@@ -479,6 +485,7 @@ struct AccountsSettings: View {
                 Button { store.connectMicrosoft() } label: { Label { Text("Add Outlook account") } icon: { BrandLogo(brand: "outlook", size: 14) } }
                 Button { showYahoo = true } label: { Label { Text("Add Yahoo account") } icon: { BrandLogo(brand: "yahoo", size: 14) } }
             }
+            .buttonStyle(ToolStyle(padded: true)).fixedSize(horizontal: false, vertical: true)
             if let b = store.busy { Text(b).font(.scaled(.callout)).foregroundStyle(.secondary) }
             if !GoogleClient.isBuiltIn { // developer builds only; customers never see Google Cloud
             DisclosureGroup("Advanced") {
@@ -519,7 +526,7 @@ struct SnippetSettings: View {
                         .disabled(selection == nil)
                     Spacer()
                 }.controlSize(.small).padding(8)
-            }.frame(width: 200)
+            }.frame(width: 160)
             Divider()
             if let i = store.state.snippets.firstIndex(where: { $0.id == selection }) {
                 VStack(alignment: .leading, spacing: 10) {
