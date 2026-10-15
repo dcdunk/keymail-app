@@ -35,7 +35,7 @@ extension AppStore {
         let v = visible
         if let i = v.firstIndex(where: { $0.id == c.id }) {
             selectedID = i + 1 < v.count ? v[i + 1].id : (i > 0 ? v[i - 1].id : nil)
-        }
+        } else { selectedID = nil } // opened from outside the list (context panel): back to the list
         if selectedID == nil { threadOpen = false }
     }
 

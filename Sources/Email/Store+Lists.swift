@@ -80,6 +80,9 @@ extension AppStore {
 
     var selected: Conversation? {
         let v = visible
-        return v.first { $0.id == selectedID } ?? v.first
+        // A conversation opened from outside the current list (the context panel, a reminder) is still the one shown;
+        // falling back to the list's first row showed an unrelated email.
+        if let id = selectedID { if let c = v.first(where: { $0.id == id }) ?? allConversations.first(where: { $0.id == id }) { return c } }
+        return v.first
     }
 }

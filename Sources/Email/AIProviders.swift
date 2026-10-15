@@ -24,13 +24,18 @@ struct AIProvider: Identifiable, Hashable {
                    // support.claude.com/en/articles/11940350 (checked Oct 2026)
                    models: [("claude-fable-5-1", "Fable 5.1"), ("claude-opus-5-5", "Opus 5.5"), ("claude-sonnet-5-5", "Sonnet 5.5"), ("claude-haiku-5-5", "Haiku 5.5")],
                    // --tools "" turns every tool off: email text can only produce text.
-                   args: { m in ["-p", "--tools", "", "--output-format", "text"] + (m.map { ["--model", $0] } ?? []) }),
+                   // Skips what a one-shot email task never needs but Claude Code loads on every start: MCP servers,
+                   // plugins and hooks from your settings, skills and session saving. About 3s instead of 6-12s.
+                   args: { m in ["-p", "--tools", "", "--output-format", "text",
+                                 "--strict-mcp-config", "--mcp-config", #"{"mcpServers":{}}"#, "--setting-sources", "",
+                                 "--no-session-persistence", "--disable-slash-commands"] + (m.map { ["--model", $0] } ?? []) }),
         AIProvider(id: "codex", name: "Codex", maker: "OpenAI", binary: "codex",
                    installURL: "https://github.com/openai/codex", signInHint: "Run `codex login` in Terminal.",
                    // learn.chatgpt.com/docs/models (checked Oct 2026). Astra and 6.1 Sol need an API key, not a ChatGPT sign-in.
                    models: [("gpt-6-astra", "GPT-6 Astra"), ("gpt-6.1-sol", "GPT-6.1 Sol"), ("gpt-6-luna", "GPT-6 Luna")],
                    // Read-only sandbox: it can't write files or run commands that change anything.
-                   args: { m in ["exec", "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral"] + (m.map { ["-m", $0] } ?? []) }),
+                   // mcp_servers={}: don't start your Codex MCP servers for an email task (about 3s instead of 7s).
+                   args: { m in ["exec", "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral", "-c", "mcp_servers={}"] + (m.map { ["-m", $0] } ?? []) }),
         AIProvider(id: "gemini", name: "Gemini", maker: "Google", binary: "gemini",
                    installURL: "https://github.com/google-gemini/gemini-cli", signInHint: "Run `gemini` in Terminal and sign in, or set GEMINI_API_KEY.",
                    // geminicli.com/docs/reference/configuration (checked Oct 2026)
