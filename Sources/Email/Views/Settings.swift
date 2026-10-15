@@ -457,7 +457,7 @@ struct AccountsSettings: View {
                         }
                         Spacer()
                         KeyHint("⌘\(i + 1)")
-                        Button("Sign in again") { if cloud { showICloud = true } else { store.reauthenticate(acct) } }.quiet()
+                        Button("Sign in again") { if store.brand(acct) == "yahoo" { showYahoo = true } else if cloud { showICloud = true } else { store.reauthenticate(acct) } }.quiet()
                             .help(cloud ? "Enter a new app-specific password" : "Refresh this account's sign-in and permissions. Your mail stays as it is.")
                         Button("Remove") { removing = acct }.quiet().foregroundStyle(.red)
                     }.padding(.vertical, 4)
