@@ -94,7 +94,7 @@ final class GoogleAuth {
         let verifier = (0..<2).map { _ in UUID().uuidString }.joined().replacingOccurrences(of: "-", with: "")
         let state = UUID().uuidString
         var redirect = ""
-        let params = try await receiveRedirect { port in
+        let params = try await receiveOAuthRedirect { port in
             redirect = "http://127.0.0.1:\(port)"
             var c = URLComponents(string: "https://accounts.google.com/o/oauth2/v2/auth")!
             c.queryItems = [.init(name: "client_id", value: client.client_id), .init(name: "redirect_uri", value: redirect),
@@ -133,55 +133,6 @@ final class GoogleAuth {
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
 
-    /// One-shot HTTP listener on 127.0.0.1. Gives up after 5 minutes.
-    private func receiveRedirect(onReady: @escaping (UInt16) -> Void) async throws -> [String: String] {
-        let params = NWParameters.tcp
-        params.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
-        let listener = try NWListener(using: params)
-        return try await withCheckedThrowingContinuation { cont in
-            var done = false
-            func finish(_ r: Result<[String: String], Error>) {
-                guard !done else { return }
-                done = true; cont.resume(with: r)
-                // Stay up a few seconds more to serve the clean /signed-in page the browser is sent to.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 15) { listener.cancel() }
-            }
-            listener.stateUpdateHandler = { state in
-                switch state {
-                case .ready: if let p = listener.port?.rawValue { onReady(p) }
-                case .failed(let e): finish(.failure(e))
-                default: break
-                }
-            }
-            listener.newConnectionHandler = { conn in
-                conn.start(queue: .main)
-                conn.receive(minimumIncompleteLength: 1, maximumLength: 65536) { data, _, _, _ in
-                    let request = String(decoding: data ?? Data(), as: UTF8.self)
-                    let path = request.split(separator: " ").dropFirst().first.map(String.init) ?? "/"
-                    let q = queryItems(fromRequest: request)
-                    func reply(_ head: String, _ body: String = "") {
-                        let resp = head + "\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n" + body
-                        conn.send(content: Data(resp.utf8), completion: .contentProcessed { _ in conn.cancel() })
-                    }
-                    if q["code"] != nil || q["error"] != nil {
-                        // Google's return address carries the one-time code; forward to a clean address so it
-                        // doesn't sit in the address bar or browser history.
-                        let target = q["code"] != nil ? "/signed-in" : "/not-signed-in?reason=" + (q["error"] ?? "").addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
-                        reply("HTTP/1.1 303 See Other\r\nLocation: \(target)")
-                        finish(.success(q))
-                    } else if path.hasPrefix("/signed-in") {
-                        reply("HTTP/1.1 200 OK", SignInPage.html(ok: true))
-                    } else if path.hasPrefix("/not-signed-in") {
-                        reply("HTTP/1.1 200 OK", SignInPage.html(ok: false, reason: q["reason"]))
-                    } else {
-                        reply("HTTP/1.1 404 Not Found") // stray requests like /favicon.ico
-                    }
-                }
-            }
-            listener.start(queue: .main)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 300) { finish(.failure(AppError("Sign-in timed out."))) }
-        }
-    }
 }
 
 /// The page the browser shows after Google sign-in: Keymail's icon, a clear message, light and dark mode.
@@ -226,9 +177,61 @@ enum SignInPage {
           <div class="icon"><img src="\(iconDataURL)" alt=""><span class="badge"><svg viewBox="0 0 24 24">\(mark)</svg></span></div>
           <h1>\(title)</h1>
           <p>\(detail)</p>
-          <div class="foot">Keymail talks to Google directly from your Mac. Nothing goes through our servers.</div>
+          <div class="foot">Keymail talks to your email provider directly from your Mac. Nothing goes through our servers.</div>
         </main>
         </body></html>
         """
+    }
+}
+
+/// One-shot HTTP listener on 127.0.0.1 for browser sign-ins (Google and Microsoft). Gives up after 5 minutes.
+/// The provider sends the browser back here with a one-time code; we forward it to a clean, branded page.
+@MainActor
+func receiveOAuthRedirect(onReady: @escaping (UInt16) -> Void) async throws -> [String: String] {
+    let params = NWParameters.tcp
+    params.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
+    let listener = try NWListener(using: params)
+    return try await withCheckedThrowingContinuation { cont in
+        var done = false
+        func finish(_ r: Result<[String: String], Error>) {
+            guard !done else { return }
+            done = true; cont.resume(with: r)
+            // Stay up a few seconds more to serve the clean /signed-in page the browser is sent to.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 15) { listener.cancel() }
+        }
+        listener.stateUpdateHandler = { state in
+            switch state {
+            case .ready: if let p = listener.port?.rawValue { onReady(p) }
+            case .failed(let e): finish(.failure(e))
+            default: break
+            }
+        }
+        listener.newConnectionHandler = { conn in
+            conn.start(queue: .main)
+            conn.receive(minimumIncompleteLength: 1, maximumLength: 65536) { data, _, _, _ in
+                let request = String(decoding: data ?? Data(), as: UTF8.self)
+                let path = request.split(separator: " ").dropFirst().first.map(String.init) ?? "/"
+                let q = queryItems(fromRequest: request)
+                func reply(_ head: String, _ body: String = "") {
+                    let resp = head + "\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n" + body
+                    conn.send(content: Data(resp.utf8), completion: .contentProcessed { _ in conn.cancel() })
+                }
+                if q["code"] != nil || q["error"] != nil {
+                    // Google's return address carries the one-time code; forward to a clean address so it
+                    // doesn't sit in the address bar or browser history.
+                    let target = q["code"] != nil ? "/signed-in" : "/not-signed-in?reason=" + (q["error"] ?? "").addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
+                    reply("HTTP/1.1 303 See Other\r\nLocation: \(target)")
+                    finish(.success(q))
+                } else if path.hasPrefix("/signed-in") {
+                    reply("HTTP/1.1 200 OK", SignInPage.html(ok: true))
+                } else if path.hasPrefix("/not-signed-in") {
+                    reply("HTTP/1.1 200 OK", SignInPage.html(ok: false, reason: q["reason"]))
+                } else {
+                    reply("HTTP/1.1 404 Not Found") // stray requests like /favicon.ico
+                }
+            }
+        }
+        listener.start(queue: .main)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 300) { finish(.failure(AppError("Sign-in timed out."))) }
     }
 }

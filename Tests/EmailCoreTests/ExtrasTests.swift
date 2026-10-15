@@ -351,4 +351,13 @@ final class ExtrasTests: XCTestCase {
         let keep = cacheKeys(all, keepThreads: ["a@x.com|keep"], now: now, maxPerAccount: 2)
         XCTAssertEqual(keep, ["a@x.com|new", "a@x.com|oldInbox", "c@x.com|n1", "c@x.com|n2"])
     }
+
+    func testMicrosoftAccountEmail() {
+        XCTAssertEqual(microsoftAccountEmail(profile: ["mail": "Dan@Contoso.com", "userPrincipalName": "dan@contoso.onmicrosoft.com"]), "dan@contoso.com")
+        XCTAssertEqual(microsoftAccountEmail(profile: ["mail": NSNull(), "userPrincipalName": "someone@outlook.com"]), "someone@outlook.com")
+        XCTAssertNil(microsoftAccountEmail(profile: ["userPrincipalName": "bob_gmail.com#EXT#@contoso.onmicrosoft.com"]))
+        XCTAssertNil(microsoftAccountEmail(profile: [:]))
+        XCTAssertTrue(friendlyMicrosoftSignInError("AADSTS65001: The user or administrator has not consented").contains("administrator"))
+        XCTAssertFalse(friendlyMicrosoftSignInError("AADSTS9999 weird").contains("AADSTS")) // never show raw codes
+    }
 }
