@@ -69,7 +69,7 @@ struct OnboardingView: View {
     var welcome: some View {
         VStack(spacing: 28) {
             Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 96, height: 96)
-            title("Welcome to Keymail", "Fast, keyboard-first email for Gmail and iCloud.")
+            title("Welcome to Keymail", "Fast, keyboard-first email for Gmail, iCloud and Outlook.")
             VStack(alignment: .leading, spacing: 14) {
                 feature("bolt.fill", "Fly through your inbox", "Every action has a shortcut. ⌘K finds any of them.")
                 feature("rectangle.split.3x1.fill", "An inbox that sorts itself", "Split Inbox groups people, newsletters and tools apart.")
@@ -94,6 +94,7 @@ struct OnboardingView: View {
                     if store.hasClient { store.addAccount() } else { step = .google }
                 }
                 providerCard("icloud.fill", .blue, "iCloud Mail", "With an app-specific password") { showICloud = true }
+                providerCard("tray.full.fill", Color(red: 0.0, green: 0.47, blue: 0.84), "Outlook", "Outlook.com, Hotmail or Microsoft 365") { store.connectMicrosoft() }
             }
             if !store.state.accounts.isEmpty { Button("Back") { step = .accounts }.buttonBorderShape(.capsule) }
         }
@@ -106,7 +107,7 @@ struct OnboardingView: View {
                 Text(name).font(.scaled(.title3).weight(.semibold))
                 Text(detail).font(.scaled(.callout)).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
-            .frame(width: 220, height: 170)
+            .frame(width: 200, height: 170)
             .floatingPanel(RoundedRectangle(cornerRadius: 20))
             .contentShape(RoundedRectangle(cornerRadius: 20))
         }.buttonStyle(.plain).handCursor()

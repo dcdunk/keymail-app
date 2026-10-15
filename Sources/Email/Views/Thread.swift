@@ -311,6 +311,9 @@ struct EmailWebView: NSViewRepresentable {
         \(darkCSS)
         body { padding: \(padding); font: 15px -apple-system, Helvetica, sans-serif; line-height: 1.45; overflow-wrap: anywhere; }
         img { max-width: 100%; }
+        /* Many templates set html/body to height:100%, which pins the measured height to the view's starting size
+           and cuts the email off. Higher specificity than a sender's own !important rule on plain html/body. */
+        html:root, html:root > body { height: auto !important; min-height: 0 !important; max-height: none !important; }
         a, a * { cursor: pointer; }
         table { max-width: 100%; }
         pre { white-space: pre-wrap; }
@@ -380,13 +383,19 @@ struct EmailWebView: NSViewRepresentable {
         var onHeight: (CGFloat) -> Void = { _ in }
         func webView(_ w: WKWebView, didFinish navigation: WKNavigation!) {
             // Images keep loading after "finish", so measure a few times as they arrive.
-            for delay in [0.0, 0.4, 1.2, 3.0] {
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak w] in
-                    if delay == 0 { w?.evaluateJavaScript(Self.darkScript) }
-                    w?.evaluateJavaScript(Self.plateScript)
-                    w?.evaluateJavaScript("Math.ceil(document.body.getBoundingClientRect().height)") { r, _ in
-                        if let h = r as? CGFloat { self?.onHeight(h) } else if let h = r as? Double { self?.onHeight(CGFloat(h)) }
-                    }
+            w.evaluateJavaScript(Self.darkScript)
+            for delay in [0.0, 0.4, 1.2, 3.0] { measure(w, after: delay, plates: true) }
+        }
+        /// "Finish" waits for every image, and one slow tracker or image server can hold it back for good,
+        /// leaving the email stuck at its starting height. So measure while the page is still loading too.
+        func webView(_ w: WKWebView, didCommit navigation: WKNavigation!) {
+            for delay in [0.3, 1.0, 2.5, 5.0, 10.0] { measure(w, after: delay, plates: false) }
+        }
+        func measure(_ w: WKWebView, after delay: Double, plates: Bool) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak w] in
+                if plates { w?.evaluateJavaScript(Self.plateScript) }
+                w?.evaluateJavaScript("Math.ceil(Math.max(document.body.getBoundingClientRect().height, document.body.scrollHeight))") { r, _ in
+                    if let h = r as? CGFloat { self?.onHeight(h) } else if let h = r as? Double { self?.onHeight(CGFloat(h)) }
                 }
             }
         }
