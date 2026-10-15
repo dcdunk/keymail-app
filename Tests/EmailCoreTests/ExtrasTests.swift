@@ -403,3 +403,30 @@ final class ExtrasTests: XCTestCase {
         XCTAssertNil(attachmentFromGraph(["@odata.type": "#microsoft.graph.itemAttachment", "id": "A3"])) // attached emails aren't files
     }
 }
+
+final class ClaudeCodeLinkTests: XCTestCase {
+    func testLinkCarriesEmailAndFolder() throws {
+        let m = Message(id: "1", threadId: "t", account: "a", from: "AWS <health@aws.com>", to: "", cc: "", subject: "Renew cert & DNS + more",
+                        snippet: "", date: Date(), labelIds: [], messageIdHeader: "", references: "", listUnsubscribe: "", listUnsubscribePost: false,
+                        html: nil, text: "Add the CNAME record.")
+        let url = try XCTUnwrap(claudeCodeLink(prompt: claudeCodePrompt(for: m), folder: "/Users/me/repo"))
+        XCTAssertEqual(url.scheme, "claude"); XCTAssertEqual(url.host, "code"); XCTAssertEqual(url.path, "/new")
+        let items = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
+        let q = try XCTUnwrap(items.first { $0.name == "q" }?.value)
+        XCTAssertTrue(q.contains("Subject: Renew cert & DNS + more"))
+        XCTAssertTrue(q.contains("Add the CNAME record."))
+        XCTAssertEqual(items.first { $0.name == "folder" }?.value, "/Users/me/repo")
+        XCTAssertEqual(items.count, 2) // the & in the subject didn't split the prompt
+    }
+
+    func testLocalSettingsKeepsOtherKeys() throws {
+        let old = Data(#"{"permissions":{"allow":["Bash"]},"model":"haiku"}"#.utf8)
+        let out = try XCTUnwrap(claudeLocalSettings(existing: old, model: "claude-opus-5-5", effort: "high"))
+        let j = try XCTUnwrap(JSONSerialization.jsonObject(with: out) as? [String: Any])
+        XCTAssertEqual(j["model"] as? String, "claude-opus-5-5")
+        XCTAssertEqual(j["effortLevel"] as? String, "high")
+        XCTAssertNotNil(j["permissions"])
+        XCTAssertNil(claudeLocalSettings(existing: Data("not json".utf8), model: "x", effort: nil)) // never overwrite a file we can't read
+        XCTAssertNotNil(claudeLocalSettings(existing: nil, model: nil, effort: "low"))
+    }
+}

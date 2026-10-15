@@ -220,6 +220,7 @@ struct SettingAnchor: ViewModifier {
 struct AppearanceSettings: View {
     @EnvironmentObject var store: AppStore
     @AppStorage("draftButtons") private var draftButtons = "icons"
+    @AppStorage("emailButtons") private var emailButtons = "text"
     @AppStorage("textScale") private var textScale = 1.0
     @AppStorage("windowOpacity") private var windowOpacity = 0.7
     @AppStorage("cardOpacity") private var cardOpacity = 1.0
@@ -253,6 +254,12 @@ struct AppearanceSettings: View {
                         Text("Quiet icons").tag("icons"); Text("Text links").tag("text")
                     } label: { Text("Draft buttons"); Text("Attach, Signature, Snippet and Write under a draft. Send stays as it is.") }
                     .pickerStyle(.segmented).settingAnchor("Draft buttons")
+                }
+                Section("Emails") {
+                    Picker(selection: $emailButtons) {
+                        Text("Quiet icons").tag("icons"); Text("Text links").tag("text")
+                    } label: { Text("Email buttons"); Text("Reply, Forward, Done and the rest under an open email. Shortcut keys always show.") }
+                    .pickerStyle(.segmented).settingAnchor("Email buttons")
                 }
             }
             .formStyle(.grouped).scrollContentBackground(.hidden)

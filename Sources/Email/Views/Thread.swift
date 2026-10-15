@@ -14,6 +14,7 @@ struct ThreadView: View {
     let conversation: Conversation
     @State private var expanded: Set<String> = []
     @AppStorage("threadNewestFirst") private var newestFirst = false
+    @AppStorage("emailButtons") private var emailButtons = "text"   // "icons" or "text"
     @AppStorage("emailContentTheme") private var contentTheme = "auto"
     @Environment(\.colorScheme) private var scheme
     var contentDark: Bool { contentTheme == "dark" || (contentTheme == "auto" && scheme == .dark) }
@@ -64,18 +65,20 @@ struct ThreadView: View {
                     (Hotkeys.label("h"), "Remind", "clock", { store.openPalette("remind") }),
                     (Hotkeys.label("b"), "Event", "calendar.badge.plus", { store.createEventFromEmail() }),
                     (Hotkeys.label("i"), "Summarize", "text.append", { store.summarize() }),
+                    ("", "Claude Code", "brand:claude", { store.sendToClaudeCode() }),
                     ("⌫", "Delete", "trash", { store.trash() }),
                 ]
-                ForEach(actions, id: \.0) { k, l, icon, run in
+                ForEach(actions, id: \.1) { k, l, icon, run in
                     Button(action: run) {
                         HStack(spacing: 6) {
-                            Image(systemName: icon)
+                            if icon.hasPrefix("brand:") { BrandLogo(brand: String(icon.dropFirst(6)), size: 15) }
+                            else { Image(systemName: icon).accessibilityLabel(l) }
                             if !layout.compact {
-                                Text(l)
-                                KeyHint(k)
+                                if emailButtons == "text" { Text(l) }
+                                if !k.isEmpty { KeyHint(k) }
                             }
                         }.font(.scaled(.callout)).padding(.horizontal, 4)
-                    }.buttonBorderShape(.capsule).help("\(l) (\(k))")
+                    }.buttonBorderShape(.capsule).help(k.isEmpty ? l : "\(l) (\(k))")
                 }
                 Spacer()
                 Button { store.move(-1) } label: { Image(systemName: "chevron.up") }.buttonBorderShape(.circle).help("Previous (\(Hotkeys.label("k")))")

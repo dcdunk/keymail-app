@@ -8,7 +8,7 @@ extension AppStore {
 
     // MARK: Menus and cards
 
-    var modalOpen: Bool { composing != nil || editingSnippet != nil || splitSettingsOpen || eventDraft != nil || summary != nil || linkPrompt != nil }
+    var modalOpen: Bool { composing != nil || editingSnippet != nil || splitSettingsOpen || eventDraft != nil || claudeTask != nil || summary != nil || linkPrompt != nil }
 
     func showPopup(_ entries: [MenuEntry], anchor: CGRect, width: CGFloat = 290, trailing: Bool = false, custom: AnyView? = nil) {
         if let p = popup, p.anchor == anchor { closePopup(); return } // clicking the same button again closes it
@@ -88,7 +88,7 @@ extension AppStore {
         if linkPrompt != nil { if code == 53 || code == 36 { linkPrompt = nil }; return true } // Esc / Return = don't open
         if summary != nil { if code == 53 { summary = nil; return true }; return false }
         if splitSettingsOpen { if code == 53 { splitSettingsOpen = false; return true }; return false }
-        if composing != nil || editingSnippet != nil || eventDraft != nil || state.accounts.isEmpty { return false }
+        if composing != nil || editingSnippet != nil || eventDraft != nil || claudeTask != nil || state.accounts.isEmpty { return false }
         if cmd && ch == "k" { paletteOpen ? (paletteOpen = false) : openPalette(); return true }
         if paletteOpen {
             switch code {

@@ -183,6 +183,8 @@ struct ModalLayer: View {
                         .environment(\.closeCard, CloseCard { store.splitSettingsOpen = false })
                 } else if let ev = store.eventDraft {
                     card { EventSheet(draft: ev) }.environment(\.closeCard, CloseCard { store.eventDraft = nil })
+                } else if let t = store.claudeTask {
+                    card { ClaudeTaskCard(task: t) }.environment(\.closeCard, CloseCard { store.claudeTask = nil })
                 } else if let text = store.summary {
                     card { SummaryCard(text: text) }
                 }

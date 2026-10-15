@@ -232,6 +232,7 @@ final class AppStore: ObservableObject {
     @Published var thumbnails: [String: NSImage] = [:]   // "message key|attachment id" → image
     @Published var instantLoading: String?
     @Published var eventDraft: EventDraft?
+    @Published var claudeTask: ClaudeTask?
     let calendar = CalendarService()
     var pendingG: Date?
     @Published var selectedID: String?

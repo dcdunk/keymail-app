@@ -25,6 +25,7 @@ extension AppStore {
                 Command(title: "Instant reply with \(ai.name)", key: "⇧R") { self.instantReply() },
                 Command(title: state.muted.contains(c.id) ? "Unmute thread" : "Mute thread", key: "⇧M") { self.toggleMute() },
                 Command(title: "Create calendar event from email", key: Hotkeys.label("b")) { self.createEventFromEmail() },
+                Command(title: "Send to Claude Code") { self.sendToClaudeCode() },
             ]
             let typed = paletteText.lowercased().replacingOccurrences(of: "remind me", with: "").replacingOccurrences(of: "remind", with: "")
             if let when = parseWhen(typed) {
@@ -118,6 +119,33 @@ extension AppStore {
             (typedTime && c.title.hasPrefix("Remind me: ") && !snoozePresets().contains { c.title.contains($0.0) })
                 || words.allSatisfy { c.title.lowercased().contains($0) }
         }
+    }
+
+    /// Opens the Send to Claude Code card for the latest email.
+    func sendToClaudeCode() {
+        guard let m = selected?.latest else { return }
+        let d = UserDefaults.standard
+        claudeTask = ClaudeTask(prompt: claudeCodePrompt(for: m), folder: d.string(forKey: "claudeCodeFolder") ?? "",
+                                model: d.string(forKey: "claudeCodeModel") ?? "", effort: d.string(forKey: "claudeCodeEffort") ?? "")
+    }
+
+    /// Saves the choices, writes model/effort into the project, then opens a new Claude Code session in Claude Desktop.
+    func launchClaudeTask(_ t: ClaudeTask) {
+        let d = UserDefaults.standard
+        d.set(t.folder, forKey: "claudeCodeFolder"); d.set(t.model, forKey: "claudeCodeModel"); d.set(t.effort, forKey: "claudeCodeEffort")
+        if !t.model.isEmpty || !t.effort.isEmpty {
+            let dir = URL(fileURLWithPath: t.folder).appendingPathComponent(".claude"), file = dir.appendingPathComponent("settings.local.json")
+            guard let data = claudeLocalSettings(existing: try? Data(contentsOf: file), model: t.model.isEmpty ? nil : t.model,
+                                                 effort: t.effort.isEmpty ? nil : t.effort),
+                  (try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)) != nil,
+                  (try? data.write(to: file)) != nil
+            else { banner = "Couldn't save the model and effort to this project's .claude/settings.local.json."; return }
+        }
+        guard let link = claudeCodeLink(prompt: t.prompt, folder: t.folder), NSWorkspace.shared.open(link) else {
+            banner = "Couldn't open Claude. Install the Claude desktop app and try again."; return
+        }
+        claudeTask = nil
+        banner = "Opened in Claude Code. Review the prompt and press Enter."
     }
 
     func runPalette(_ i: Int? = nil) {
