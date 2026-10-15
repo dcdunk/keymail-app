@@ -1,4 +1,4 @@
-# Keymail: macOS mail client for Gmail and iCloud (Superhuman-style)
+# Keymail: macOS mail client for Gmail, iCloud and Outlook (Superhuman-style)
 
 > Original v1 planning note. The app has grown well past it (iCloud, notifications, settings panel, updates); the code is the source of truth.
 

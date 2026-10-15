@@ -429,12 +429,12 @@ struct AccountsSettings: View {
                                 get: { store.state.accountNames[acct] ?? "" },
                                 set: { store.state.accountNames[acct] = $0 }))
                                 .textFieldStyle(.plain).font(.scaled(.headline))
-                            Text("\(acct) · \(cloud ? "iCloud Mail" : "Gmail")").font(.scaled(.caption)).foregroundStyle(.secondary)
+                            Text("\(acct) · \(cloud ? "iCloud Mail" : store.isMicrosoft(acct) ? "Outlook" : "Gmail")").font(.scaled(.caption)).foregroundStyle(.secondary)
                             TextField("Send-as aliases, comma-separated", text: Binding(
                                 get: { (store.state.aliases[acct] ?? []).joined(separator: ", ") },
                                 set: { store.setAliases($0, for: acct) }))
                                 .textFieldStyle(.roundedBorder).font(.scaled(.caption))
-                                .help(cloud ? "Aliases from icloud.com → Mail settings → Accounts" : "Must already be set up under Gmail → Settings → Accounts → Send mail as")
+                                .help(cloud ? "Aliases from icloud.com → Mail settings → Accounts" : store.isMicrosoft(acct) ? "Must already be set up in Outlook on the web" : "Must already be set up under Gmail → Settings → Accounts → Send mail as")
                             if !(store.state.aliases[acct] ?? []).isEmpty {
                                 Picker("Send from by default", selection: Binding(
                                     get: { store.sendAddress(acct) },
