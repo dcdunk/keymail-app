@@ -11,7 +11,7 @@ public func parseMessage(_ j: [String: Any], account: String) -> Message? {
         if key == "authentication-results" { authResults.append(v) }
         if headers[key] == nil { headers[key] = v } // first wins: later duplicates are the sender's, not the server's
     }
-    var html: String?, text: String?
+    var html: String?, text: String?, calendar: String?
     var files: [AttachmentRef] = []
     var embedded: [String: String] = [:]   // content id → data URL, for small images Gmail sends inside the message
     func walk(_ p: [String: Any]) {
@@ -37,6 +37,7 @@ public func parseMessage(_ j: [String: Any], account: String) -> Message? {
            let decoded = base64urlDecode(data).flatMap({ String(data: $0, encoding: .utf8) ?? String(data: $0, encoding: .isoLatin1) }) {
             if mime == "text/html", html == nil { html = decoded }
             if mime == "text/plain", text == nil { text = decoded }
+            if mime == "text/calendar", calendar == nil { calendar = decoded }
         }
         for child in p["parts"] as? [[String: Any]] ?? [] { walk(child) }
     }
@@ -57,6 +58,7 @@ public func parseMessage(_ j: [String: Any], account: String) -> Message? {
                    listUnsubscribe: headers["list-unsubscribe"] ?? "",
                    listUnsubscribePost: headers["list-unsubscribe-post"] != nil, html: html, text: text, attachments: files)
     msg.replyTo = headers["reply-to"]
+    msg.calendar = calendar
     msg.authFailed = authenticationFailed(providerAuthResults(authResults, server: "mx.google.com"))
     return msg
 }

@@ -64,7 +64,7 @@ struct GmailSettings: View {
                 Label("Allow Keymail to manage these settings", systemImage: "lock.shield").font(.scaled(.headline))
                 Text("To change out of office and signatures here, Google needs your OK. Click below and approve in your browser.")
                     .font(.scaled(.callout)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Button("Grant access") { store.grantSettingsAccess() }.prominentGlassButton().buttonBorderShape(.capsule)
+                Button("Grant access") { store.grantSettingsAccess(for: account) }.prominentGlassButton().buttonBorderShape(.capsule)
             }
         }
     }

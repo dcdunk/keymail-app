@@ -20,6 +20,7 @@ public struct Message: Codable, Identifiable, Hashable {
     public var attachments: [AttachmentRef] = []
     public var replyTo: String?        // Reply-To header, if any
     public var authFailed: Bool?       // the sender's domain failed SPF/DKIM/DMARC (from Authentication-Results)
+    public var calendar: String?       // a calendar invite carried inside the email (text/calendar part), if any
 
     public init(id: String, threadId: String, account: String, from: String, to: String = "", cc: String = "",
                 subject: String = "", snippet: String = "", date: Date = Date(), labelIds: [String] = [],

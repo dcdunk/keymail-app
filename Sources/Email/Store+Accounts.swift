@@ -10,7 +10,7 @@ extension AppStore {
         Task {
             busy = "Waiting for Google sign-in in your browser…"
             do {
-                let email = try await auth.signIn()
+                let email = try await auth.signIn().email
                 if !state.accounts.contains(email) { state.accounts.append(email) }
                 state.historyIds[email] = nil
                 busy = nil

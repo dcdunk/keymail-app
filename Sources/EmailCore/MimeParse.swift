@@ -10,6 +10,7 @@ public struct ParsedMail {
     public var headers: [String: String] = [:]
     public var html: String?
     public var text: String?
+    public var calendar: String?
     public var attachments: [(ref: AttachmentRef, data: Data)] = []
 }
 
@@ -111,6 +112,7 @@ public func parseRaw(_ raw: Data) -> ParsedMail {
             let str = decodeCharset(data, headerParam(ctype, "charset"))
             if mime == "text/html", mail.html == nil { mail.html = str }
             if mime == "text/plain", mail.text == nil { mail.text = str }
+            if mime == "text/calendar", mail.calendar == nil { mail.calendar = str }
             return
         }
         let cid = h["content-id"].map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "<> ")) }
@@ -171,6 +173,8 @@ public func messageFromRaw(_ raw: Data, uid: Int, flags: [String], account: Stri
                         return inlineImages(html, map)
                     }, text: p.text, attachments: p.attachments.map(\.ref))
     m.replyTo = h["reply-to"]
+    m.calendar = p.calendar ?? p.attachments.first { $0.ref.mimeType == "text/calendar" || $0.ref.name.lowercased().hasSuffix(".ics") }
+        .map { String(decoding: $0.data, as: UTF8.self) }
     m.authFailed = authenticationFailed(h["authentication-results"])
     m.snippet = String(m.plainText.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ").prefix(160))
     return m

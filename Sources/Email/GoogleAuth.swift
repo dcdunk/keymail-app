@@ -59,7 +59,8 @@ struct GoogleClient: Decodable {
 final class GoogleAuth {
     private var cache: [String: (token: String, expires: Date)] = [:]
     // gmail.settings.basic: out of office, signatures (send-as). Accounts added before it existed are asked again once.
-    let scopes = "https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.settings.basic"
+    // calendar.events: answer invites (Accept / Maybe / No) on the account's own Google Calendar.
+    let scopes = "https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.settings.basic https://www.googleapis.com/auth/calendar.events"
 
     func invalidate(_ account: String) { cache[account] = nil }
 
@@ -84,10 +85,11 @@ final class GoogleAuth {
               let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [] }
         return Set((j["scope"] as? String ?? "").split(separator: " ").map(String.init))
     }
-    static let settingsScope = "https://www.googleapis.com/auth/gmail.settings.basic"
+    nonisolated static let settingsScope = "https://www.googleapis.com/auth/gmail.settings.basic"
 
-    /// Opens the browser, waits for Google to redirect back to 127.0.0.1, returns the account's email.
-    func signIn() async throws -> String {
+    /// Opens the browser, waits for Google to redirect back to 127.0.0.1, returns the account's email and the
+    /// permissions the person actually ticked (Google lets them untick some). `hint` preselects that account.
+    func signIn(hint: String? = nil) async throws -> (email: String, scopes: Set<String>) {
         guard let client = GoogleClient.load() else { throw AppError("Google client file missing.") }
         let verifier = (0..<2).map { _ in UUID().uuidString }.joined().replacingOccurrences(of: "-", with: "")
         let state = UUID().uuidString
@@ -100,6 +102,7 @@ final class GoogleAuth {
                             .init(name: "code_challenge", value: pkceChallenge(verifier)), .init(name: "code_challenge_method", value: "S256"),
                             .init(name: "access_type", value: "offline"), .init(name: "prompt", value: "consent select_account"),
                             .init(name: "state", value: state), .init(name: "include_granted_scopes", value: "true")]
+                + (hint.map { [.init(name: "login_hint", value: $0)] } ?? [])
             NSWorkspace.shared.open(c.url!)
         }
         guard params["state"] == state, let code = params["code"] else { throw AppError("Sign-in was cancelled or failed.") }
@@ -116,7 +119,7 @@ final class GoogleAuth {
         }
         Keychain.set(refresh, for: email)
         cache[email] = (access, Date().addingTimeInterval(j["expires_in"] as? Double ?? 3000))
-        return email
+        return (email, Set((j["scope"] as? String ?? "").split(separator: " ").map(String.init)))
     }
 
     private func tokenRequest(_ form: [String: String]) async throws -> [String: Any] {

@@ -17,6 +17,7 @@ public struct Draft: Codable, Hashable {
     public var quoted: String?           // the original being replied to / forwarded, kept apart from what you type
     public var signaturePlain: String?   // plain-text signature, placed between `body` and `quoted`
     public var signatureHTML: String?    // its rich version; when set, the email also goes out as HTML
+    public var calendarReply: String?    // an iTIP REPLY (.ics) sent alongside the text so the organizer's calendar records it
     public init(from: String) { self.from = from }
 }
 
@@ -91,6 +92,11 @@ private func base64Part(_ type: String, _ text: String) -> String {
 /// Images embedded as data: URLs become inline attachments (multipart/related), since Gmail blocks data: images.
 func contentPart(_ d: Draft) -> String {
     let plain = base64Part("text/plain", fullBody(d))
+    if let ics = d.calendarReply {
+        let b = "=_cal_" + UUID().uuidString
+        return "Content-Type: multipart/alternative; boundary=\"\(b)\"\r\n\r\n--\(b)\r\n\(plain)\r\n--\(b)\r\n"
+            + base64Part("text/calendar; method=REPLY", ics) + "\r\n--\(b)--"
+    }
     guard let html = composeHTML(d) else { return plain }
     let (cidHTML, images) = extractDataImages(html)
     var htmlPart = base64Part("text/html", cidHTML)

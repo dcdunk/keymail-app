@@ -155,6 +155,9 @@ struct MessageCard: View {
             .contentShape(Rectangle())
             .onTapGesture { if collapsible { collapse() } }
             .help(collapsible ? "Click to collapse" : "")
+            if message.calendar != nil || message.attachments.contains(where: { $0.mimeType == "text/calendar" || $0.name.lowercased().hasSuffix(".ics") }) {
+                InviteCard(message: message)
+            }
             bodyView
             let files = message.attachments.filter { !$0.isInline }
             let photos = files.filter { $0.mimeType.hasPrefix("image/") }

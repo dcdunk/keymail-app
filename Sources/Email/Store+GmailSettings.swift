@@ -36,15 +36,16 @@ extension AppStore {
     }
 
     /// Signs in again so Google can grant the settings permission (no mail reload needed).
-    func grantSettingsAccess() {
+    /// Asks Google again for `account` only, then trusts what Google says was granted in that same answer.
+    func grantSettingsAccess(for account: String) {
         Task {
             busy = "Approve the new permission in your browser…"
             defer { busy = nil }
             do {
-                let a = try await auth.signIn()
-                await checkSettingsAccess(a)
-                if needsSettingsAccess.contains(a) {
-                    banner = "Google didn't grant the settings permission. Add gmail.settings.basic to your consent screen's scopes (Data Access), then try again."
+                let r = try await auth.signIn(hint: account)
+                banner = settingsGrantOutcome(requested: account, signedIn: r.email, scopes: r.scopes)
+                if r.email.lowercased() == account.lowercased() {
+                    if r.scopes.contains(GoogleAuth.settingsScope) { needsSettingsAccess.remove(account) } else { needsSettingsAccess.insert(account) }
                 }
                 await loadVacations()
             } catch { report(error) }
@@ -181,4 +182,15 @@ extension AppStore {
         case .none: banner = "This sender has no unsubscribe link."
         }
     }
+}
+
+/// What to tell the person after a Grant access round trip. nil = it worked.
+func settingsGrantOutcome(requested: String, signedIn: String, scopes: Set<String>) -> String? {
+    if signedIn.lowercased() != requested.lowercased() {
+        return "You approved \(signedIn), not \(requested). Click Grant access again and pick \(requested) in Google's account list."
+    }
+    if !scopes.contains(GoogleAuth.settingsScope) {
+        return "Google didn't include the settings permission. On Google's screen, tick \"See, edit, create, or change your email settings and filters in Gmail\" (or Select all) before you press Continue."
+    }
+    return "Settings access granted for \(requested)."
 }

@@ -44,3 +44,16 @@ final class AIModelTests: XCTestCase {
         }
     }
 }
+
+final class SettingsGrantTests: XCTestCase {
+    let ok: Set<String> = ["https://www.googleapis.com/auth/gmail.modify", GoogleAuth.settingsScope]
+    func testWrongAccountPicked() {
+        XCTAssertTrue(settingsGrantOutcome(requested: "a@gmail.com", signedIn: "b@gmail.com", scopes: ok)!.contains("not a@gmail.com"))
+    }
+    func testBoxLeftUnticked() {
+        XCTAssertTrue(settingsGrantOutcome(requested: "a@gmail.com", signedIn: "A@gmail.com", scopes: ["https://www.googleapis.com/auth/gmail.modify"])!.contains("tick"))
+    }
+    func testGranted() {
+        XCTAssertTrue(settingsGrantOutcome(requested: "a@gmail.com", signedIn: "a@gmail.com", scopes: ok)!.contains("granted"))
+    }
+}
