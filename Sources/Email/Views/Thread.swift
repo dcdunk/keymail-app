@@ -56,13 +56,13 @@ struct ThreadView: View {
             }
             HStack(spacing: 22) {
                 let actions: [(String, String, String, () -> Void)] = [
-                    ("R", "Reply", "arrowshape.turn.up.left", { store.reply(all: false) }),
-                    ("A", "Reply all", "arrowshape.turn.up.left.2", { store.reply(all: true) }),
-                    ("F", "Forward", "arrowshape.turn.up.right", { store.forward() }),
-                    ("E", "Done", "checkmark", { store.markDone() }),
-                    ("H", "Remind", "clock", { store.openPalette("remind") }),
-                    ("B", "Event", "calendar.badge.plus", { store.createEventFromEmail() }),
-                    ("I", "Summarize", "text.append", { store.summarize() }),
+                    (Hotkeys.label("r"), "Reply", "arrowshape.turn.up.left", { store.reply(all: false) }),
+                    (Hotkeys.label("a"), "Reply all", "arrowshape.turn.up.left.2", { store.reply(all: true) }),
+                    (Hotkeys.label("f"), "Forward", "arrowshape.turn.up.right", { store.forward() }),
+                    (Hotkeys.label("e"), "Done", "checkmark", { store.markDone() }),
+                    (Hotkeys.label("h"), "Remind", "clock", { store.openPalette("remind") }),
+                    (Hotkeys.label("b"), "Event", "calendar.badge.plus", { store.createEventFromEmail() }),
+                    (Hotkeys.label("i"), "Summarize", "text.append", { store.summarize() }),
                     ("⌫", "Delete", "trash", { store.trash() }),
                 ]
                 ForEach(actions, id: \.0) { k, l, icon, run in
@@ -71,14 +71,14 @@ struct ThreadView: View {
                             Image(systemName: icon)
                             if !layout.compact {
                                 Text(l)
-                                Text(k).font(.scaled(size: 10, weight: .semibold)).foregroundStyle(.tertiary)
+                                KeyHint(k)
                             }
                         }.font(.scaled(.callout)).padding(.horizontal, 4)
                     }.buttonBorderShape(.capsule).help("\(l) (\(k))")
                 }
                 Spacer()
-                Button { store.move(-1) } label: { Image(systemName: "chevron.up") }.buttonBorderShape(.circle).help("Previous (K)")
-                Button { store.move(1) } label: { Image(systemName: "chevron.down") }.buttonBorderShape(.circle).help("Next (J)")
+                Button { store.move(-1) } label: { Image(systemName: "chevron.up") }.buttonBorderShape(.circle).help("Previous (\(Hotkeys.label("k")))")
+                Button { store.move(1) } label: { Image(systemName: "chevron.down") }.buttonBorderShape(.circle).help("Next (\(Hotkeys.label("j")))")
             }
             .font(.scaled(.callout)).foregroundStyle(.secondary)
             .padding(.horizontal, layout.compact ? 16 : 40).padding(.vertical, 12)

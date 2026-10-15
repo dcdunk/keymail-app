@@ -118,7 +118,7 @@ struct ComposeView: View {
     var toolbar: some View {
         HStack(spacing: 6) {
             Button { send(at: nil) } label: {
-                HStack(spacing: 8) { Text("Send").fontWeight(.semibold); Text("⌘↵").font(.scaled(.caption)).opacity(0.7) }
+                HStack(spacing: 8) { Text("Send").fontWeight(.semibold); KeyHint("⌘↵") }
                     .padding(.horizontal, 6)
             }
             .keyboardShortcut(.return, modifiers: .command).prominentGlassButton().controlSize(.large).buttonBorderShape(.capsule)

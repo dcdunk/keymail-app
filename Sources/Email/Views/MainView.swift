@@ -78,7 +78,7 @@ struct Header: View {
             } else if let f = store.folder {
                 HStack(spacing: 10) {
                     Text(f).font(.scaled(size: 15, weight: .semibold)).lineLimit(1)
-                    Text("Esc").font(.scaled(size: 12, weight: .medium)).foregroundStyle(.secondary)
+                    KeyHint("Esc")
                 }
                 .padding(.horizontal, 16).padding(.vertical, 8)
                 .glass(Capsule())
@@ -123,7 +123,7 @@ struct Header: View {
                     .frame(width: 34, height: 34).contentShape(Circle())
             }
             .buttonStyle(.plain).foregroundStyle(.primary).glass(Circle(), interactive: true)
-            .help("New email (C)").coachAnchor("compose")
+            .help("New email (\(Hotkeys.label("c")))").coachAnchor("compose")
             // Search button: an entry point for mouse users, and something for the search tip to point at.
             Button { store.searchOpen = true } label: { Image(systemName: "magnifyingglass").frame(width: 34, height: 34).contentShape(Circle()) }
                 .buttonStyle(.plain).foregroundStyle(.secondary).glass(Circle(), interactive: true)
@@ -252,7 +252,7 @@ struct Row: View {
                     quick("checkmark", "Done (E)") { store.markDone() }
                     MenuButton(width: 270, trailing: true, entries: { store.remindEntries(c, ifNoReply: false) }) {
                         Image(systemName: "clock").frame(width: 28, height: 28).contentShape(Rectangle())
-                    }.buttonStyle(.plain).handCursor().fixedSize().help("Remind me (H)")
+                    }.buttonStyle(.plain).handCursor().fixedSize().help("Remind me (\(Hotkeys.label("h")))")
                     quick(c.isStarred ? "star.fill" : "star", c.isStarred ? "Unstar (S)" : "Star (S)") { store.toggleStar() }
                     quick("trash", "Delete (⌫)") { store.trash() }
                 }

@@ -73,7 +73,7 @@ struct FolderPanel: View {
                 if let subtitle { Text(subtitle).font(.scaled(size: 12)).foregroundStyle(.tertiary) }
                 Spacer()
                 if count > 0 { Text("\(count)").font(.scaled(size: 12).monospacedDigit()).foregroundStyle(.secondary) }
-                else if !key.isEmpty { Text(key).font(.scaled(size: 10, weight: .medium)).foregroundStyle(.quaternary) }
+                else if !key.isEmpty { KeyHint(key, size: 10) }
             }
             .padding(.leading, indent ? 30 : 18).padding(.trailing, 18).padding(.vertical, 8)
             .background(alignment: .leading) {

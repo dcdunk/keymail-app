@@ -27,7 +27,7 @@ struct PaletteView: View {
                             HStack {
                                 Text(c.title)
                                 Spacer()
-                                if !c.key.isEmpty { Text(c.key).font(.scaled(size: 12, weight: .medium)).foregroundStyle(.secondary) }
+                                if !c.key.isEmpty { KeyHint(c.key, size: 12) }
                             }
                             .padding(.horizontal, 14).padding(.vertical, 9)
                             .background(RoundedRectangle(cornerRadius: 10).fill(i == store.paletteIndex ? Theme.selection : .clear))

@@ -81,3 +81,20 @@ extension Font {
         return scaled(size: sizes[style] ?? 13, weight: style == .headline ? .bold : .regular, design: design)
     }
 }
+
+/// A keyboard shortcut drawn as a small keycap. Uses the surrounding text color (white on a filled button,
+/// label color elsewhere) so it stays readable in light and dark mode and on glass.
+struct KeyHint: View {
+    let key: String
+    var size: CGFloat = 11
+    init(_ key: String, size: CGFloat = 11) { self.key = key; self.size = size }
+    var body: some View {
+        Text(key).font(.scaled(size: size, weight: .semibold, design: .rounded)).monospacedDigit()
+            .foregroundStyle(.primary.opacity(0.9))
+            .padding(.horizontal, 5).padding(.vertical, 1.5)
+            .frame(minWidth: size * 1.7 * Font.scale)
+            .background(RoundedRectangle(cornerRadius: 5).fill(.primary.opacity(0.16)))
+            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.primary.opacity(0.3), lineWidth: 0.75))
+            .accessibilityLabel("Shortcut \(key)")
+    }
+}

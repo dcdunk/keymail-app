@@ -147,7 +147,7 @@ struct PopupLayer: View {
                     }
                     Spacer(minLength: 8)
                     if e.checked { Image(systemName: "checkmark").font(.scaled(size: 11, weight: .bold)).foregroundStyle(Theme.accent) }
-                    if let k = e.key { Text(k).font(.scaled(size: 11, weight: .medium)).foregroundStyle(.tertiary).monospacedDigit() }
+                    if let k = e.key { KeyHint(k) }
                     if e.submenu != nil { Image(systemName: "chevron.right").font(.scaled(size: 10, weight: .semibold)).foregroundStyle(.tertiary) }
                 }
                 .padding(.horizontal, 8).frame(minHeight: e.subtitle != nil || e.letter != nil ? 40 : 30)

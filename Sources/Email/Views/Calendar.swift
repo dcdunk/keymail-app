@@ -21,7 +21,7 @@ struct CalendarSection: View {
                     .font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary)
                 Spacer()
                 Button { store.createEventFromEmail() } label: { Image(systemName: "calendar.badge.plus") }
-                    .buttonStyle(.plain).foregroundStyle(.secondary).help("Create event (B)")
+                    .buttonStyle(.plain).foregroundStyle(.secondary).help("Create event (\(Hotkeys.label("b")))")
             }
             if !cal.authorized {
                 Button("Show my calendar") { Task { _ = await store.calendar.requestAccess() } }.controlSize(.small)

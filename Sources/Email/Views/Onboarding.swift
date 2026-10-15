@@ -199,8 +199,7 @@ struct OnboardingView: View {
 
     func keyRow(_ k: String, _ d: String) -> some View {
         GridRow {
-            Text(k).font(.scaled(size: 13, weight: .semibold, design: .rounded)).padding(.horizontal, 8).padding(.vertical, 3)
-                .background(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.primary.opacity(0.2)))
+            KeyHint(k, size: 13)
             Text(d)
         }
     }

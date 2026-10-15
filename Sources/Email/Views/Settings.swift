@@ -300,7 +300,7 @@ struct AccountsSettings: View {
                             }
                         }
                         Spacer()
-                        Text("⌘\(i + 1)").font(.scaled(.caption)).foregroundStyle(.tertiary)
+                        KeyHint("⌘\(i + 1)")
                         Button("Remove") { removing = acct }
                     }.padding(.vertical, 4)
                 }
