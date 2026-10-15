@@ -100,7 +100,7 @@ extension AppStore {
         if state.activeAccount != nil, state.accounts.count > 1 {
             list.append(Command(title: "Show all accounts together", key: "⌘0") { self.switchAccount(nil) })
         }
-        list.append(Command(title: "Add Google account") { self.addAccount() })
+        list.append(Command(title: "Add Email Account") { self.openSettings(tab: "accounts") })
         list += state.accounts.map { a in Command(title: "Sign out \(a)") { self.removeAccount(a) } }
         if !undoStack.isEmpty { list.append(Command(title: "Undo", key: "⌘Z") { self.undo() }) }
         list.append(Command(title: "Fetch mail", key: "⌘R") { Task { await self.tick() } })

@@ -67,11 +67,11 @@ final class GoogleAuth {
     func accessToken(for account: String) async throws -> String {
         if let c = cache[account], c.expires > Date().addingTimeInterval(60) { return c.token }
         guard let client = GoogleClient.load() else { throw AppError("Google client file missing.") }
-        guard let refresh = Keychain.get(account) else { throw AppError("\(account) is signed out. Press ⌘K → Add Google account.") }
+        guard let refresh = Keychain.get(account) else { throw AppError("\(account) is signed out. Press ⌘K → Add Email Account.") }
         let j = try await tokenRequest(["client_id": client.client_id, "client_secret": client.client_secret,
                                         "refresh_token": refresh, "grant_type": "refresh_token"])
         guard let token = j["access_token"] as? String else {
-            throw AppError("\(account) needs to sign in again (Google expires test-mode sign-ins after 7 days). Press ⌘K → Add Google account.")
+            throw AppError("\(account) needs to sign in again (Google expires test-mode sign-ins after 7 days). Press ⌘K → Add Email Account.")
         }
         cache[account] = (token, Date().addingTimeInterval(j["expires_in"] as? Double ?? 3000))
         return token

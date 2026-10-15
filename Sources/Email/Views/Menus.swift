@@ -56,7 +56,7 @@ extension AppStore {
             e.append(MenuEntry(title: "All accounts", icon: "tray.2", key: "⌘0", checked: state.activeAccount == nil) { self.switchAccount(nil) })
         }
         e += [.divider,
-              MenuEntry(title: "Add Google account", icon: "plus", disabled: !hasClient) { self.addAccount() },
+              MenuEntry(title: "Add Email Account", icon: "plus") { self.openSettings(tab: "accounts") },
               MenuEntry(title: "Settings", icon: "gearshape", key: "⌘,") { self.openSettings() }]
         return e
     }
