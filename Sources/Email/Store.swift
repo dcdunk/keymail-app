@@ -235,7 +235,12 @@ final class AppStore: ObservableObject {
     }
 
     /// Settings slide in from the right inside the main window (⌘,). Esc or clicking the inbox closes them.
-    @Published var settingsOpen = false { didSet { if !settingsOpen && oldValue { refreshHover(after: 0.5) } } }
+    @Published var settingsOpen = false { didSet {
+        guard !settingsOpen && oldValue else { return }
+        // Hand the keyboard back to the inbox, or a settings text box keeps it and arrows/Return stop working.
+        NSApp.keyWindow?.makeFirstResponder(nil)
+        refreshHover(after: 0.5)
+    } }
     func openSettings() {
         paletteOpen = false; sidebarOpen = false; closePopup()
         settingsOpen = true

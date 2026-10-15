@@ -15,6 +15,7 @@ struct SettingsPanel: View {
     @AppStorage("settingsTab") private var tab = "general"
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var query = ""
+    @State private var showContent = false   // the settings themselves exist only while open or sliding out
 
     struct Section: Identifiable { let id: String, title: String, icon: String, keywords: String }
     static let sections: [Section] = [
@@ -43,7 +44,10 @@ struct SettingsPanel: View {
                 Color.black.opacity(open ? 0.18 : 0).ignoresSafeArea()
                     .onTapGesture { store.settingsOpen = false }
                     .allowsHitTesting(open)
-                panel
+                Group { if showContent { panel } else { Color.clear } }
+                    // Closed settings must never hold keyboard focus (an invisible search box would swallow
+                    // arrows and Return meant for the inbox).
+                    .disabled(!open)
                     .frame(width: width)
                     .frame(maxHeight: .infinity)
                     .solidPanel(UnevenRoundedRectangle(topLeadingRadius: 18, bottomLeadingRadius: 18))
@@ -53,6 +57,10 @@ struct SettingsPanel: View {
                     .allowsHitTesting(open)
             }
             .animation(motion, value: open)
+        }
+        .onChange(of: open) { _, isOpen in
+            if isOpen { showContent = true }
+            else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { if !store.settingsOpen { showContent = false } } }
         }
     }
 
