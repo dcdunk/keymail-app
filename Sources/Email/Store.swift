@@ -308,6 +308,7 @@ final class AppStore: ObservableObject {
         Disk.clearPreviewCache()
         Task {
             await loadVacations()
+            await loadAccountPhotos()
             for a in gmailAccounts { await loadLabels(a) } // for the Label menu; needs no extra permission
         }
         // Follow the Mac's light/dark setting by default (one-time reset from the old toggle).

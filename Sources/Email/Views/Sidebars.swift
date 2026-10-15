@@ -112,6 +112,7 @@ struct ContextPanel: View {
         let files = withThem.flatMap { c in c.messages.flatMap { m in m.attachments.filter { !$0.isInline }.map { (m, $0) } } }
             .sorted { $0.0.date > $1.0.date }
         let recent = store.recentlyOpened.filter { $0 != conversation.id }.compactMap { id in all.first { $0.id == id } }
+        VStack(spacing: 0) {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 if let person { header(person, email: email, count: withThem.count, first: withThem.map(\.messages[0].date).min()) }
@@ -131,12 +132,18 @@ struct ContextPanel: View {
                     }
                 }
                 section("Recently opened", count: 0, hidden: recent.isEmpty) { ForEach(recent.prefix(4)) { c in row(c) } }
-                CalendarSection(conversation: conversation).padding(.horizontal, 8)
-                let due = store.state.snoozes.filter { Calendar.current.isDateInToday($0.until) }.count
-                Text("\(due) reminder\(due == 1 ? "" : "s") returning today · \(store.state.scheduled.count) scheduled")
-                    .font(.scaled(.caption)).foregroundStyle(.tertiary).padding(.horizontal, 8)
             }
             .padding(.horizontal, 10).padding(.vertical, 16).frame(maxWidth: .infinity, alignment: .leading)
+        }
+        // Your day, kept apart at the bottom so it doesn't read as being about this person.
+        VStack(alignment: .leading, spacing: 10) {
+            CalendarSection(conversation: conversation)
+            let due = store.state.snoozes.filter { Calendar.current.isDateInToday($0.until) }.count
+            Text("\(due) reminder\(due == 1 ? "" : "s") returning today · \(store.state.scheduled.count) scheduled")
+                .font(.scaled(.caption)).foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 18).padding(.vertical, 14).frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .top) { Divider().padding(.horizontal, 12) }
         }
         .frame(width: 280)
         .glass(RoundedRectangle(cornerRadius: 20))
@@ -146,7 +153,7 @@ struct ContextPanel: View {
     func header(_ person: Address, email: String, count: Int, first: Date?) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                Avatar(address: person, size: 44)
+                Avatar(address: person, size: 48)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(person.display).font(.scaled(.headline)).lineLimit(1)
                     Text(person.email).font(.scaled(.caption)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle).textSelection(.enabled)

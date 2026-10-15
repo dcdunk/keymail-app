@@ -233,6 +233,9 @@ struct Row: View {
                         .help("Possible phishing: " + warnings.joined(separator: " "))
                 }
                 if c.messages.count > 1 { Text("\(c.messages.count)").foregroundStyle(.secondary) }
+                if c.messages.contains(where: { $0.attachments.contains { !$0.isInline } }) {
+                    Image(systemName: "paperclip").font(.scaled(size: 12)).foregroundStyle(.secondary).help("Has attachments")
+                }
             }
             .font(.scaled(size: 15, weight: unread ? .semibold : .regular))
             .frame(width: layout.compact ? 170 : 260, alignment: .leading)

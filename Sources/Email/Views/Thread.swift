@@ -112,14 +112,35 @@ struct CollapsedMessage: View {
     }
 }
 
+/// The sender's company logo when their site has one (see SenderLogos), otherwise their initial.
 struct Avatar: View {
     let address: Address?
     var size: CGFloat = 34
+    @ObservedObject private var logos = SenderLogos.shared
     var body: some View {
         let key = address?.email ?? "?"
-        Circle().fill(Theme.chip(key).opacity(0.2)).frame(width: size, height: size)
-            .overlay(Text(String((address?.display ?? "?").prefix(1)).uppercased())
-                .font(.scaled(size: size * 0.42, weight: .semibold)).foregroundStyle(Theme.chip(key)))
+        let domain = logoDomain(for: key)
+        Group {
+            if let logo = logos.images[SenderLogos.personKey(key)] ?? domain.flatMap({ logos.images[SenderLogos.key($0, senderName: address?.name)] }) {
+                Group {
+                    // The circle takes the icon's own background color (white for bare marks), with the mark centered on it.
+                    if logo.photo {   // a profile photo fills the circle
+                        Image(nsImage: logo.image).resizable().interpolation(.high).scaledToFill()
+                    } else {
+                        Circle().fill(Color(nsColor: logo.background ?? .white))
+                            .overlay(Image(nsImage: logo.image).resizable().interpolation(.high).scaledToFit()
+                                .padding(size * (logo.background == nil ? 0.18 : 0.08)))
+                    }
+                }
+                .frame(width: size, height: size).clipShape(Circle())
+                .overlay(Circle().strokeBorder(Color.primary.opacity(0.08)))
+            } else {
+                Circle().fill(Theme.chip(key).opacity(0.2)).frame(width: size, height: size)
+                    .overlay(Text(String((address?.display ?? "?").prefix(1)).uppercased())
+                        .font(.scaled(size: size * 0.42, weight: .semibold)).foregroundStyle(Theme.chip(key)))
+            }
+        }
+        .task(id: key) { logos.loadPhoto(key); if let domain { await logos.load(domain, senderName: address?.name) } }
     }
 }
 

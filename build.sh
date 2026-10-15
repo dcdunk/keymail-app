@@ -57,6 +57,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSHighResolutionCapable</key><true/>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>NSAppTransportSecurity</key><dict><key>NSAllowsArbitraryLoadsInWebContent</key><true/></dict>
+  <key>NSContactsUsageDescription</key><string>Keymail shows the photo on your own contact card for your iCloud account.</string>
   <key>NSCalendarsFullAccessUsageDescription</key><string>Keymail shows your schedule next to your inbox and turns emails into calendar events.</string>
 </dict></plist>
 PLIST

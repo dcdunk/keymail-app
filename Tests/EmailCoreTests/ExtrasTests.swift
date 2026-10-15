@@ -435,3 +435,38 @@ final class ClaudeCodeLinkTests: XCTestCase {
         XCTAssertEqual(t, "Hello\n\nSee https://short.io too")
     }
 }
+
+final class SenderLogoTests: XCTestCase {
+    func testLogoDomain() {
+        XCTAssertEqual(logoDomain(for: "health@aws.com"), "aws.com")
+        XCTAssertEqual(logoDomain(for: "DoNotReply@email.trinet.com"), "trinet.com")
+        XCTAssertEqual(logoDomain(for: "news@mail.bbc.co.uk"), "bbc.co.uk")
+        XCTAssertNil(logoDomain(for: "friend@gmail.com"))
+        XCTAssertNil(logoDomain(for: "me@icloud.com"))
+        XCTAssertNil(logoDomain(for: "not-an-email"))
+    }
+    func testIconLinksPreferTouchIcon() {
+        let html = #"<link rel="icon" href="/favicon-32.png"><link rel="mask-icon" href="/m.svg"><LINK href='/apple.png' rel='apple-touch-icon'>"#
+        XCTAssertEqual(iconLinks(inHTML: html), ["/apple.png", "/favicon-32.png"])
+    }
+    func testLogoSites() {
+        XCTAssertEqual(Array(logoSites(for: "sonarsource.email").prefix(3)), ["sonarsource.email", "sonarsource.com", "sonarsource.io"])
+        XCTAssertTrue(logoSites(for: "stripemail.com").contains("stripe.com"))
+        XCTAssertTrue(logoSites(for: "acme-news.io").contains("acme.com"))
+        XCTAssertTrue(logoSites(for: "mailacme.net").contains("acme.com"))
+        XCTAssertEqual(logoSites(for: "aws.com").first, "aws.com")
+        XCTAssertEqual(logoSites(for: "aws.com").filter { $0 == "aws.com" }.count, 1) // no repeats
+        XCTAssertTrue(logoSites(for: "bbc.co.uk").contains("bbc.com"))
+    }
+    func testLogoSitesUseSenderName() {
+        XCTAssertTrue(logoSites(for: "shipmail-xyz.com", senderName: "xSuit").contains("xsuit.com"))
+        XCTAssertEqual(companyName("The Sonar Team"), "sonar")
+        XCTAssertEqual(companyName("Salesforce Billing"), "salesforce")
+        XCTAssertNil(companyName("billing@acme.com"))
+    }
+    func testUnrelatedSenderNameGoesFirst() {
+        XCTAssertEqual(logoSites(for: "getredo.com", senderName: "xSuit").first, "xsuit.com")       // vendor domain
+        XCTAssertEqual(logoSites(for: "sonarsource.email", senderName: "The Sonar Team").first, "sonarsource.email") // related
+        XCTAssertEqual(logoSites(for: "trinet.com", senderName: "DoNotReply").first, "trinet.com")
+    }
+}

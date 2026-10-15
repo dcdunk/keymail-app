@@ -60,7 +60,7 @@ final class GoogleAuth {
     private var cache: [String: (token: String, expires: Date)] = [:]
     // gmail.settings.basic: out of office, signatures (send-as). Accounts added before it existed are asked again once.
     // calendar.events: answer invites (Accept / Maybe / No) on the account's own Google Calendar.
-    let scopes = "https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.settings.basic https://www.googleapis.com/auth/calendar.events"
+    let scopes = "profile https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.settings.basic https://www.googleapis.com/auth/calendar.events"
 
     func invalidate(_ account: String) { cache[account] = nil }
 

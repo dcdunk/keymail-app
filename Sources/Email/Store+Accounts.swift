@@ -1,4 +1,5 @@
 import AppKit
+import Contacts
 import SwiftUI
 import EmailCore
 import CryptoKit
@@ -17,6 +18,7 @@ extension AppStore {
                 busy = nil
                 try await fullSync(email)
                 saveCache()
+                await loadAccountPhotos()
             } catch { busy = nil; report(error) }
         }
     }
@@ -52,6 +54,7 @@ extension AppStore {
                 busy = "Loading \(email)…"
                 try await syncMicrosoft(email)
                 saveCache()
+                await loadAccountPhotos()
                 banner = "Added \(email)."
             } catch { report(error) }
         }
@@ -64,5 +67,45 @@ extension AppStore {
         state.forget(a)
         messages = messages.filter { $0.value.account != a }
         saveCache()
+    }
+
+    /// Your profile photo for each Google and Microsoft account. Google needs the "profile" permission, which accounts
+    /// signed in before it was added don't have yet: those keep their initial until the next sign-in.
+    func loadAccountPhotos() async {
+        if AppFlavor.isDemo { return }
+        // iCloud has no photo API: use the Mac's own "Me" card in Contacts, which usually carries the Apple Account photo.
+        if state.accounts.contains(where: isICloud), let data = await meCardPhoto() {
+            for a in state.accounts where isICloud(a) { SenderLogos.shared.setPhoto(a, data) }
+        }
+        for a in state.accounts where !isICloud(a) {
+            do {
+                var req: URLRequest
+                if isMicrosoft(a) {
+                    req = URLRequest(url: URL(string: "https://graph.microsoft.com/v1.0/me/photos/240x240/$value")!)
+                    req.setValue("Bearer \(try await microsoft.accessToken(for: a))", forHTTPHeaderField: "Authorization")
+                } else {
+                    var info = URLRequest(url: URL(string: "https://www.googleapis.com/oauth2/v3/userinfo")!)
+                    info.setValue("Bearer \(try await auth.accessToken(for: a))", forHTTPHeaderField: "Authorization")
+                    let (d, r) = try await URLSession.shared.data(for: info)
+                    guard (r as? HTTPURLResponse)?.statusCode == 200, let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+                          var pic = j["picture"] as? String else { continue }
+                    if let eq = pic.lastIndex(of: "="), pic[eq...].hasPrefix("=s") { pic = String(pic[..<eq]) + "=s256-c" } // bigger than the default 96px
+                    guard let u = URL(string: pic) else { continue }
+                    req = URLRequest(url: u)
+                }
+                let (data, resp) = try await URLSession.shared.data(for: req)
+                if (resp as? HTTPURLResponse)?.statusCode == 200 { SenderLogos.shared.setPhoto(a, data) }
+            } catch { continue } // no photo or no permission: keep the initial
+        }
+    }
+
+    /// Your "Me" card photo. Asks for Contacts access once; reads only that one card.
+    func meCardPhoto() async -> Data? {
+        let store = CNContactStore()
+        if CNContactStore.authorizationStatus(for: .contacts) == .notDetermined {
+            guard (try? await store.requestAccess(for: .contacts)) == true else { return nil }
+        }
+        let me = try? store.unifiedMeContactWithKeys(toFetch: [CNContactImageDataKey as CNKeyDescriptor, CNContactThumbnailImageDataKey as CNKeyDescriptor])
+        return me?.imageData ?? me?.thumbnailImageData
     }
 }

@@ -4,4 +4,5 @@
      (claude/codex/gemini) and talks to IMAP directly, which the App Store sandbox doesn't allow. -->
 <plist version="1.0"><dict>
   <key>com.apple.security.personal-information.calendars</key><true/>
+  <key>com.apple.security.personal-information.addressbook</key><true/>
 </dict></plist>

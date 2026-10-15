@@ -17,7 +17,7 @@ struct CalendarSection: View {
         let day = mentioned ?? Date()
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(mentioned == nil ? "Today" : "Mentioned: \(day.formatted(.dateTime.weekday(.abbreviated).month().day()))")
+                Text(mentioned == nil ? "Today's Events" : "Mentioned: \(day.formatted(.dateTime.weekday(.abbreviated).month().day()))")
                     .font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary)
                 Spacer()
                 Button { store.createEventFromEmail() } label: { Image(systemName: "calendar.badge.plus").frame(width: 26, height: 26) }
