@@ -28,7 +28,7 @@ struct SettingsPanel: View {
         .init(id: "splits", title: "Split inbox", icon: "rectangle.split.3x1", group: "Mail", keywords: "tabs splits important other rules"),
         .init(id: "signatures", title: "Signatures", icon: "signature", group: "Mail", keywords: "signature html logo"),
         .init(id: "snippets", title: "Snippets", icon: "text.quote", group: "Mail", keywords: "templates snippets canned"),
-        .init(id: "accounts", title: "Accounts", icon: "person.crop.circle", group: "Accounts", keywords: "add remove google icloud alias send as nickname default from"),
+        .init(id: "accounts", title: "Accounts", icon: "person.crop.circle", group: "Accounts", keywords: "add remove google icloud microsoft outlook hotmail alias send as nickname default from"),
         .init(id: "gmail", title: "Gmail", icon: "envelope.badge", group: "Accounts", keywords: "out of office vacation auto reply labels signature sync"),
         .init(id: "appearance", title: "Appearance", icon: "textformat.size", group: "Personalize", keywords: "draft compose buttons icons links appearance text font size bigger larger zoom dark light email content opacity glass window card",
               items: ["Text size", "Appearance", "Email content", "Draft buttons", "Window opacity", "Email card opacity"]),
