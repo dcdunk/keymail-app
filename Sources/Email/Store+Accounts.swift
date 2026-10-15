@@ -39,13 +39,7 @@ extension AppStore {
     func removeAccount(_ a: String) {
         Keychain.delete(a)
         Keychain.delete(ICloud.keychainKey(a))
-        state.icloud.removeAll { $0 == a }
-        state.aliases[a] = nil
-        state.defaultFrom[a] = nil
-        state.accountNames[a] = nil
-        state.accounts.removeAll { $0 == a }
-        if state.activeAccount == a { state.activeAccount = nil }
-        state.historyIds[a] = nil
+        state.forget(a)
         messages = messages.filter { $0.value.account != a }
         saveCache()
     }

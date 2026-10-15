@@ -10,5 +10,6 @@ let package = Package(
         .executableTarget(name: "Email", dependencies: ["EmailCore", .product(name: "Sparkle", package: "Sparkle")],
                           linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]),
         .testTarget(name: "EmailCoreTests", dependencies: ["EmailCore"]),
+        .testTarget(name: "EmailTests", dependencies: ["Email"]),
     ]
 )

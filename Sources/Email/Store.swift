@@ -90,6 +90,33 @@ struct SavedState: Codable {
     }
 }
 
+extension SavedState {
+    /// Drops everything stored for a signed-out account, including unsent scheduled sends.
+    mutating func forget(_ a: String) {
+        let addresses = Set([a] + (aliases[a] ?? []) + [defaultFrom[a]].compactMap { $0 }).map { $0.lowercased() }
+        func mine(_ address: String) -> Bool {
+            addresses.contains(address.lowercased()) || parseAddresses(address).contains { addresses.contains($0.email.lowercased()) }
+        }
+        func ours(_ conversationId: String) -> Bool { conversationId.hasPrefix(a + "|") }
+        accounts.removeAll { $0 == a }
+        icloud.removeAll { $0 == a }
+        icloudLogins[a] = nil
+        aliases[a] = nil
+        defaultFrom[a] = nil
+        accountNames[a] = nil
+        historyIds[a] = nil
+        if activeAccount == a { activeAccount = nil }
+        snoozes.removeAll { $0.account == a }
+        followUps.removeAll { $0.account == a }
+        scheduled.removeAll { mine($0.draft.from) }
+        for k in signatures.keys where mine(k) { signatures[k] = nil }
+        for k in bumped.keys where ours(k) { bumped[k] = nil }
+        for k in importance.keys where ours(k) { importance[k] = nil }
+        muted.removeAll(where: ours)
+        autoArchived.removeAll(where: ours)
+    }
+}
+
 struct Cache: Codable { var messages: [Message] = []; var labelNames: [String: String] = [:] }
 
 final class ComposeModel: ObservableObject, Identifiable {
