@@ -7,6 +7,7 @@ extension AppStore {
     // MARK: Accounts
 
     func addAccount() {
+        if AppFlavor.isDemo { addDemoAccount("gmail"); return }
         Task {
             busy = "Waiting for Google sign-in in your browser…"
             do {
@@ -22,6 +23,7 @@ extension AppStore {
 
     /// Checks the app-specific password with iCloud before saving it to the Keychain.
     func addICloudAccount(email: String, password: String, aliases: String = "") async throws {
+        if AppFlavor.isDemo { addDemoAccount("icloud"); return } // the sheet still shows; anything typed is ignored
         let e = email.trimmingCharacters(in: .whitespaces).lowercased()
         let found = try await ICloud.findLogin(email: e, password: password)
         Keychain.set(found.password, for: ICloud.keychainKey(e))
@@ -39,6 +41,7 @@ extension AppStore {
     // MARK: Microsoft (Outlook.com, Hotmail, Microsoft 365)
 
     func connectMicrosoft() {
+        if AppFlavor.isDemo { addDemoAccount("microsoft"); return }
         Task {
             busy = "Waiting for Microsoft sign-in in your browser…"
             defer { busy = nil }

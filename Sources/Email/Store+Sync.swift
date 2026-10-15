@@ -14,7 +14,7 @@ extension AppStore {
         defer { ticking = false; syncing = false }
         await processDue()
         let known = Set(messages.keys)
-        for a in state.accounts {
+        for a in state.accounts where !AppFlavor.isDemo {
             if let until = cooldown[a], until > Date() { continue }
             do { try await sync(a); quotaHits[a] = 0 }
             catch where (error as? HTTPError)?.isTransient == true || error is URLError {

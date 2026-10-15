@@ -18,6 +18,7 @@ enum Disk {
     static let dir: URL = {
         let d = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent(AppFlavor.isDemo ? "Email-Demo" : "Email")
+        if AppFlavor.isDemo { try? FileManager.default.removeItem(at: d) } // the demo starts over at the welcome screen every launch
         try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
         // Mail cache and settings: readable by you only.
         try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: d.path)

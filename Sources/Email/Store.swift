@@ -413,6 +413,8 @@ final class AppStore: ObservableObject {
     /// Every error shown to the user goes through here: Google and network errors become plain sentences.
     func report(_ e: Error) {
         if e is CancellationError || (e as? URLError)?.code == .cancelled { return } // -999: we stopped the request ourselves
+        // ponytail: demo accounts have no server, so every sync/triage call fails; hide those. AI errors are hidden too.
+        if AppFlavor.isDemo { log("demo: \(e.localizedDescription)"); return }
         banner = friendlyNetworkError(e) ?? e.localizedDescription
     }
 

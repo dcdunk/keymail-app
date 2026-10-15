@@ -91,7 +91,7 @@ struct OnboardingView: View {
             title("Connect your email", "Your mail goes straight from the provider to this Mac. No servers in between.")
             HStack(spacing: 16) {
                 providerCard("envelope.fill", .red, "Gmail", "Google sign-in in your browser") {
-                    if store.hasClient { store.addAccount() } else { step = .google }
+                    if store.hasClient || AppFlavor.isDemo { store.addAccount() } else { step = .google }
                 }
                 providerCard("icloud.fill", .blue, "iCloud Mail", "With an app-specific password") { showICloud = true }
                 providerCard("tray.full.fill", Color(red: 0.0, green: 0.47, blue: 0.84), "Outlook", "Outlook.com, Hotmail or Microsoft 365") { store.connectMicrosoft() }

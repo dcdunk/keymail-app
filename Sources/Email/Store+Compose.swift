@@ -76,6 +76,7 @@ extension AppStore {
         var d = d
         let domain = d.from.split(separator: "@").last.map(String.init) ?? "email.local"
         if d.messageId == nil { d.messageId = "<\(UUID().uuidString)@\(domain)>" }
+        if AppFlavor.isDemo { demoSend(d); return }
         let acct = account(for: d.from)
         if isMicrosoft(acct) {
             // Save as a draft, then send it: the draft step tells us the conversation for "remind me if no reply".
@@ -123,7 +124,7 @@ extension AppStore {
         var d = model.draft
         let isEmpty = d.to.trimmingCharacters(in: .whitespaces).isEmpty && d.subject.isEmpty
             && d.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        guard !isEmpty else { return }
+        guard !isEmpty, !AppFlavor.isDemo else { return }
         if d.messageId == nil {
             let domain = d.from.split(separator: "@").last.map(String.init) ?? "email.local"
             d.messageId = "<\(UUID().uuidString)@\(domain)>"; model.draft.messageId = d.messageId
