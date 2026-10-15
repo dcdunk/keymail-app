@@ -187,23 +187,22 @@ struct SignatureSyncRow: View {
                 Spacer()
                 status(same: same, ours: oursHTML, theirs: theirs)
             }
-            HStack(alignment: .center, spacing: 10) {
-                preview("In Keymail", oursHTML, empty: "No signature in Keymail")
-                VStack(spacing: 8) {
-                    Button { run { await store.pushSignature(sendAs.email, account: account) } } label: {
-                        Label("Copy to Gmail", systemImage: "arrow.right").labelStyle(.titleAndIcon)
-                    }
-                    .disabled(oursHTML.isEmpty || same || blocked != nil || working)
-                    .help(blocked ?? "Replace Gmail's signature with Keymail's")
-                    Button { run { await store.pullSignature(sendAs.email, account: account) } } label: {
-                        Label("Copy to Keymail", systemImage: "arrow.left")
-                    }
-                    .disabled(theirs.isEmpty || same || working)
-                    .help("Replace Keymail's signature with Gmail's")
+            // Stacked, full width: side by side left each signature a third of the row, so they wrapped and got cut off.
+            preview("In Keymail", oursHTML, empty: "No signature in Keymail")
+            HStack(spacing: 4) {
+                Button { run { await store.pushSignature(sendAs.email, account: account) } } label: {
+                    Label("Copy to Gmail", systemImage: "arrow.down")
                 }
-                .buttonStyle(ToolStyle(padded: true)).font(.scaled(.callout)).fixedSize()
-                preview("In Gmail", theirs, empty: "No signature in Gmail")
+                .disabled(oursHTML.isEmpty || same || blocked != nil || working)
+                .help(blocked ?? "Replace Gmail's signature with Keymail's")
+                Button { run { await store.pullSignature(sendAs.email, account: account) } } label: {
+                    Label("Copy to Keymail", systemImage: "arrow.up")
+                }
+                .disabled(theirs.isEmpty || same || working)
+                .help("Replace Keymail's signature with Gmail's")
             }
+            .buttonStyle(ToolStyle(padded: true)).font(.scaled(.callout))
+            preview("In Gmail", theirs, empty: "No signature in Gmail")
             if let blocked, !same { Label(blocked, systemImage: "info.circle").font(.scaled(.caption)).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
             if let note { Text(note).font(.scaled(.caption)).foregroundStyle(.secondary) }
         }
@@ -235,7 +234,7 @@ struct SignatureSyncRow: View {
                     Text(empty).font(.scaled(.callout)).foregroundStyle(.tertiary).frame(maxWidth: .infinity, minHeight: 70)
                         .background(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.primary.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [4])))
                 } else {
-                    EmailWebView(html: html, padding: "8px 10px", dark: scheme == .dark, blockRemote: false).frame(maxHeight: 140).clipShape(RoundedRectangle(cornerRadius: 10))
+                    EmailWebView(html: html, padding: "8px 10px", dark: scheme == .dark, blockRemote: false).frame(height: 160).clipShape(RoundedRectangle(cornerRadius: 10))
                 }
             }
         }
