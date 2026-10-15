@@ -39,7 +39,7 @@ import EmailCore
 
     func load(_ domain: String, senderName: String? = nil) async {
         let sites = logoSites(for: domain, senderName: senderName), domain = sites.first ?? domain
-        guard !tried.contains(domain), UserDefaults.standard.object(forKey: "loadRemoteImages") as? Bool ?? true else { return }
+        guard !tried.contains(domain), UserDefaults.standard.object(forKey: "loadSenderLogos") as? Bool ?? true else { return }
         tried.insert(domain)
         let file = dir.appendingPathComponent(domain + ".png"), none = dir.appendingPathComponent(domain + ".none")
         if let img = NSImage(contentsOf: file) { images[domain] = Logo(image: img, background: Self.background(img)); return }

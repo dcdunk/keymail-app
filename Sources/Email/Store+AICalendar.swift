@@ -7,7 +7,24 @@ extension AppStore {
     // MARK: AI (your chosen provider's CLI)
 
     var ai: AIProvider { AIProvider.all.first { $0.id == state.aiProvider } ?? AIProvider.all[0] }
-    func askAI(_ prompt: String) async throws -> String { try await AI.run(prompt, with: ai, model: state.aiModels[ai.id]) }
+    func askAI(_ prompt: String) async throws -> String {
+        guard aiConsent(ai) else { throw AppError("Cancelled. Nothing was sent to \(ai.maker).") }
+        return try await AI.run(prompt, with: ai, model: state.aiModels[ai.id])
+    }
+
+    /// Asks once per provider before any email text leaves this Mac for an AI service. The answer is remembered.
+    func aiConsent(_ p: AIProvider) -> Bool {
+        let key = "aiConsent." + p.id
+        if UserDefaults.standard.bool(forKey: key) { return true }
+        let alert = NSAlert()
+        alert.messageText = "Send email text to \(p.maker)?"
+        alert.informativeText = "To do this, Keymail passes the email you're working on to \(p.name) on this Mac, which sends it to \(p.maker) under your own account and their privacy terms. Keymail only sends what you ask about, when you ask.\n\nYou can switch providers or stop using AI features any time in Settings → AI."
+        alert.addButton(withTitle: "Allow")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return false }
+        UserDefaults.standard.set(true, forKey: key)
+        return true
+    }
 
     func threadTranscript(_ c: Conversation) -> String {
         c.messages.map { "From: \($0.from)\nDate: \($0.date)\nSubject: \($0.subject)\n\n\($0.plainText.prefix(6000))" }.joined(separator: "\n\n-----\n\n")

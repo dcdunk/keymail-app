@@ -82,6 +82,14 @@ final class MimeTests: XCTestCase {
         XCTAssertEqual(imapQuote("pa\"ss\\"), "\"pa\\\"ss\\\\\"")
     }
 
+    func testHasRemoteContent() {
+        XCTAssertTrue(hasRemoteContent(#"<img src="https://t.example.com/p.gif">"#))
+        XCTAssertTrue(hasRemoteContent(#"<td style="background: URL('http://x.com/a.png')">"#))
+        XCTAssertTrue(hasRemoteContent("<img src=//cdn.example.com/a.png>"))
+        XCTAssertFalse(hasRemoteContent(#"<img src="cid:logo123">"#))
+        XCTAssertFalse(hasRemoteContent(#"<a href="https://example.com">link</a>"#))
+    }
+
     func testIMAPServerByDomain() {
         XCTAssertEqual(imapServer(for: "me@yahoo.com").imapHost, "imap.mail.yahoo.com")
         XCTAssertEqual(imapServer(for: "me@Yahoo.co.uk").smtpURL, "smtp://smtp.mail.yahoo.com:587")

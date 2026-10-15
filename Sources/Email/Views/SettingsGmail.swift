@@ -235,7 +235,7 @@ struct SignatureSyncRow: View {
                     Text(empty).font(.scaled(.callout)).foregroundStyle(.tertiary).frame(maxWidth: .infinity, minHeight: 70)
                         .background(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.primary.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [4])))
                 } else {
-                    EmailWebView(html: html, padding: "8px 10px", dark: scheme == .dark).frame(maxHeight: 140).clipShape(RoundedRectangle(cornerRadius: 10))
+                    EmailWebView(html: html, padding: "8px 10px", dark: scheme == .dark, blockRemote: false).frame(maxHeight: 140).clipShape(RoundedRectangle(cornerRadius: 10))
                 }
             }
         }

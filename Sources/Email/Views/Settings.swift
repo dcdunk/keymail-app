@@ -22,9 +22,9 @@ struct SettingsPanel: View {
     struct Section: Identifiable { let id: String, title: String, icon: String, group: String, keywords: String; var items: [String] = [] }
     /// Sidebar order, which ↑/↓ also follow. `items` are single settings search can jump to; each is a row marked `.settingAnchor`.
     static let sections: [Section] = [
-        .init(id: "general", title: "General", icon: "gearshape", group: "Mail", keywords: "thread order undo send notifications badge remote images privacy spelling grammar writing auto archive calendar fetch sync tips",
+        .init(id: "general", title: "General", icon: "gearshape", group: "Mail", keywords: "thread order undo send notifications badge remote images sender logos privacy spelling grammar writing auto archive calendar fetch sync tips",
               items: ["Messages in a thread", "Show folders sidebar", "Show context panel", "Undo send", "Notify me about", "Dock badge counts",
-                      "Load remote images", "Check spelling while typing", "Check grammar", "Correct spelling automatically", "Smart quotes and dashes", "Fetch mail", "Calendar"]),
+                      "Load remote images", "Show sender logos", "Check spelling while typing", "Check grammar", "Correct spelling automatically", "Smart quotes and dashes", "Fetch mail", "Calendar"]),
         .init(id: "splits", title: "Split inbox", icon: "rectangle.split.3x1", group: "Mail", keywords: "tabs splits important other rules"),
         .init(id: "signatures", title: "Signatures", icon: "signature", group: "Mail", keywords: "signature html logo"),
         .init(id: "snippets", title: "Snippets", icon: "text.quote", group: "Mail", keywords: "templates snippets canned"),
@@ -320,7 +320,8 @@ struct AppearancePreview: View {
 
 struct GeneralSettings: View {
     @EnvironmentObject var store: AppStore
-    @AppStorage("loadRemoteImages") private var loadRemoteImages = true
+    @AppStorage("loadRemoteImages") private var loadRemoteImages = false
+    @AppStorage("loadSenderLogos") private var loadSenderLogos = true
     @AppStorage("spellcheck") private var spellcheck = true
     @AppStorage("grammar") private var grammar = true
     @AppStorage("autocorrect") private var autocorrect = true
@@ -386,8 +387,12 @@ struct GeneralSettings: View {
             Section("Privacy") {
                 Toggle(isOn: $loadRemoteImages) {
                     Text("Load remote images")
-                    Text("Senders can use them to see when, where and on what device you opened an email. Off blocks all outside content; attached images still show.")
+                    Text("Senders can use them to see when, where and on what device you opened an email. Off blocks all outside content; attached images still show, and each email offers Load images.")
                 }.settingAnchor("Load remote images")
+                Toggle(isOn: $loadSenderLogos) {
+                    Text("Show sender logos")
+                    Text("Fetches each company's logo from its own website, using only the sender's domain. That site sees your IP address, not the email.")
+                }.settingAnchor("Show sender logos")
             }
             Section {
                 Toggle("Check spelling while typing", isOn: $spellcheck).settingAnchor("Check spelling while typing")

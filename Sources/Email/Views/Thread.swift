@@ -151,6 +151,8 @@ struct MessageCard: View {
     let collapsible: Bool
     let collapse: () -> Void
     @State private var showQuoted = false
+    @State private var loadImagesOnce = false   // "Load images" for just this message
+    @AppStorage("loadRemoteImages") private var loadRemoteImages = false
     @AppStorage("cardOpacity") private var cardOpacity = 1.0
     @AppStorage("emailContentTheme") private var contentTheme = "auto"   // auto (match app), light, dark
     @Environment(\.colorScheme) private var scheme
@@ -256,10 +258,18 @@ struct MessageCard: View {
 
     @ViewBuilder var bodyView: some View {
         if let html = message.html {
+            if !loadRemoteImages && !loadImagesOnce && hasRemoteContent(html) {
+                HStack(spacing: 8) {
+                    Image(systemName: "photo.badge.exclamationmark").foregroundStyle(.secondary)
+                    Text("Remote images are blocked to protect your privacy.").font(.scaled(.callout)).foregroundStyle(.secondary)
+                    Button("Load images") { loadImagesOnce = true }.quiet()
+                }
+            }
             // HTML emails are designed for a light page, so they sit on a white "paper" card, like Apple Mail does.
             EmailWebView(html: inlineImages(html, store.inlineData[message.key] ?? [:]), cardOpacity: cardOpacity,
-                         dark: contentDark,
+                         dark: contentDark, blockRemote: !loadRemoteImages && !loadImagesOnce,
                          suspicious: Dictionary(suspiciousLinks(html).map { ($0.href, $0.reason) }, uniquingKeysWith: { a, _ in a }))
+                .id(loadImagesOnce) // the blocker is set when the web view is made, so a new one loads the images
                 .clipShape(RoundedRectangle(cornerRadius: 10))
         } else {
             let parts = splitQuoted(message.text ?? message.snippet)
@@ -296,6 +306,7 @@ struct EmailWebView: NSViewRepresentable {
     var cardOpacity = 1.0   // < 1 lets the window glass show through the email's background
     var dark = false        // HTML emails: invert colors (keeping photos as-is) to read on dark mode
     var themed = false      // plain-text emails: app font and light/dark colors, transparent background
+    var blockRemote = true   // plain-text bodies have no remote content either way
     var suspicious: [String: String] = [:]   // href → why it looks like phishing; clicking asks first
     @State private var height: CGFloat = 120
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -303,7 +314,7 @@ struct EmailWebView: NSViewRepresentable {
         let config = WKWebViewConfiguration()
         config.defaultWebpagePreferences.allowsContentJavaScript = false
         config.websiteDataStore = .nonPersistent() // no cookies or storage shared between emails
-        if !UserDefaults.standard.bool(forKey: "loadRemoteImages", default: true), let blocker = RemoteContent.blocker {
+        if blockRemote, let blocker = RemoteContent.blocker {
             config.userContentController.add(blocker)
         }
         config.userContentController.addUserScript(WKUserScript(source: Coordinator.darkScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true))

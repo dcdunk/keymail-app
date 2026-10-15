@@ -233,3 +233,8 @@ public func imapServer(for email: String) -> IMAPServer {
     }
     return IMAPServer(name: "iCloud", imapHost: "imap.mail.me.com", smtpURL: "smtp://smtp.mail.me.com:587")
 }
+
+/// True when an HTML email would load something from the internet (images, CSS backgrounds, fonts).
+public func hasRemoteContent(_ html: String) -> Bool {
+    html.range(of: #"(src|background)\s*=\s*["']?\s*(https?:)?//|url\(\s*["']?\s*(https?:)?//"#, options: [.regularExpression, .caseInsensitive]) != nil
+}

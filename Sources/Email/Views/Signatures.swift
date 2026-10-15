@@ -59,7 +59,7 @@ struct SignatureSettings: View {
                     } else if isComplexHTML(binding.wrappedValue) {
                         // Tables, logos and rounded corners can't go through the rich-text editor unchanged,
                         // so show it exactly as recipients will see it instead.
-                        EmailWebView(html: binding.wrappedValue, dark: scheme == .dark).frame(minHeight: 100).clipShape(RoundedRectangle(cornerRadius: 10))
+                        EmailWebView(html: binding.wrappedValue, dark: scheme == .dark, blockRemote: false).frame(minHeight: 100).clipShape(RoundedRectangle(cornerRadius: 10))
                         Text("This signature has a designed layout (table, logo or rounded corners). It's kept exactly as is. Edit it in HTML, or paste/import a new one.")
                             .font(.scaled(.caption)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         Spacer()
@@ -70,7 +70,7 @@ struct SignatureSettings: View {
                     if !binding.wrappedValue.isEmpty && !isComplexHTML(binding.wrappedValue) {
                         // Live: how the signature lands under a real message, as recipients see it.
                         Text("In an email").font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary)
-                        EmailWebView(html: "<p>Hi Maya,</p><p>Sounds good, talk Thursday.</p><br>" + binding.wrappedValue, padding: "10px 14px", dark: scheme == .dark)
+                        EmailWebView(html: "<p>Hi Maya,</p><p>Sounds good, talk Thursday.</p><br>" + binding.wrappedValue, padding: "10px 14px", dark: scheme == .dark, blockRemote: false)
                             .frame(maxHeight: 180).clipShape(RoundedRectangle(cornerRadius: 10))
                     }
                     if let note { Text(note).font(.scaled(.callout)).foregroundStyle(.orange) }
@@ -216,7 +216,7 @@ struct ComposeSignature: View {
         if let plain = model.draft.signaturePlain {
             HStack(alignment: .top, spacing: 8) {
                 if let html = model.draft.signatureHTML {
-                    EmailWebView(html: html, padding: "10px 14px", dark: scheme == .dark).frame(maxWidth: 520).clipShape(RoundedRectangle(cornerRadius: 10))
+                    EmailWebView(html: html, padding: "10px 14px", dark: scheme == .dark, blockRemote: false).frame(maxWidth: 520).clipShape(RoundedRectangle(cornerRadius: 10))
                 } else {
                     Text(plain).font(.scaled(size: 14)).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
                 }
