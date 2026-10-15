@@ -243,7 +243,9 @@ final class GoogleAuth {
             var done = false
             func finish(_ r: Result<[String: String], Error>) {
                 guard !done else { return }
-                done = true; listener.cancel(); cont.resume(with: r)
+                done = true; cont.resume(with: r)
+                // Stay up a few seconds more to serve the clean /signed-in page the browser is sent to.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 15) { listener.cancel() }
             }
             listener.stateUpdateHandler = { state in
                 switch state {
@@ -255,17 +257,81 @@ final class GoogleAuth {
             listener.newConnectionHandler = { conn in
                 conn.start(queue: .main)
                 conn.receive(minimumIncompleteLength: 1, maximumLength: 65536) { data, _, _, _ in
-                    let q = queryItems(fromRequest: String(decoding: data ?? Data(), as: UTF8.self))
-                    let ok = q["code"] != nil
-                    let page = "<html><body style=\"font:16px -apple-system;padding:48px;color:#333\">\(ok ? "Signed in. You can close this tab and go back to Lightmail." : "Sign-in didn't complete.")</body></html>"
-                    let resp = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n" + page
-                    conn.send(content: Data(resp.utf8), completion: .contentProcessed { _ in conn.cancel() })
-                    if ok || q["error"] != nil { finish(.success(q)) } // ignore stray requests like /favicon.ico
+                    let request = String(decoding: data ?? Data(), as: UTF8.self)
+                    let path = request.split(separator: " ").dropFirst().first.map(String.init) ?? "/"
+                    let q = queryItems(fromRequest: request)
+                    func reply(_ head: String, _ body: String = "") {
+                        let resp = head + "\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n" + body
+                        conn.send(content: Data(resp.utf8), completion: .contentProcessed { _ in conn.cancel() })
+                    }
+                    if q["code"] != nil || q["error"] != nil {
+                        // Google's return address carries the one-time code; forward to a clean address so it
+                        // doesn't sit in the address bar or browser history.
+                        let target = q["code"] != nil ? "/signed-in" : "/not-signed-in?reason=" + (q["error"] ?? "").addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
+                        reply("HTTP/1.1 303 See Other\r\nLocation: \(target)")
+                        finish(.success(q))
+                        if q["code"] != nil { NSApp.activate(ignoringOtherApps: true) } // bring Lightmail back to the front
+                    } else if path.hasPrefix("/signed-in") {
+                        reply("HTTP/1.1 200 OK", SignInPage.html(ok: true))
+                    } else if path.hasPrefix("/not-signed-in") {
+                        reply("HTTP/1.1 200 OK", SignInPage.html(ok: false, reason: q["reason"]))
+                    } else {
+                        reply("HTTP/1.1 404 Not Found") // stray requests like /favicon.ico
+                    }
                 }
             }
             listener.start(queue: .main)
             DispatchQueue.main.asyncAfter(deadline: .now() + 300) { finish(.failure(AppError("Sign-in timed out."))) }
         }
+    }
+}
+
+/// The page the browser shows after Google sign-in: Lightmail's icon, a clear message, light and dark mode.
+enum SignInPage {
+    static let iconDataURL: String = {
+        let img = NSApp.applicationIconImage ?? NSImage()
+        let size = NSSize(width: 160, height: 160)
+        let out = NSImage(size: size); out.lockFocus(); img.draw(in: NSRect(origin: .zero, size: size)); out.unlockFocus()
+        guard let tiff = out.tiffRepresentation, let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else { return "" }
+        return "data:image/png;base64," + png.base64EncodedString()
+    }()
+
+    static func html(ok: Bool, reason: String? = nil) -> String {
+        let title = ok ? "You're signed in" : "Sign-in didn't finish"
+        let detail = ok ? "Lightmail has what it needs. You can close this tab and head back to your inbox."
+            : reason == "access_denied" ? "Access wasn't approved. Go back to Lightmail and try again when you're ready."
+            : "Something interrupted the sign-in. Go back to Lightmail and try again."
+        let mark = ok ? "<path d='M7 12.5l3.2 3.2L17 9' />" : "<path d='M12 7.5v6' /><path d='M12 16.6v.1' />"
+        return """
+        <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+        <title>Lightmail · \(title)</title>
+        <style>
+        :root { color-scheme: light dark; --bg:#f5f5f7; --card:#fff; --text:#1d1d1f; --muted:#6e6e73; --line:rgba(0,0,0,.08); --accent:#4a66ed; }
+        @media (prefers-color-scheme: dark) { :root { --bg:#141416; --card:#1e1e21; --text:#f2f2f4; --muted:#9a9aa1; --line:rgba(255,255,255,.08); --accent:#7a90ff; } }
+        * { box-sizing: border-box; }
+        body { margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg); color:var(--text);
+               font:15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; padding:24px; }
+        .card { width:100%; max-width:420px; background:var(--card); border:1px solid var(--line); border-radius:20px;
+                padding:40px 36px 32px; text-align:center; animation: rise .5s cubic-bezier(.2,.8,.2,1) both; }
+        .icon { width:80px; height:80px; position:relative; margin:0 auto 22px; }
+        .icon img { width:80px; height:80px; }
+        .badge { position:absolute; right:-6px; bottom:-6px; width:30px; height:30px; border-radius:50%;
+                 background:\(ok ? "var(--accent)" : "#e0863a"); border:3px solid var(--card); display:grid; place-items:center; }
+        .badge svg { width:18px; height:18px; fill:none; stroke:#fff; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; }
+        h1 { font-size:22px; font-weight:600; margin:0 0 8px; letter-spacing:-.01em; }
+        p { margin:0; color:var(--muted); }
+        .foot { margin-top:28px; padding-top:18px; border-top:1px solid var(--line); font-size:12px; color:var(--muted); }
+        @keyframes rise { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+        @media (prefers-reduced-motion: reduce) { .card { animation:none; } }
+        </style></head><body>
+        <main class="card">
+          <div class="icon"><img src="\(iconDataURL)" alt=""><span class="badge"><svg viewBox="0 0 24 24">\(mark)</svg></span></div>
+          <h1>\(title)</h1>
+          <p>\(detail)</p>
+          <div class="foot">Lightmail talks to Google directly from your Mac. Nothing goes through our servers.</div>
+        </main>
+        </body></html>
+        """
     }
 }
 

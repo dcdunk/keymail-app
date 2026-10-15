@@ -65,7 +65,8 @@ struct SplitSettingsView: View {
                 if !embedded { Button("Done") { dismiss() }.keyboardShortcut(.defaultAction) }
             }
         }
-        .padding(24).frame(width: 680, height: embedded ? nil : 620)
+        .padding(24).frame(width: embedded ? nil : 680, height: embedded ? nil : 620)
+        .frame(maxWidth: embedded ? .infinity : nil)
     }
 }
 

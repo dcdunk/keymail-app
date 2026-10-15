@@ -67,6 +67,11 @@ extension AppStore {
             }
             return true
         }
+        if settingsOpen && !modalOpen {
+            if code == 53 { settingsOpen = false; return true } // Esc
+            if cmd, ch == "," { settingsOpen = false; return true }
+            return false // typing in settings fields must never trigger inbox shortcuts
+        }
         if linkPrompt != nil { if code == 53 || code == 36 { linkPrompt = nil }; return true } // Esc / Return = don't open
         if summary != nil { if code == 53 { summary = nil; return true }; return false }
         if splitSettingsOpen { if code == 53 { splitSettingsOpen = false; return true }; return false }

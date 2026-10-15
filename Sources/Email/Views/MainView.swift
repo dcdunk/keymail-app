@@ -19,7 +19,6 @@ extension EnvironmentValues { var layout: LayoutWidth { get { self[LayoutWidthKe
 
 struct MainView: View {
     @EnvironmentObject var store: AppStore
-    @Environment(\.openSettings) private var openSettings
     var body: some View {
         GeometryReader { geo in content(LayoutWidth(width: geo.size.width)) }
     }
@@ -54,9 +53,9 @@ struct MainView: View {
             GeometryReader { proxy in CoachTips(anchors: anchors, proxy: proxy) }
         }
         .environment(\.layout, layout)
-        .onAppear { store.openSettingsAction = { openSettings() } }
         .overlay(alignment: .top) { if store.paletteOpen { PaletteView().padding(.top, 90) } }
         .overlay(alignment: .bottom) { StatusBar() }
+        .overlay { SettingsPanel() }
         .overlay { ModalLayer() }
         .overlay { PopupLayer() }
         .coordinateSpace(name: "main")

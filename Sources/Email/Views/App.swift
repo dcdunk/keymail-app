@@ -19,12 +19,14 @@ struct EmailApp: App {
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1240, height: 780)
         .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") { store.settingsOpen ? (store.settingsOpen = false) : store.openSettings() }.keyboardShortcut(",", modifiers: .command)
+            }
             CommandGroup(replacing: .appInfo) {
                 Button("About Lightmail") { UserDefaults.standard.set("about", forKey: "settingsTab"); store.openSettings() }
                 if Updates.shared.enabled { Button("Check for Updates…") { Updates.shared.check() } }
             }
         }
-        Settings { SettingsView().environmentObject(store).environmentObject(store.calendar) }
     }
 }
 

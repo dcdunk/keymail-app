@@ -234,11 +234,11 @@ final class AppStore: ObservableObject {
         labelNames = cache.labelNames
     }
 
-    /// Set by the main view from SwiftUI's openSettings action (the old showSettingsWindow: selector is a no-op on macOS 14+).
-    var openSettingsAction: (() -> Void)?
+    /// Settings slide in from the right inside the main window (⌘,). Esc or clicking the inbox closes them.
+    @Published var settingsOpen = false { didSet { if !settingsOpen && oldValue { refreshHover(after: 0.5) } } }
     func openSettings() {
-        paletteOpen = false; sidebarOpen = false
-        openSettingsAction?()
+        paletteOpen = false; sidebarOpen = false; closePopup()
+        settingsOpen = true
         NSApp.activate(ignoringOtherApps: true)
     }
 

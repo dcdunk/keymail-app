@@ -8,9 +8,11 @@ extension AppStore {
 
     var gmailAccounts: [String] { state.accounts.filter { !isICloud($0) } }
 
-    /// Runs a settings call; an account signed in before Email asked for settings access is flagged instead of erroring.
+    /// Runs a settings call; an account signed in before Lightmail asked for settings access is flagged instead of erroring.
+    /// A success doesn't clear the flag: Google lets you *read* settings without the permission, only saving needs it,
+    /// so only the granted-scopes check (checkSettingsAccess) decides when the permission is really there.
     func settingsCall<T>(_ a: String, _ f: () async throws -> T) async -> T? {
-        do { let r = try await f(); needsSettingsAccess.remove(a); return r }
+        do { return try await f() }
         catch let e as HTTPError where e.needsMorePermission { needsSettingsAccess.insert(a); return nil }
         catch { report(error); return nil }
     }

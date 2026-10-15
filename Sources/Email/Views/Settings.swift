@@ -8,21 +8,113 @@ import QuickLook
 
 // MARK: Settings window (⌘,)
 
-struct SettingsView: View {
+/// Settings, sliding in from the right over the inbox (option C). Always in the view tree and driven by live
+/// state, so it glides out and back in instead of popping, and never blocks the inbox's hover once closed.
+struct SettingsPanel: View {
+    @EnvironmentObject var store: AppStore
     @AppStorage("settingsTab") private var tab = "general"
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var query = ""
+
+    struct Section: Identifiable { let id: String, title: String, icon: String, keywords: String }
+    static let sections: [Section] = [
+        .init(id: "general", title: "General", icon: "gearshape", keywords: "appearance email content dark light thread order undo send notifications badge opacity remote images privacy spelling grammar writing auto archive"),
+        .init(id: "accounts", title: "Accounts", icon: "person.crop.circle", keywords: "add remove google icloud alias send as nickname default from"),
+        .init(id: "gmail", title: "Gmail", icon: "envelope.badge", keywords: "out of office vacation auto reply labels signature sync"),
+        .init(id: "ai", title: "AI providers", icon: "sparkles", keywords: "claude codex gemini write summarize instant reply"),
+        .init(id: "splits", title: "Split inbox", icon: "rectangle.split.3x1", keywords: "tabs splits important other rules"),
+        .init(id: "signatures", title: "Signatures", icon: "signature", keywords: "signature html logo"),
+        .init(id: "snippets", title: "Snippets", icon: "text.quote", keywords: "templates snippets canned"),
+        .init(id: "about", title: "About", icon: "info.circle", keywords: "version updates privacy help"),
+    ]
+
+    var matches: [Section] {
+        let q = query.lowercased().trimmingCharacters(in: .whitespaces)
+        return q.isEmpty ? Self.sections : Self.sections.filter { ($0.title + " " + $0.keywords).lowercased().contains(q) }
+    }
+
     var body: some View {
-        TabView(selection: $tab) {
-            GeneralSettings().tabItem { Label("General", systemImage: "gearshape") }.tag("general")
-            AccountsSettings().tabItem { Label("Accounts", systemImage: "person.crop.circle") }.tag("accounts")
-            GmailSettings().tabItem { Label("Gmail", systemImage: "envelope.badge") }.tag("gmail")
-            AIProviderSettings().tabItem { Label("AI Providers", systemImage: "sparkles") }.tag("ai")
-            SplitSettingsView(embedded: true).tabItem { Label("Split Inbox", systemImage: "rectangle.split.3x1") }.tag("splits")
-            SignatureSettings().tabItem { Label("Signatures", systemImage: "signature") }.tag("signatures")
-            SnippetSettings().tabItem { Label("Snippets", systemImage: "text.quote") }.tag("snippets")
-            AboutSettings().tabItem { Label("About", systemImage: "info.circle") }.tag("about")
+        let open = store.settingsOpen
+        // A soft, unhurried glide: critically damped (no bounce), slower out of the gate than the inbox panels.
+        let motion: Animation = reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.5, dampingFraction: 1)
+        GeometryReader { geo in
+            let width = min(760, max(560, geo.size.width * 0.62))
+            ZStack(alignment: .trailing) {
+                Color.black.opacity(open ? 0.18 : 0).ignoresSafeArea()
+                    .onTapGesture { store.settingsOpen = false }
+                    .allowsHitTesting(open)
+                panel
+                    .frame(width: width)
+                    .frame(maxHeight: .infinity)
+                    .solidPanel(UnevenRoundedRectangle(topLeadingRadius: 18, bottomLeadingRadius: 18))
+                    .shadow(color: .black.opacity(open ? 0.25 : 0), radius: 30, x: -8)
+                    .offset(x: open || reduceMotion ? 0 : width + 40)
+                    .opacity(open ? 1 : 0)
+                    .allowsHitTesting(open)
+            }
+            .animation(motion, value: open)
         }
-        .frame(width: 700, height: 560)
+    }
+
+    var panel: some View {
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(.tertiary)
+                    TextField("Search settings", text: $query).textFieldStyle(.plain).font(.system(size: 13))
+                        .onSubmit { if let first = matches.first { tab = first.id } }
+                }
+                .padding(.horizontal, 10).padding(.vertical, 7)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
+                .padding(.bottom, 10)
+                ForEach(matches) { s in
+                    Button { tab = s.id } label: {
+                        Label(s.title, systemImage: s.icon).font(.system(size: 13, weight: tab == s.id ? .medium : .regular))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 10).padding(.vertical, 7)
+                            .background(RoundedRectangle(cornerRadius: 8).fill(tab == s.id ? Theme.selection : .clear))
+                            .foregroundStyle(tab == s.id ? Theme.accent : .primary)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain).handCursor()
+                }
+                if matches.isEmpty { Text("No matches").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 10) }
+                Spacer()
+                Text("Esc to close").font(.caption2).foregroundStyle(.tertiary).padding(.horizontal, 10)
+            }
+            .padding(14).padding(.top, 30)
+            .frame(width: 190)
+            .background(Color.primary.opacity(0.03))
+            Divider()
+            VStack(spacing: 0) {
+                HStack {
+                    Text(Self.sections.first { $0.id == tab }?.title ?? "Settings").font(.system(size: 20, weight: .semibold))
+                    Spacer()
+                    Button { store.settingsOpen = false } label: {
+                        Image(systemName: "xmark").font(.system(size: 12, weight: .semibold)).frame(width: 28, height: 28).contentShape(Circle())
+                    }.buttonStyle(.plain).foregroundStyle(.secondary).handCursor().help("Close (Esc)")
+                }
+                .padding(.horizontal, 24).padding(.top, 38).padding(.bottom, 6)
+                content.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .id(tab)
+                    .transition(.opacity)
+            }
+            .animation(.easeOut(duration: 0.15), value: tab)
+        }
         .glassButtons()
+    }
+
+    @ViewBuilder var content: some View {
+        switch tab {
+        case "accounts": AccountsSettings()
+        case "gmail": GmailSettings()
+        case "ai": AIProviderSettings()
+        case "splits": SplitSettingsView(embedded: true)
+        case "signatures": SignatureSettings()
+        case "snippets": SnippetSettings()
+        case "about": AboutSettings()
+        default: GeneralSettings()
+        }
     }
 }
 
@@ -207,7 +299,7 @@ struct AccountsSettings: View {
         }
         .padding(24)
         .card(isPresented: $showICloud) { ICloudSheet() }
-        .card(isPresented: $showGoogleSetup, closeButton: true) { SetupView().frame(width: 640, height: 500) }
+        .card(isPresented: $showGoogleSetup, closeButton: true) { SetupView().frame(width: 520, height: 500) }
         .confirmCard(removing.map { "Remove \($0)?" }, message: "This signs Lightmail out of the account and clears its cached mail from this Mac. Nothing is deleted from the server.",
                      confirm: "Remove account", icon: "person.crop.circle.badge.minus", cancel: { removing = nil }) {
             if let r = removing { store.removeAccount(r) }; removing = nil
