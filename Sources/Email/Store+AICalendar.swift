@@ -49,7 +49,7 @@ extension AppStore {
         guard let c = selected else { return }
         Task {
             // Gmail accounts can add straight to Google Calendar, so the Mac's Calendar access is only needed for iCloud.
-            if !calendar.authorized, isICloud(c.account) || gmailAccounts.isEmpty, !(await calendar.requestAccess()) {
+            if !calendar.authorized, !isGmail(c.account) || gmailAccounts.isEmpty, !(await calendar.requestAccess()) {
                 banner = "Keymail needs Calendar access: System Settings → Privacy & Security → Calendars."
                 return
             }

@@ -423,7 +423,7 @@ struct AccountsSettings: View {
                 ForEach(Array(store.state.accounts.enumerated()), id: \.element) { i, acct in
                     let cloud = store.isICloud(acct)
                     HStack(spacing: 12) {
-                        BrandLogo(brand: cloud ? "icloud" : "gmail", size: 22)
+                        BrandLogo(brand: cloud ? "icloud" : store.isMicrosoft(acct) ? "microsoft" : "gmail", size: 22)
                         VStack(alignment: .leading, spacing: 4) {
                             TextField("Name (e.g. Work, Personal)", text: Binding(
                                 get: { store.state.accountNames[acct] ?? "" },
@@ -456,8 +456,8 @@ struct AccountsSettings: View {
                     .disabled(!store.hasClient)
 
                 Button { showICloud = true } label: { Label { Text("Add iCloud account") } icon: { BrandLogo(brand: "icloud", size: 14) } }
+                Button { store.connectMicrosoft() } label: { Label { Text("Add Microsoft account") } icon: { BrandLogo(brand: "microsoft", size: 14) } }
             }
-            MicrosoftPreviewSection()
             if let b = store.busy { Text(b).font(.scaled(.callout)).foregroundStyle(.secondary) }
             if !GoogleClient.isBuiltIn { // developer builds only; customers never see Google Cloud
             DisclosureGroup("Advanced") {
@@ -587,35 +587,3 @@ struct HotkeySettings: View {
     }
 }
 
-
-/// Settings → Accounts: Microsoft sign-in while mail support is being built. Accounts here don't appear in the
-/// inbox yet; the check shows Keymail can read the mailbox.
-struct MicrosoftPreviewSection: View {
-    @EnvironmentObject var store: AppStore
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Text("Microsoft").font(.headline)
-                Text("Preview").font(.caption.weight(.semibold)).foregroundStyle(Theme.accent)
-                    .padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(Theme.selection))
-            }
-            Text("Outlook.com, Hotmail and Microsoft 365. Sign-in works now; these accounts join your inbox once mail support is finished.")
-                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            ForEach(store.state.microsoftPreview, id: \.self) { a in
-                HStack(spacing: 10) {
-                    BrandLogo(brand: "microsoft", size: 14)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(a).font(.callout)
-                        Text(store.microsoftStatus[a] ?? "Not checked yet").font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("Check inbox") { Task { await store.checkMicrosoft(a) } }.controlSize(.small)
-                    Button("Remove") { store.removeMicrosoft(a) }.controlSize(.small)
-                }
-                .padding(.vertical, 4)
-            }
-            Button { store.connectMicrosoft() } label: { Label { Text("Add Microsoft account") } icon: { BrandLogo(brand: "microsoft", size: 14) } }
-        }
-        .padding(.top, 8)
-    }
-}

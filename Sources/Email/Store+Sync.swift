@@ -78,6 +78,7 @@ extension AppStore {
 
     func sync(_ a: String) async throws {
         if isICloud(a) { return try await syncICloud(a) }
+        if isMicrosoft(a) { return try await syncMicrosoft(a) }
         let g = gmail(a)
         if let h = state.historyIds[a], let result = try await g.history(since: h) {
             let delta = parseHistory(result.pages)
@@ -138,6 +139,32 @@ extension AppStore {
         for m in result.new { messages[m.key] = m }
     }
 
+    /// Microsoft: the newest 300 inbox emails from the last 30 days. Read/flag/Focused changes come from the list;
+    /// full bodies are fetched only for emails not cached yet; emails that left the inbox are dropped.
+    func syncMicrosoft(_ a: String) async throws {
+        let g = graph(a)
+        let list = try await g.inbox()
+        let byId = Dictionary(list.compactMap { j in (j["id"] as? String).map { ($0, j) } }, uniquingKeysWith: { x, _ in x })
+        for m in messages.values where m.account == a {
+            guard let j = byId[m.id], let fresh = messageFromGraph(j, account: a, inInbox: true) else {
+                messages[m.key] = nil // left the inbox (archived, deleted or moved anywhere)
+                continue
+            }
+            if messages[m.key]?.labelIds != fresh.labelIds { messages[m.key]?.labelIds = fresh.labelIds }
+        }
+        let missing = byId.keys.filter { messages[a + "|" + $0] == nil }
+        // A few at a time: fast on first load without tripping Microsoft's rate limits.
+        for chunk in stride(from: 0, to: missing.count, by: 8).map({ Array(missing[$0..<min($0 + 8, missing.count)]) }) {
+            let fetched = await withTaskGroup(of: Message?.self) { group in
+                for id in chunk { group.addTask { try? await g.message(id, inInbox: true) } }
+                var out: [Message] = []
+                for await m in group { if let m { out.append(m) } }
+                return out
+            }
+            for m in fetched { messages[m.key] = m }
+        }
+    }
+
     // MARK: Timed jobs: snooze wake-ups, scheduled sends, follow-up reminders
 
     func processDue() async {
@@ -146,7 +173,7 @@ extension AppStore {
             let cached = messages.values.filter { $0.account == s.account && $0.threadId == s.threadId }
             let repliedEarly = s.ifNoReply && gotReply(Array(cached), me: s.account, after: s.setAt)
             guard s.until <= now || repliedEarly else { continue }
-            if isICloud(s.account) {
+            if !isGmail(s.account) {
                 state.snoozes.removeAll { $0 == s }
                 if !repliedEarly { state.bumped[s.conversationId] = now }
                 continue
@@ -174,7 +201,7 @@ extension AppStore {
             } catch { report(AppError("Scheduled send failed, will retry: \(error.localizedDescription)")) }
         }
         for f in state.followUps where f.due <= now {
-            if isICloud(f.account) {
+            if !isGmail(f.account) {
                 let msgs = messages.values.filter { $0.account == f.account && $0.threadId == f.threadId }
                 if !gotReply(Array(msgs), me: f.account, after: f.sentAt) { banner = "No reply yet to your email from \(f.account)." }
                 state.followUps.removeAll { $0 == f }

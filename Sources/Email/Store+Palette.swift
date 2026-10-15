@@ -67,7 +67,7 @@ extension AppStore {
                 }
             }
         }
-        if let c = selected, !isICloud(c.account) {
+        if let c = selected, isGmail(c.account) {
             for l in gmailLabels[c.account] ?? labelNames.filter({ !isAppLabel($0.value) }).map({ Gmail.Label(id: $0.key, name: $0.value) }) {
                 let has = c.labels.contains(l.id)
                 list.append(Command(title: has ? "Remove label: \(l.name)" : "Label: \(l.name)", key: Hotkeys.label("l")) { self.setLabel(l.id, on: c, !has) })

@@ -6,7 +6,7 @@ import CryptoKit
 extension AppStore {
     // MARK: Gmail settings (out of office, signature sync, labels)
 
-    var gmailAccounts: [String] { state.accounts.filter { !isICloud($0) } }
+    var gmailAccounts: [String] { state.accounts.filter { isGmail($0) } }
 
     /// Runs a settings call; an account signed in before Keymail asked for settings access is flagged instead of erroring.
     /// A success doesn't clear the flag: Google lets you *read* settings without the permission, only saving needs it,
@@ -96,8 +96,8 @@ extension AppStore {
     func remind(until date: Date, ifNoReply: Bool) {
         guard let c = selected else { return }
         advance(after: c)
-        if isICloud(c.account) {
-            // iCloud reminders hide the thread locally; it stays in the iCloud inbox.
+        if !isGmail(c.account) {
+            // iCloud and Microsoft reminders hide the thread locally; it stays in that account's inbox.
             state.snoozes.removeAll { $0.conversationId == c.id }
             state.snoozes.append(Snooze(account: c.account, threadId: c.threadId, until: date, ifNoReply: ifNoReply))
             state.bumped[c.id] = nil
@@ -120,7 +120,7 @@ extension AppStore {
     func removeReminder() {
         guard let c = selected, state.snoozes.contains(where: { $0.conversationId == c.id }) else { return }
         state.snoozes.removeAll { $0.conversationId == c.id }
-        if isICloud(c.account) { return }
+        if !isGmail(c.account) { return }
         let snoozed = labelNames.first { $0.value == Gmail.snoozeLabel || Gmail.legacySnoozeLabels.contains($0.value) }?.key
         modify(c, add: ["INBOX"], remove: snoozed.map { [$0] } ?? [])
     }
@@ -140,7 +140,7 @@ extension AppStore {
         if c.isUnread { modify(c, remove: ["UNREAD"]) }
         Task {
             // Pull the whole thread, including older messages that already left the inbox.
-            if isICloud(c.account) { await loadInlineImages(c.messages); return }
+            if !isGmail(c.account) { await loadInlineImages(c.messages); return }
             if let msgs = try? await gmail(c.account).thread(c.threadId) {
                 for m in msgs { messages[m.key] = m }
                 await loadInlineImages(msgs)

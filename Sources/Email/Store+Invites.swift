@@ -57,7 +57,7 @@ extension AppStore {
 
     /// Your current answer: Google's copy for Gmail accounts (it reflects answers given anywhere), else the invite's.
     func currentRSVP(_ inv: Invite, account: String) async -> RSVP? {
-        if !isICloud(account), let e = try? await GoogleCalendar(account: account, auth: auth).event(inv),
+        if isGmail(account), let e = try? await GoogleCalendar(account: account, auth: auth).event(inv),
            let me = (e["attendees"] as? [[String: Any]])?.first(where: { $0["self"] as? Bool == true }) {
             return RSVP(google: me["responseStatus"] as? String ?? "")
         }
@@ -67,7 +67,7 @@ extension AppStore {
     /// Answers an invite so both your calendar and the organizer's show it. Returns what to tell the person.
     func rsvp(_ inv: Invite, _ answer: RSVP, message m: Message) async throws -> String {
         let acct = m.account, me = inviteeAddress(inv, account: acct)
-        if !isICloud(acct) {
+        if isGmail(acct) {
             let cal = GoogleCalendar(account: acct, auth: auth)
             do {
                 if let e = try await cal.event(inv), let id = e["id"] as? String {

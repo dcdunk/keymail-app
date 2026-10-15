@@ -8,7 +8,8 @@ extension AppStore {
 
     func fetchAttachment(account: String, messageId: String, id: String) async throws -> Data {
         isICloud(account) ? try await icloud(account).attachment(uid: messageId, id: id)
-                          : try await gmail(account).attachment(message: messageId, id: id)
+            : isMicrosoft(account) ? try await graph(account).attachmentData(message: messageId, id: id)
+            : try await gmail(account).attachment(message: messageId, id: id)
     }
 
     /// Downloads images embedded in the body (cid:) so they render. Skips anything over 5 MB.

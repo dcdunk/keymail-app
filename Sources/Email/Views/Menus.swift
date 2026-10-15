@@ -33,7 +33,7 @@ extension AppStore {
                       submenu: remindEntries(c, ifNoReply: true) + [.divider] + remindEntries(c, ifNoReply: false)),
             MenuEntry(title: state.muted.contains(c.id) ? "Unmute" : "Mute", icon: state.muted.contains(c.id) ? "bell" : "bell.slash", key: "⇧M") { self.act(on: c) { self.toggleMute() } },
         ]
-        if !isICloud(c.account), let labels = gmailLabels[c.account], !labels.isEmpty {
+        if isGmail(c.account), let labels = gmailLabels[c.account], !labels.isEmpty {
             e.append(MenuEntry(title: "Label", icon: "tag", key: Hotkeys.label("l"), submenu: labels.map { l in
                 MenuEntry(title: l.name, icon: "tag", checked: c.labels.contains(l.id)) { self.setLabel(l.id, on: c, !c.labels.contains(l.id)) }
             }))

@@ -36,7 +36,7 @@ extension AppStore {
         }
     }
 
-    // MARK: Microsoft (preview: sign-in and an inbox check; mail support comes next)
+    // MARK: Microsoft (Outlook.com, Hotmail, Microsoft 365)
 
     func connectMicrosoft() {
         Task {
@@ -44,41 +44,19 @@ extension AppStore {
             defer { busy = nil }
             do {
                 let email = try await microsoft.signIn()
-                if !state.microsoftPreview.contains(email) { state.microsoftPreview.append(email) }
-                await checkMicrosoft(email)
+                if !state.accounts.contains(email) { state.accounts.append(email) }
+                if !state.microsoft.contains(email) { state.microsoft.append(email) }
+                busy = "Loading \(email)…"
+                try await syncMicrosoft(email)
+                saveCache()
+                banner = "Added \(email)."
             } catch { report(error) }
         }
     }
 
-    /// Proves Keymail can read the mailbox: asks Microsoft for the inbox's email and unread counts.
-    func checkMicrosoft(_ a: String) async {
-        microsoftStatus[a] = "Checking…"
-        do {
-            let token = try await microsoft.accessToken(for: a)
-            var req = URLRequest(url: URL(string: "https://graph.microsoft.com/v1.0/me/mailFolders/inbox?$select=totalItemCount,unreadItemCount")!)
-            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            let (data, resp) = try await GoogleNet.session.data(for: req)
-            guard (resp as? HTTPURLResponse)?.statusCode == 200,
-                  let j = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                microsoftStatus[a] = "Signed in, but the inbox couldn't be read."
-                return
-            }
-            let total = j["totalItemCount"] as? Int ?? 0, unread = j["unreadItemCount"] as? Int ?? 0
-            microsoftStatus[a] = "Connected · \(total.formatted()) emails in Inbox, \(unread.formatted()) unread"
-        } catch {
-            microsoftStatus[a] = error.localizedDescription
-        }
-    }
-
-    func removeMicrosoft(_ a: String) {
-        Keychain.delete(MicrosoftAuth.keychainKey(a))
-        microsoft.invalidate(a)
-        state.microsoftPreview.removeAll { $0 == a }
-        microsoftStatus[a] = nil
-    }
-
     func removeAccount(_ a: String) {
         Keychain.delete(a)
+        Keychain.delete(MicrosoftAuth.keychainKey(a)); microsoft.invalidate(a); state.microsoft.removeAll { $0 == a }
         Keychain.delete(ICloud.keychainKey(a))
         state.forget(a)
         messages = messages.filter { $0.value.account != a }

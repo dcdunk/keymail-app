@@ -48,7 +48,7 @@ extension AppStore {
             folder = name; searchOpen = false; threadOpen = false; selectedID = nil
             searchResults = Set(state.snoozes.map(\.conversationId))
             Task {
-                for s in state.snoozes where !isICloud(s.account) && !messages.values.contains(where: { $0.account == s.account && $0.threadId == s.threadId }) {
+                for s in state.snoozes where isGmail(s.account) && !messages.values.contains(where: { $0.account == s.account && $0.threadId == s.threadId }) {
                     for m in (try? await gmail(s.account).thread(s.threadId)) ?? [] { messages[m.key] = m }
                 }
             }
@@ -62,8 +62,8 @@ extension AppStore {
             busy = "Searching…"
             var ids: Set<String> = []
             for a in state.accounts where state.activeAccount == nil || state.activeAccount == a {
-                if isICloud(a) {
-                    // No server-side Gmail search on iCloud: search what's cached locally.
+                if !isGmail(a) {
+                    // No Gmail search on iCloud or Microsoft (yet): search what's cached locally.
                     let words = q.lowercased().split(separator: " ").map(String.init)
                     for m in messages.values where m.account == a {
                         let hay = (m.from + " " + m.to + " " + m.subject + " " + m.plainText).lowercased()

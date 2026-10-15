@@ -62,7 +62,8 @@ struct SavedState: Codable {
     var autoArchive: [AutoArchiveCategory] = []
     var autoArchiveSince: Date?                // only mail arriving after this is auto-archived
     var autoArchived: [String] = []            // conversation ids, newest last (for the folder)
-    var microsoftPreview: [String] = []        // Microsoft accounts signed in for testing; not in the inbox until mail support lands
+    var microsoftPreview: [String] = []        // old preview list; moved into `accounts` on load
+    var microsoft: [String] = []               // which accounts are Microsoft (Outlook.com, Hotmail, Microsoft 365)
 
     init() {}
     /// Tolerates missing keys so adding a setting never wipes your accounts and splits.
@@ -89,6 +90,10 @@ struct SavedState: Codable {
         muted = v(.muted, base.muted); autoArchive = v(.autoArchive, base.autoArchive)
         autoArchiveSince = v(.autoArchiveSince, base.autoArchiveSince); autoArchived = v(.autoArchived, base.autoArchived)
         microsoftPreview = v(.microsoftPreview, base.microsoftPreview)
+        microsoft = v(.microsoft, base.microsoft)
+        // Accounts connected during the sign-in preview join the inbox now that mail reading exists.
+        for a in microsoftPreview where !accounts.contains(a) { accounts.append(a); microsoft.append(a) }
+        microsoftPreview = []
     }
 }
 
@@ -254,7 +259,6 @@ final class AppStore: ObservableObject {
 
     let auth = GoogleAuth()
     let microsoft = MicrosoftAuth()
-    @Published var microsoftStatus: [String: String] = [:]   // preview account → what the inbox check found
     var timer: Timer?
     var keyMonitor: Any?
 
@@ -354,6 +358,10 @@ final class AppStore: ObservableObject {
     }
     func gmail(_ account: String) -> Gmail { Gmail(account: account, auth: auth) }
     func isICloud(_ a: String) -> Bool { state.icloud.contains(a) }
+    func isMicrosoft(_ a: String) -> Bool { state.microsoft.contains(a) }
+    /// Gmail-only features (labels, server search, Gmail settings, Google Calendar) check this, never "not iCloud".
+    func isGmail(_ a: String) -> Bool { !isICloud(a) && !isMicrosoft(a) }
+    func graph(_ a: String) -> GraphMail { GraphMail(account: a, auth: microsoft) }
     func icloud(_ a: String) -> ICloud {
         ICloud(account: a, login: state.icloudLogins[a] ?? String(a.split(separator: "@").first ?? ""))
     }

@@ -128,7 +128,7 @@ struct OnboardingView: View {
             VStack(spacing: 8) {
                 ForEach(store.state.accounts, id: \.self) { a in
                     HStack(spacing: 12) {
-                        Image(systemName: store.isICloud(a) ? "icloud.fill" : "envelope.fill").foregroundStyle(store.isICloud(a) ? .blue : .red)
+                        BrandLogo(brand: store.isICloud(a) ? "icloud" : store.isMicrosoft(a) ? "microsoft" : "gmail", size: 16)
                         Text(a)
                         Spacer()
                         Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)

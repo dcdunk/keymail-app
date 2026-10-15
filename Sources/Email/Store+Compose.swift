@@ -77,6 +77,9 @@ extension AppStore {
         let domain = d.from.split(separator: "@").last.map(String.init) ?? "email.local"
         if d.messageId == nil { d.messageId = "<\(UUID().uuidString)@\(domain)>" }
         let acct = account(for: d.from)
+        if isMicrosoft(acct) {
+            throw AppError("Sending from Microsoft accounts is coming in the next update. Pick another account in From for now.")
+        }
         defer { Task { await self.deleteDraft(d) } }
         if isICloud(acct) {
             try await icloud(acct).send(d)
@@ -117,6 +120,7 @@ extension AppStore {
         }
         let acct = account(for: d.from)
         do {
+            if isMicrosoft(acct) { model.savedNote = nil; return } // Microsoft drafts sync comes with sending
             if isICloud(acct) { try await icloud(acct).saveDraft(d) }
             else { model.draft.draftId = try await gmail(acct).saveDraft(d) }
             model.savedNote = "Draft saved"
@@ -126,7 +130,7 @@ extension AppStore {
     func deleteDraft(_ d: Draft) async {
         let acct = account(for: d.from)
         if isICloud(acct) { if let mid = d.messageId { try? await icloud(acct).deleteDraft(messageId: mid) } }
-        else if let id = d.draftId { try? await gmail(acct).deleteDraft(id) }
+        else if isGmail(acct), let id = d.draftId { try? await gmail(acct).deleteDraft(id) }
     }
 
     /// Drafts can't go to Trash (Gmail answers 404), so they're discarded with the drafts API instead.
@@ -139,7 +143,7 @@ extension AppStore {
             do {
                 if isICloud(c.account) {
                     for m in c.messages where !m.messageIdHeader.isEmpty { try await icloud(c.account).deleteDraft(messageId: m.messageIdHeader) }
-                } else {
+                } else if isGmail(c.account) {
                     let ids = try await gmail(c.account).draftIds()
                     for m in c.messages { if let d = ids[m.id] { try await gmail(c.account).deleteDraft(d) } }
                 }
@@ -157,7 +161,7 @@ extension AppStore {
         d.references = m.references
         let model = ComposeModel(draft: d, context: c.messages.count > 1 ? c : nil)
         composing = model
-        guard !isICloud(m.account) else { return }
+        guard isGmail(m.account) else { return }
         Task { model.draft.draftId = (try? await gmail(m.account).draftIds())?[m.id] }
     }
 

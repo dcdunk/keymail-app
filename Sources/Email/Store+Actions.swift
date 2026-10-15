@@ -15,9 +15,21 @@ extension AppStore {
         Task {
             do {
                 if isICloud(c.account) { try await icloudModify(c, add: add, remove: remove) }
+                else if isMicrosoft(c.account) { try await graphModify(c, add: add, remove: remove) }
                 else { try await gmail(c.account).modifyThread(c.threadId, add: add, remove: remove) }
             } catch { report(error); try? await sync(c.account) }
         }
+    }
+
+    /// Gmail labels → Microsoft Graph: UNREAD = isRead, STARRED = flag, INBOX = Inbox vs Archive folder.
+    func graphModify(_ c: Conversation, add: [String], remove: [String]) async throws {
+        let g = graph(c.account), ids = c.messages.map(\.id)
+        if remove.contains("UNREAD") { for id in ids { try await g.setRead(id, true) } }
+        if add.contains("UNREAD") { try await g.setRead(c.latest.id, false) }
+        if add.contains("STARRED") { try await g.setFlagged(c.latest.id, true) }
+        if remove.contains("STARRED") { for id in ids { try await g.setFlagged(id, false) } }
+        if remove.contains("INBOX") { for id in ids { try await g.move(id, to: "archive") } }
+        if add.contains("INBOX") { try await g.move(c.latest.id, to: "inbox") }
     }
 
     /// Gmail labels → IMAP: INBOX removal = archive, UNREAD = \Seen, STARRED = \Flagged.
@@ -97,6 +109,9 @@ extension AppStore {
                     // UIDs change when iCloud moves mail, so drop the old copies and re-fetch.
                     for m in c.messages { messages[m.key] = nil }
                     try await syncICloud(c.account)
+                } else if isMicrosoft(c.account) {
+                    // IDs are immutable (see GraphMail), so the same IDs work after the move.
+                    for m in c.messages { try await graph(c.account).move(m.id, to: "inbox") }
                 } else if kind == .trash {
                     try await gmail(c.account).untrashThread(c.threadId)
                 } else {
@@ -125,6 +140,7 @@ extension AppStore {
         Task {
             do {
                 if isICloud(c.account) { try await icloud(c.account).move(c.messages.map(\.id), toTrash: true) }
+                else if isMicrosoft(c.account) { for m in c.messages { try await graph(c.account).move(m.id, to: "deleteditems") } }
                 else { try await gmail(c.account).trashThread(c.threadId) }
             } catch { report(error) }
         }

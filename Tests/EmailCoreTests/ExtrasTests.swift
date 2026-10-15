@@ -360,4 +360,46 @@ final class ExtrasTests: XCTestCase {
         XCTAssertTrue(friendlyMicrosoftSignInError("AADSTS65001: The user or administrator has not consented").contains("administrator"))
         XCTAssertFalse(friendlyMicrosoftSignInError("AADSTS9999 weird").contains("AADSTS")) // never show raw codes
     }
+
+    func testMessageFromGraph() {
+        let j: [String: Any] = [
+            "id": "AAMk1", "conversationId": "conv1", "subject": "Lunch?", "bodyPreview": "Want to grab\r\nlunch",
+            "receivedDateTime": "2026-10-15T17:30:00Z", "isRead": false, "inferenceClassification": "focused",
+            "flag": ["flagStatus": "flagged"], "internetMessageId": "<abc@outlook.com>", "isDraft": false,
+            "from": ["emailAddress": ["name": "Sam Patel", "address": "sam@outlook.com"]],
+            "toRecipients": [["emailAddress": ["name": "Me", "address": "me@outlook.com"]], ["emailAddress": ["name": "", "address": "b@x.com"]]],
+            "replyTo": [["emailAddress": ["name": "Sam", "address": "sam@work.com"]]],
+            "body": ["contentType": "html", "content": "<p>Hi</p>"],
+            "internetMessageHeaders": [["name": "Authentication-Results", "value": "spf=fail; dmarc=fail header.from=bank.com"],
+                                       ["name": "Authentication-Results", "value": "dmarc=pass"],
+                                       ["name": "List-Unsubscribe", "value": "<mailto:u@x.com>"]]]
+        let m = messageFromGraph(j, account: "me@outlook.com", inInbox: true)!
+        XCTAssertEqual(m.threadId, "conv1")
+        XCTAssertEqual(Set(m.labelIds), ["INBOX", "UNREAD", "STARRED", "IMPORTANT"])
+        XCTAssertEqual(parseAddresses(m.from).first?.email, "sam@outlook.com")
+        XCTAssertEqual(parseAddresses(m.to).map(\.email), ["me@outlook.com", "b@x.com"])
+        XCTAssertEqual(m.snippet, "Want to grab lunch")
+        XCTAssertEqual(m.html, "<p>Hi</p>")
+        XCTAssertEqual(m.authFailed, true)            // Microsoft's own header (first) wins over a later fake pass
+        XCTAssertEqual(m.listUnsubscribe, "<mailto:u@x.com>")
+        XCTAssertEqual(m.replyTo, "\"Sam\" <sam@work.com>")
+        // Read, unflagged, "Other", archived: no INBOX/UNREAD/STARRED/IMPORTANT.
+        let other = messageFromGraph(["id": "2", "conversationId": "c", "isRead": true, "inferenceClassification": "other",
+                                      "flag": ["flagStatus": "notFlagged"], "body": ["contentType": "text", "content": "plain"]],
+                                     account: "me@outlook.com", inInbox: false)!
+        XCTAssertEqual(other.labelIds, [])
+        XCTAssertEqual(other.text, "plain")
+        XCTAssertEqual(other.subject, "(no subject)")
+        XCTAssertNil(messageFromGraph(["id": "x"], account: "a", inInbox: true)) // no conversation id
+    }
+
+    func testAttachmentFromGraph() {
+        let inline = attachmentFromGraph(["@odata.type": "#microsoft.graph.fileAttachment", "id": "A1", "name": "logo.png",
+                                          "contentType": "image/PNG", "size": 1200, "isInline": true, "contentId": "<logo@1>"])
+        XCTAssertEqual(inline?.contentId, "logo@1")
+        XCTAssertEqual(inline?.mimeType, "image/png")
+        let file = attachmentFromGraph(["@odata.type": "#microsoft.graph.fileAttachment", "id": "A2", "name": "a.pdf", "isInline": false, "contentId": "x"])
+        XCTAssertNil(file?.contentId)
+        XCTAssertNil(attachmentFromGraph(["@odata.type": "#microsoft.graph.itemAttachment", "id": "A3"])) // attached emails aren't files
+    }
 }
