@@ -17,8 +17,8 @@ struct SplitSettingsView: View {
             HStack {
                 Text("Split Inbox").font(.scaled(.title2).weight(.semibold))
                 Spacer()
-                Button("Build your own") { store.state.splits.append(Split(name: "New split", query: "")) }
-                Button { store.suggestSplits() } label: { Label("Suggest with \(store.ai.name)", systemImage: "sparkles") }
+                Button("Build your own") { store.state.splits.append(Split(name: "New split", query: "")) }.quiet()
+                Button { store.suggestSplits() } label: { Label("Suggest with \(store.ai.name)", systemImage: "sparkles") }.quiet()
             }
             Text("Define each split with a search, e.g. `from:hubspot.com OR subject:\"new lead\"`. Also works: to:, cc:, label:, has:attachment, is:unread, is:starred, -term to exclude. Drag to reorder. Aim for 3 to 7.")
                 .font(.scaled(.callout)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -30,8 +30,8 @@ struct SplitSettingsView: View {
                             TextField("Name", text: $split.name).font(.scaled(.headline)).textFieldStyle(.plain)
                             Spacer()
                             Toggle("On", isOn: $split.enabled).toggleStyle(.switch).controlSize(.small)
-                            Button(role: .destructive) { store.state.splits.removeAll { $0.id == split.id } } label: { Image(systemName: "trash") }
-                                .buttonStyle(.plain).foregroundStyle(.secondary)
+                            Button(role: .destructive) { store.state.splits.removeAll { $0.id == split.id } } label: { Image(systemName: "trash").frame(width: 26, height: 26) }
+                                .buttonStyle(ToolStyle())
                         }
                         TextField(split.query.hasPrefix("is:") ? "" : "Definition, e.g. from:boss@company.com", text: $split.query)
                             .textFieldStyle(.roundedBorder).font(.scaled(.callout, design: .monospaced))
@@ -62,7 +62,7 @@ struct SplitSettingsView: View {
             HStack {
                 Text("Important and Other are always last.").font(.scaled(.callout)).foregroundStyle(.secondary)
                 Spacer()
-                if !embedded { Button("Done") { dismiss() }.keyboardShortcut(.defaultAction) }
+                if !embedded { Button { dismiss() } label: { HStack(spacing: 8) { Text("Done").fontWeight(.semibold); KeyHint("↩") } }.primaryAction().keyboardShortcut(.defaultAction) }
             }
         }
         .padding(24).frame(width: embedded ? nil : 680, height: embedded ? nil : 620)

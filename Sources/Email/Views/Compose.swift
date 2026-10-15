@@ -353,13 +353,16 @@ struct SnippetEditor: View {
 
 /// Draft tools: no border, a soft wash on hover, so Send is the only filled button in the bar.
 struct ToolStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View { ToolBody(configuration: configuration) }
+    var padded = false   // plain-text buttons need the padding the draft tools build into their labels
+    func makeBody(configuration: Configuration) -> some View { ToolBody(configuration: configuration, padded: padded) }
     struct ToolBody: View {
         let configuration: ButtonStyleConfiguration
+        let padded: Bool
         @Environment(\.isEnabled) private var enabled
         @State private var hover = false
         var body: some View {
             configuration.label
+                .padding(.horizontal, padded ? 8 : 0).frame(minHeight: padded ? 28 : nil)
                 .foregroundStyle(hover ? Color.primary : Color.secondary)
                 .background(RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(configuration.isPressed ? 0.12 : hover ? 0.07 : 0)))
                 .contentShape(Rectangle())

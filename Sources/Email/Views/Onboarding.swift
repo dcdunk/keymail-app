@@ -62,8 +62,8 @@ struct OnboardingView: View {
     }
 
     func primary(_ t: String, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) { Text(t).frame(minWidth: 180).padding(.vertical, 4) }
-            .prominentGlassButton().controlSize(.large).buttonBorderShape(.capsule).keyboardShortcut(.defaultAction)
+        Button(action: action) { HStack(spacing: 8) { Text(t).fontWeight(.semibold); KeyHint("↩") }.frame(minWidth: 180).padding(.vertical, 4) }
+            .primaryAction().keyboardShortcut(.defaultAction)
     }
 
     var welcome: some View {
@@ -96,7 +96,7 @@ struct OnboardingView: View {
                 providerCard("icloud.fill", .blue, "iCloud Mail", "With an app-specific password") { showICloud = true }
                 providerCard("tray.full.fill", Color(red: 0.0, green: 0.47, blue: 0.84), "Outlook", "Outlook.com, Hotmail or Microsoft 365") { store.connectMicrosoft() }
             }
-            if !store.state.accounts.isEmpty { Button("Back") { step = .accounts }.buttonBorderShape(.capsule) }
+            if !store.state.accounts.isEmpty { Button("Back") { step = .accounts }.quiet() }
         }
     }
 
@@ -117,7 +117,7 @@ struct OnboardingView: View {
         VStack(spacing: 16) {
             SetupView().frame(height: 460)
             HStack {
-                Button("Back") { step = .connect }.buttonBorderShape(.capsule)
+                Button("Back") { step = .connect }.quiet()
                 if store.hasClient { primary("Sign in with Google") { store.addAccount() } }
             }
         }
@@ -139,7 +139,7 @@ struct OnboardingView: View {
                 }
             }
             HStack(spacing: 12) {
-                Button { step = .connect } label: { Label("Add another account", systemImage: "plus") }.buttonBorderShape(.capsule).controlSize(.large)
+                Button { step = .connect } label: { Label("Add another account", systemImage: "plus") }.quiet()
                 primary("Continue") { step = .ai }
             }
         }
@@ -157,9 +157,9 @@ struct OnboardingView: View {
                         if installedAI.contains(p.id) {
                             Label("Installed", systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.scaled(.callout))
                             if store.state.aiProvider == p.id { Text("Selected").font(.scaled(.caption)).foregroundStyle(Theme.accent) }
-                            else { Button("Use") { store.state.aiProvider = p.id }.buttonBorderShape(.capsule) }
+                            else { Button("Use") { store.state.aiProvider = p.id }.quiet() }
                         } else {
-                            Button("Get it") { NSWorkspace.shared.open(URL(string: p.installURL)!) }.buttonBorderShape(.capsule)
+                            Button("Get it") { NSWorkspace.shared.open(URL(string: p.installURL)!) }.quiet()
                         }
                     }
                     .padding(.horizontal, 16).padding(.vertical, 10)
@@ -172,7 +172,7 @@ struct OnboardingView: View {
                 for p in AIProvider.all where await Task.detached(operation: { AI.binary(p.binary) }).value != nil { installedAI.insert(p.id) }
             }
             HStack(spacing: 12) {
-                Button("Skip") { step = .done }.buttonBorderShape(.capsule).controlSize(.large)
+                Button("Skip") { step = .done }.quiet()
                 primary("Continue") { step = .done }
             }
         }

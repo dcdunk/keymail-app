@@ -98,7 +98,7 @@ struct FolderPanel: View {
     }
 }
 
-/// Right panel: who you're talking to, your history with them, and recently opened threads.
+/// Right panel: who you're talking to, quick actions for them, what you've shared, and your day.
 struct ContextPanel: View {
     @EnvironmentObject var store: AppStore
     let conversation: Conversation
@@ -107,48 +107,110 @@ struct ContextPanel: View {
                                     ?? conversation.latest.to).first
         let all = store.allConversations
         let email = person?.email.lowercased() ?? ""
-        let history = all.filter { c in c.id != conversation.id && c.messages.contains { parseAddresses($0.from + "," + $0.to).contains { $0.email.lowercased() == email } } }
+        let withThem = all.filter { c in c.messages.contains { parseAddresses($0.from + "," + $0.to + "," + $0.cc).contains { $0.email.lowercased() == email } } }
+        let history = withThem.filter { $0.id != conversation.id }.sorted { $0.latest.date > $1.latest.date }
+        let files = withThem.flatMap { c in c.messages.flatMap { m in m.attachments.filter { !$0.isInline }.map { (m, $0) } } }
+            .sorted { $0.0.date > $1.0.date }
         let recent = store.recentlyOpened.filter { $0 != conversation.id }.compactMap { id in all.first { $0.id == id } }
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                if let person {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Circle().fill(Theme.chip(email).opacity(0.18)).frame(width: 44, height: 44)
-                            .overlay(Text(String(person.display.prefix(1)).uppercased()).font(.scaled(.title3).weight(.semibold)).foregroundStyle(Theme.chip(email)))
-                        Text(person.display).font(.scaled(.headline)).lineLimit(1)
-                        Text(person.email).font(.scaled(.callout)).foregroundStyle(.secondary).textSelection(.enabled).lineLimit(1)
+            VStack(alignment: .leading, spacing: 20) {
+                if let person { header(person, email: email, count: withThem.count, first: withThem.map(\.messages[0].date).min()) }
+                section("History", count: history.count, hidden: history.isEmpty) {
+                    ForEach(history.prefix(5)) { c in row(c) }
+                }
+                section("Files", count: files.count, hidden: files.isEmpty) {
+                    ForEach(files.prefix(4), id: \.1.id) { m, f in
+                        Button { store.preview(account: m.account, messageId: m.id, attachmentId: f.id, name: f.name) } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: fileIcon(f.name)).font(.scaled(size: 13)).foregroundStyle(.secondary).frame(width: 18)
+                                Text(f.name).font(.scaled(.callout)).lineLimit(1).truncationMode(.middle)
+                                Spacer(minLength: 4)
+                                Text(shortDate(m.date)).font(.scaled(.caption)).foregroundStyle(.tertiary)
+                            }.padding(.horizontal, 8).frame(height: 30).frame(maxWidth: .infinity, alignment: .leading)
+                        }.buttonStyle(ToolStyle()).help("Quick Look \(f.name)")
                     }
                 }
-                section("Recent with \(person?.firstName.isEmpty == false ? person!.firstName : "them")", history.prefix(5))
-                section("Recently opened", recent.prefix(5))
-                CalendarSection(conversation: conversation)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Today").font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary)
-                    Text(Date().formatted(date: .complete, time: .omitted)).font(.scaled(.callout))
-                    let due = store.state.snoozes.filter { Calendar.current.isDateInToday($0.until) }.count
-                    Text("\(due) reminder\(due == 1 ? "" : "s") returning today · \(store.state.scheduled.count) scheduled").font(.scaled(.callout)).foregroundStyle(.secondary)
-                }
+                section("Recently opened", count: 0, hidden: recent.isEmpty) { ForEach(recent.prefix(4)) { c in row(c) } }
+                CalendarSection(conversation: conversation).padding(.horizontal, 8)
+                let due = store.state.snoozes.filter { Calendar.current.isDateInToday($0.until) }.count
+                Text("\(due) reminder\(due == 1 ? "" : "s") returning today · \(store.state.scheduled.count) scheduled")
+                    .font(.scaled(.caption)).foregroundStyle(.tertiary).padding(.horizontal, 8)
             }
-            .padding(.horizontal, 18).padding(.top, 18).frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10).padding(.vertical, 16).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(width: 270)
+        .frame(width: 280)
         .glass(RoundedRectangle(cornerRadius: 20))
         .padding(.trailing, 10).padding(.vertical, 10).padding(.top, 24)
     }
 
-    @ViewBuilder func section(_ title: String, _ items: ArraySlice<Conversation>) -> some View {
-        if !items.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(title).font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary)
-                ForEach(Array(items)) { c in
-                    Button { store.open(c) } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(c.latest.subject).font(.scaled(.callout)).lineLimit(1)
-                            Text(shortDate(c.latest.date)).font(.scaled(.caption)).foregroundStyle(.secondary)
-                        }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-                    }.buttonStyle(.plain)
+    func header(_ person: Address, email: String, count: Int, first: Date?) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Avatar(address: person, size: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(person.display).font(.scaled(.headline)).lineLimit(1)
+                    Text(person.email).font(.scaled(.caption)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
                 }
             }
+            Text("\(count) conversation\(count == 1 ? "" : "s")\(first.map { " · since \($0.formatted(.dateTime.month(.abbreviated).year()))" } ?? "")")
+                .font(.scaled(.caption)).foregroundStyle(.tertiary)
+            HStack(spacing: 2) {
+                tool("square.and.pencil", "Email \(person.firstName.isEmpty ? person.display : person.firstName)") {
+                    var d = Draft(from: store.sendAddress(store.defaultAccount)); d.to = person.email
+                    _ = store.openCompose(d, context: nil)
+                }
+                tool("magnifyingglass", "All mail with \(person.email)") {
+                    var q = SearchQuery(); q.from = email; store.search = q; store.runSearch()
+                }
+                tool("rectangle.split.3x1", "New split for \(person.display)") { store.addSplit(Split(name: person.display, query: "from:\(email)")) }
+                tool("doc.on.doc", "Copy address") {
+                    NSPasteboard.general.clearContents(); NSPasteboard.general.setString(person.email, forType: .string)
+                    store.banner = "Copied \(person.email)."
+                }
+            }
+        }.padding(.horizontal, 8)
+    }
+
+    func tool(_ symbol: String, _ help: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) { Image(systemName: symbol).font(.scaled(size: 14)).frame(width: 30, height: 28) }
+            .buttonStyle(ToolStyle()).help(help).accessibilityLabel(help)
+    }
+
+    @ViewBuilder func section<C: View>(_ title: String, count: Int, hidden: Bool, @ViewBuilder _ content: () -> C) -> some View {
+        if !hidden { VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(title).font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary)
+                Spacer()
+                if count > 0 { Text("\(count)").font(.scaled(.caption)).foregroundStyle(.tertiary) }
+            }.padding(.horizontal, 8).padding(.bottom, 4)
+            content()
+        } }
+    }
+
+    func row(_ c: Conversation) -> some View {
+        Button { store.open(c) } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Circle().fill(c.isUnread ? Theme.accent : .clear).frame(width: 6, height: 6)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Text(c.latest.subject.isEmpty ? "(no subject)" : c.latest.subject).font(.scaled(.callout).weight(c.isUnread ? .semibold : .regular)).lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(shortDate(c.latest.date)).font(.scaled(.caption)).foregroundStyle(.tertiary)
+                    }
+                    Text(c.latest.snippet).font(.scaled(.caption)).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 8).padding(.vertical, 6).frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+        }.buttonStyle(ToolStyle())
+    }
+
+    func fileIcon(_ name: String) -> String {
+        switch (name as NSString).pathExtension.lowercased() {
+        case "pdf": "doc.richtext"
+        case "png", "jpg", "jpeg", "gif", "heic", "webp": "photo"
+        case "xls", "xlsx", "csv", "numbers": "tablecells"
+        case "zip": "doc.zipper"
+        default: "doc"
         }
     }
 }

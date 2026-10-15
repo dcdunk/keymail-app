@@ -100,3 +100,15 @@ struct KeyHint: View {
     /// ⇧ reads as an up arrow to many people, so Shift is spelled out ("⇧U" → "Shift U").
     static func display(_ key: String) -> String { key.replacingOccurrences(of: "⇧", with: "Shift ") }
 }
+
+/// Keymail's button language, taken from the compose window: quiet tools, one filled capsule per surface,
+/// and a tinted action bar along the bottom of cards.
+extension View {
+    func quiet() -> some View { buttonStyle(ToolStyle(padded: true)) }
+    func primaryAction() -> some View { prominentGlassButton().buttonBorderShape(.capsule).controlSize(.large) }
+    func actionBar() -> some View {
+        padding(.horizontal, 16).padding(.vertical, 12)
+            .background(Color.primary.opacity(0.03))
+            .overlay(alignment: .top) { Divider() }
+    }
+}

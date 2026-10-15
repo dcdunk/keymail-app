@@ -27,14 +27,14 @@ struct SetupView: View {
                 step(6, "In the popup, click **Download JSON** and choose it below. Missed it? Paste the Client ID and secret instead.")
             }
             HStack {
-                Button("Open Google Cloud Console") { NSWorkspace.shared.open(URL(string: "https://console.cloud.google.com/auth/overview")!) }
-                Button("Choose client JSON…") { pick() }.prominentGlassButton()
-                Button("Use iCloud Mail instead…") { showICloud = true }
+                Button("Open Google Cloud Console") { NSWorkspace.shared.open(URL(string: "https://console.cloud.google.com/auth/overview")!) }.quiet()
+                Button("Choose client JSON…") { pick() }.primaryAction()
+                Button("Use iCloud Mail instead…") { showICloud = true }.quiet()
             }
             HStack {
                 TextField("Client ID", text: $clientId).textFieldStyle(.roundedBorder)
                 SecureField("Client secret", text: $clientSecret).textFieldStyle(.roundedBorder)
-                Button("Save") { save() }.disabled(clientId.isEmpty || clientSecret.isEmpty)
+                Button("Save") { save() }.quiet().disabled(clientId.isEmpty || clientSecret.isEmpty)
             }
             if let b = store.banner { Text(b).foregroundStyle(.red) }
         }
@@ -74,8 +74,8 @@ struct SignInView: View {
             Text("Keymail").font(.scaled(size: 34, weight: .semibold))
             Text("Fast, keyboard-first Gmail.").foregroundStyle(.secondary)
             Button { store.addAccount() } label: { Text("Sign in with Google").padding(.horizontal, 12).padding(.vertical, 4) }
-                .prominentGlassButton().controlSize(.large)
-            Button("Add iCloud Mail instead…") { showICloud = true }.buttonStyle(.link).handCursor()
+                .primaryAction()
+            Button("Add iCloud Mail instead…") { showICloud = true }.quiet()
             if let b = store.busy { Text(b).foregroundStyle(.secondary) }
             if let b = store.banner { Text(b).foregroundStyle(.red).multilineTextAlignment(.center).frame(maxWidth: 480) }
         }

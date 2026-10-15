@@ -27,14 +27,14 @@ struct AboutSettings: View {
                         Text(updateStatus).font(.scaled(.caption)).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Check for Updates") { updates.check() }.disabled(!updates.enabled || !updates.canCheck)
+                    Button("Check for Updates") { updates.check() }.quiet().disabled(!updates.enabled || !updates.canCheck)
                 }
                 if updates.enabled {
                     Toggle("Check for updates automatically", isOn: Binding(get: { updates.automatic }, set: { updates.automatic = $0 }))
                 }
             }
             .padding(16).frame(maxWidth: 460)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(0.04)))
+            .background(RoundedRectangle(cornerRadius: 14).fill(Color.primary.opacity(0.04)))
 
             VStack(alignment: .leading, spacing: 8) {
                 info("Privacy", "Mail goes straight between this Mac and Google, Apple or Microsoft. Keymail has no servers.")
@@ -42,7 +42,7 @@ struct AboutSettings: View {
                 info("Requires", "macOS 14 or later")
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     Text("Your data").foregroundStyle(.secondary).frame(width: 80, alignment: .trailing)
-                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([Disk.dir]) }.buttonStyle(.link).handCursor()
+                    Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([Disk.dir]) }.quiet()
                 }
             }
             .font(.scaled(.callout)).frame(maxWidth: 460, alignment: .leading)

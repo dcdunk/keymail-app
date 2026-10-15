@@ -20,11 +20,11 @@ struct CalendarSection: View {
                 Text(mentioned == nil ? "Today" : "Mentioned: \(day.formatted(.dateTime.weekday(.abbreviated).month().day()))")
                     .font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary)
                 Spacer()
-                Button { store.createEventFromEmail() } label: { Image(systemName: "calendar.badge.plus") }
-                    .buttonStyle(.plain).foregroundStyle(.secondary).help("Create event (\(Hotkeys.label("b")))")
+                Button { store.createEventFromEmail() } label: { Image(systemName: "calendar.badge.plus").frame(width: 26, height: 26) }
+                    .buttonStyle(ToolStyle()).help("Create event (\(Hotkeys.label("b")))")
             }
             if !cal.authorized {
-                Button("Show my calendar") { Task { _ = await store.calendar.requestAccess() } }.controlSize(.small)
+                Button("Show my calendar") { Task { _ = await store.calendar.requestAccess() } }.quiet().font(.scaled(.callout))
             } else {
                 let events = cal.events(on: day)
                 if events.isEmpty { Text("Nothing scheduled").font(.scaled(.callout)).foregroundStyle(.tertiary) }
@@ -67,6 +67,7 @@ struct EventSheet: View {
     var end: Date { draft.start.addingTimeInterval(Double(draft.minutes) * 60) }
 
     var body: some View {
+        VStack(spacing: 0) {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("New event").font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary).textCase(.uppercase)
@@ -139,25 +140,28 @@ struct EventSheet: View {
             if needsAccess, let a = googleAccount {
                 HStack(spacing: 8) {
                     Text("Keymail needs your OK to add events to \(a)'s Google Calendar.").font(.scaled(.caption)).foregroundStyle(.secondary)
-                    Button("Allow calendar access") { Task { if await store.grantCalendarAccess(for: a) { needsAccess = false; save() } } }.controlSize(.small)
+                    Button("Allow calendar access") { Task { if await store.grantCalendarAccess(for: a) { needsAccess = false; save() } } }.quiet().font(.scaled(.caption))
                 }
             }
             if let error { Text(error).foregroundStyle(.red).font(.scaled(.callout)).fixedSize(horizontal: false, vertical: true) }
 
+            }
+            .padding(24)
             HStack {
                 Spacer()
-                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Cancel") { dismiss() }.quiet().keyboardShortcut(.cancelAction)
                 Button { save() } label: {
                     HStack(spacing: 6) {
                         if saving { ProgressView().controlSize(.small) }
                         Text(googleAccount != nil ? (invite && !guests.isEmpty ? "Add and invite" : "Add to Google Calendar") : "Add to calendar")
                     }
                 }
-                .keyboardShortcut(.defaultAction).prominentGlassButton()
+                .keyboardShortcut(.defaultAction).primaryAction()
                 .disabled(saving || draft.title.trimmingCharacters(in: .whitespaces).isEmpty || destination.isEmpty)
             }
+            .actionBar()
         }
-        .padding(24).frame(width: 520)
+        .frame(width: 520)
         .onAppear {
             if gmailAccounts.contains(draft.account) { destination = "google:" + draft.account }
             else if let c = store.calendar.store.defaultCalendarForNewEvents { destination = "mac:" + c.calendarIdentifier }

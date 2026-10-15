@@ -17,6 +17,7 @@ struct ICloudSheet: View {
     @State private var error: String?
     @State private var working = false
     var body: some View {
+        VStack(spacing: 0) {
         VStack(alignment: .leading, spacing: 14) {
             Text("Add iCloud Mail").font(.scaled(.title2).weight(.semibold))
             Text("iCloud needs an **app-specific password**, not your Apple Account password. It's saved only in your Mac's Keychain.")
@@ -25,16 +26,18 @@ struct ICloudSheet: View {
                 Text("1. Go to account.apple.com → Sign-In and Security → App-Specific Passwords.")
                 Text("2. Create one named \"Keymail\" and paste it below.")
             }.font(.scaled(.callout))
-            Button("Open account.apple.com") { NSWorkspace.shared.open(URL(string: "https://account.apple.com/account/manage")!) }
+            Button("Open account.apple.com") { NSWorkspace.shared.open(URL(string: "https://account.apple.com/account/manage")!) }.quiet()
             TextField("Primary iCloud email (you@icloud.com)", text: $email).textFieldStyle(.roundedBorder)
             SecureField("App-specific password (xxxx-xxxx-xxxx-xxxx)", text: $password).textFieldStyle(.roundedBorder)
             TextField("Aliases to send as (optional, comma-separated)", text: $aliases).textFieldStyle(.roundedBorder)
             Text("Sign in with your **primary** iCloud address; aliases can't sign in. Add aliases here to send from them.")
                 .font(.scaled(.callout)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if let error { Text(error).foregroundStyle(.red).font(.scaled(.callout)) }
+            }
+            .padding(28)
             HStack {
                 Spacer()
-                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Cancel") { dismiss() }.quiet().keyboardShortcut(.cancelAction)
                 Button(working ? "Checking…" : "Add account") {
                     working = true; error = nil
                     Task {
@@ -43,10 +46,11 @@ struct ICloudSheet: View {
                         working = false
                     }
                 }
-                .keyboardShortcut(.defaultAction).prominentGlassButton()
+                .keyboardShortcut(.defaultAction).primaryAction()
                 .disabled(working || !email.contains("@") || password.count < 8)
             }
+            .actionBar()
         }
-        .padding(28).frame(width: 520)
+        .frame(width: 520)
     }
 }

@@ -25,7 +25,7 @@ struct InviteCard: View {
                     Spacer()
                     if let c = inv.conference, !inv.isCancelled {
                         Button { NSWorkspace.shared.open(c.url) } label: { Label("Join \(c.kind.rawValue)", systemImage: "video.fill") }
-                            .prominentGlassButton().buttonBorderShape(.capsule).help(c.url.absoluteString)
+                            .primaryAction().help(c.url.absoluteString)
                     }
                 }
                 if inv.isCancelled {
@@ -41,7 +41,6 @@ struct InviteCard: View {
                                     Text(r.label)
                                 }.frame(minWidth: 52)
                             }
-                            .buttonBorderShape(.capsule)
                             .tint(answer == r ? (r == .declined ? .red : Theme.accent) : nil)
                             .modifier(Chosen(on: answer == r))
                             .disabled(sending != nil)
@@ -52,7 +51,7 @@ struct InviteCard: View {
                             Text("To update your Google Calendar, Keymail needs your OK once.").font(.scaled(.caption)).foregroundStyle(.secondary)
                             Button("Allow calendar access") {
                                 Task { if await store.grantCalendarAccess(for: message.account) { needsAccess = false; await load() } }
-                            }.controlSize(.small)
+                            }.quiet().font(.scaled(.caption))
                         }
                     }
                     if let error { Text(error).font(.scaled(.caption)).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
@@ -97,10 +96,11 @@ struct InviteCard: View {
     }
 }
 
-/// The chosen answer gets the filled style; the others stay quiet.
+/// RSVP answers are quiet tools; the chosen one gets a soft accent wash so Join stays the only filled button.
 private struct Chosen: ViewModifier {
     let on: Bool
     func body(content: Content) -> some View {
-        if on { content.prominentGlassButton() } else { content }
+        content.buttonStyle(ToolStyle(padded: true))
+            .background(RoundedRectangle(cornerRadius: 7).fill(on ? Theme.accent.opacity(0.16) : .clear))
     }
 }

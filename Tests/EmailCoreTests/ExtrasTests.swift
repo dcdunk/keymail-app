@@ -429,4 +429,9 @@ final class ClaudeCodeLinkTests: XCTestCase {
         XCTAssertNil(claudeLocalSettings(existing: Data("not json".utf8), model: "x", effort: nil)) // never overwrite a file we can't read
         XCTAssertNotNil(claudeLocalSettings(existing: nil, model: nil, effort: "low"))
     }
+
+    func testPromptDropsBlankRunsAndTrackingLinks() {
+        let t = tidyForPrompt("Hello\n\n\n\n   \nhttps://click.example.com/?qs=ABp7ImQiOjUwMzAsInQiOjE1NTgsInMiOjUwfQAyAAAAAAI39XUCheqqUt\nSee https://short.io too\n\n")
+        XCTAssertEqual(t, "Hello\n\nSee https://short.io too")
+    }
 }

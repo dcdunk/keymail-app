@@ -13,38 +13,67 @@ struct ClaudeTaskCard: View {
     static let efforts = [("", "Default"), ("low", "Low"), ("medium", "Medium"), ("high", "High"), ("xhigh", "Extra high"), ("max", "Max")]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) { BrandLogo(brand: "claude", size: 20); Text("Send to Claude Code") }.font(.scaled(.title3).weight(.semibold))
-            HStack {
-                Image(systemName: "folder").foregroundStyle(.secondary)
-                Text(task.folder.isEmpty ? "No project folder" : (task.folder as NSString).abbreviatingWithTildeInPath)
-                    .lineLimit(1).truncationMode(.middle).foregroundStyle(task.folder.isEmpty ? .secondary : .primary)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                BrandLogo(brand: "claude", size: 20)
+                Text("Send to Claude Code").font(.scaled(.title3).weight(.semibold))
                 Spacer()
-                Button("Choose…") { chooseFolder() }
+                Button { dismiss() } label: { Image(systemName: "xmark").font(.scaled(size: 12, weight: .semibold)).frame(width: 26, height: 26) }
+                    .buttonStyle(ToolStyle()).keyboardShortcut(.cancelAction).help("Close (Esc)")
             }
-            TextEditor(text: $task.prompt).font(.scaled(size: 13)).frame(height: 240)
-                .scrollContentBackground(.hidden).padding(6)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.04)))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.primary.opacity(0.1)))
-            HStack(spacing: 16) {
-                Picker("Model", selection: $task.model) { ForEach(Self.models, id: \.0) { Text($0.1).tag($0.0) } }.fixedSize()
-                Picker("Effort", selection: $task.effort) { ForEach(Self.efforts, id: \.0) { Text($0.1).tag($0.0) } }.fixedSize()
+            .padding(.horizontal, 20).padding(.top, 18).padding(.bottom, 12)
+
+            Button { chooseFolder() } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "folder").font(.scaled(size: 13))
+                    Text(task.folder.isEmpty ? "Choose a project folder" : (task.folder as NSString).abbreviatingWithTildeInPath)
+                        .lineLimit(1).truncationMode(.middle)
+                    Image(systemName: "chevron.up.chevron.down").font(.scaled(size: 9, weight: .semibold))
+                }
+                .font(.scaled(.callout)).padding(.horizontal, 8).frame(height: 28)
             }
-            if !task.model.isEmpty || !task.effort.isEmpty {
-                Text("Saved as this project's default in .claude/settings.local.json, which only you use.")
-                    .font(.scaled(.caption)).foregroundStyle(.secondary)
+            .buttonStyle(ToolStyle()).help("The project Claude Code works in")
+            .padding(.horizontal, 12)
+
+            TextEditor(text: $task.prompt).font(.scaled(size: 13)).lineSpacing(2)
+                .scrollContentBackground(.hidden)
+                .padding(.horizontal, 15).padding(.vertical, 10)
+                .frame(height: 280)
+
+            HStack(spacing: 4) {
+                chip("cpu", Self.models.first { $0.0 == task.model }?.1 ?? "Project default", help: "Model") {
+                    Self.models.map { id, name in MenuEntry(title: name, checked: task.model == id) { task.model = id } }
+                }
+                chip("gauge.with.dots.needle.50percent", task.effort.isEmpty ? "Default effort" : "\(Self.efforts.first { $0.0 == task.effort }?.1 ?? task.effort) effort", help: "Effort") {
+                    Self.efforts.map { id, name in MenuEntry(title: name, checked: task.effort == id) { task.effort = id } }
+                }
+                Spacer(minLength: 12)
+                Text("Nothing runs until you press Enter in Claude").font(.scaled(.caption)).foregroundStyle(.tertiary).lineLimit(1)
+                Button { store.launchClaudeTask(task) } label: {
+                    HStack(spacing: 8) { Text("Open in Claude").fontWeight(.semibold); KeyHint("⌘↵") }.padding(.horizontal, 4)
+                }
+                .prominentGlassButton().buttonBorderShape(.capsule).controlSize(.large)
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(task.folder.isEmpty || task.prompt.isEmpty)
             }
-            HStack {
-                Text("Claude opens with this prompt filled in. Nothing runs until you press Enter there.")
-                    .font(.scaled(.caption)).foregroundStyle(.secondary)
-                Spacer()
-                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Open in Claude") { store.launchClaudeTask(task) }
-                    .keyboardShortcut(.defaultAction).disabled(task.folder.isEmpty || task.prompt.isEmpty)
-            }
+            .padding(.horizontal, 16).padding(.vertical, 12)
+            .background(Color.primary.opacity(0.03))
+            .overlay(alignment: .top) { Divider() }
         }
-        .padding(24).frame(width: 620)
+        .frame(width: 640)
         .onAppear { if task.folder.isEmpty { chooseFolder() } }
+    }
+
+    /// A quiet menu button, like the draft tools under Compose.
+    func chip(_ symbol: String, _ title: String, help: String, _ entries: @escaping () -> [MenuEntry]) -> some View {
+        MenuButton(width: 220, entries: entries) {
+            HStack(spacing: 5) {
+                Image(systemName: symbol).font(.scaled(size: 12)); Text(title)
+                Image(systemName: "chevron.down").font(.scaled(size: 9, weight: .semibold))
+            }.font(.scaled(.callout)).padding(.horizontal, 8).frame(height: 28)
+        }
+        .buttonStyle(ToolStyle()).fixedSize()
+        .help("\(help). Saved as this project's default in .claude/settings.local.json, which only you use.")
     }
 
     func chooseFolder() {

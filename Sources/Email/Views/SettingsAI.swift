@@ -40,10 +40,10 @@ struct AIProviderSettings: View {
                         }
                         Spacer()
                         if installed[p.id] == nil {
-                            Button("Get it") { NSWorkspace.shared.open(URL(string: p.installURL)!) }
+                            Button("Get it") { NSWorkspace.shared.open(URL(string: p.installURL)!) }.quiet()
                         } else {
-                            Button(testing == p.id ? "Testing…" : "Test") { test(p) }.disabled(testing != nil)
-                            if !isOn { Button("Use") { store.state.aiProvider = p.id } }
+                            Button(testing == p.id ? "Testing…" : "Test") { test(p) }.quiet().disabled(testing != nil)
+                            if !isOn { Button("Use") { store.state.aiProvider = p.id }.quiet() }
                         }
                     }.padding(.vertical, 6)
                 }

@@ -41,8 +41,8 @@ struct SearchFilters: View {
                 chip("Has attachment", "paperclip", on: $store.search.hasAttachment)
                 chip("Unread", "circle.fill", on: $store.search.unreadOnly)
                 Spacer()
-                Button("Reset") { store.search = SearchQuery(); range = "any" }.buttonBorderShape(.capsule)
-                Button("Search") { store.runSearch() }.keyboardShortcut(.defaultAction).prominentGlassButton().buttonBorderShape(.capsule)
+                Button("Reset") { store.search = SearchQuery(); range = "any" }.quiet()
+                Button { store.runSearch() } label: { HStack(spacing: 8) { Text("Search").fontWeight(.semibold); KeyHint("↩") } }.keyboardShortcut(.defaultAction).prominentGlassButton().buttonBorderShape(.capsule)
             }
         }
         .font(.scaled(.callout))

@@ -162,7 +162,7 @@ struct BannerView: View {
         HStack {
             Text(text).font(.scaled(.callout))
             Spacer()
-            Button(action: close) { Image(systemName: "xmark") }.buttonStyle(.plain)
+            Button(action: close) { Image(systemName: "xmark").font(.scaled(size: 11, weight: .semibold)).frame(width: 22, height: 22) }.buttonStyle(ToolStyle()).help("Dismiss")
         }
         .padding(.horizontal, 14).padding(.vertical, 9)
         .glass(RoundedRectangle(cornerRadius: 14), tint: .orange.opacity(0.25))

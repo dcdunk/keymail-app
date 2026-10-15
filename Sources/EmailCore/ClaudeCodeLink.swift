@@ -10,8 +10,20 @@ public func claudeCodePrompt(for m: Message) -> String {
     Date: \(m.date.formatted(date: .abbreviated, time: .shortened))
     Subject: \(m.subject)
 
-    \(String(m.plainText.prefix(10_000)))
+    \(tidyForPrompt(m.plainText))
     """
+}
+
+/// Newsletter HTML turns into runs of blank lines and long tracking links. Drop both so the prompt reads cleanly.
+func tidyForPrompt(_ text: String) -> String {
+    var out: [String] = []
+    for raw in text.components(separatedBy: .newlines) {
+        let line = raw.trimmingCharacters(in: .whitespaces)
+        if line.hasPrefix("http"), !line.contains(" "), line.count > 60 { continue } // a bare tracking URL
+        if line.isEmpty, out.last?.isEmpty ?? true { continue }
+        out.append(line)
+    }
+    return String(out.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines).prefix(10_000))
 }
 
 /// claude://code/new link that opens a new Claude Code session in Claude Desktop with the prompt prefilled.

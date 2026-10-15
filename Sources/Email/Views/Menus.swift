@@ -240,9 +240,9 @@ struct LinkWarningCard: View {
             .padding(12).frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.05)))
             HStack {
-                Button("Open anyway") { NSWorkspace.shared.open(prompt.url); store.linkPrompt = nil }.buttonStyle(.plain).foregroundStyle(.secondary).handCursor()
+                Button("Open anyway") { NSWorkspace.shared.open(prompt.url); store.linkPrompt = nil }.quiet()
                 Spacer()
-                Button("Don't open") { store.linkPrompt = nil }.prominentGlassButton().controlSize(.large)
+                Button("Don't open") { store.linkPrompt = nil }.primaryAction()
             }
         }
         .padding(24).frame(width: 440)
@@ -263,8 +263,8 @@ extension View {
                         Text(message).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         HStack {
                             Spacer()
-                            Button("Cancel", action: cancel).keyboardShortcut(.cancelAction)
-                            Button(confirm, role: .destructive, action: action).tint(.red).buttonStyle(.borderedProminent)
+                            Button("Cancel", action: cancel).quiet().keyboardShortcut(.cancelAction)
+                            Button(confirm, role: .destructive, action: action).tint(.red).primaryAction()
                         }.padding(.top, 4)
                     }
                     .padding(22).frame(width: 380)

@@ -64,7 +64,7 @@ struct GmailSettings: View {
                 Label("Allow Keymail to manage these settings", systemImage: "lock.shield").font(.scaled(.headline))
                 Text("To change out of office and signatures here, Google needs your OK. Click below and approve in your browser.")
                     .font(.scaled(.callout)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Button("Grant access") { store.grantSettingsAccess(for: account) }.prominentGlassButton().buttonBorderShape(.capsule)
+                Button("Grant access") { store.grantSettingsAccess(for: account) }.primaryAction()
             }
         }
     }
@@ -90,7 +90,7 @@ struct GmailSettings: View {
                     if !hasEnd { out.end = nil }
                     let a = account
                     Task { vacationNote = await store.saveVacation(out, for: a) ? "Saved to Gmail." : nil }
-                }.prominentGlassButton().buttonBorderShape(.capsule)
+                }.primaryAction()
             }
         }
     }
@@ -120,12 +120,12 @@ struct GmailSettings: View {
                     LabelNameField(name: l.name) { new in
                         let a = account; store.labelAction(a) { try await store.gmail(a).updateLabel(l.id, name: new) }
                     }
-                    Button { deleting = l } label: { Image(systemName: "trash") }.buttonStyle(.plain).foregroundStyle(.secondary).help("Delete label")
+                    Button { deleting = l } label: { Image(systemName: "trash").frame(width: 26, height: 26) }.buttonStyle(ToolStyle()).help("Delete label")
                 }
             }
             HStack {
                 TextField("New label", text: $newLabel).onSubmit(addLabel)
-                Button("Add", action: addLabel).disabled(newLabel.trimmingCharacters(in: .whitespaces).isEmpty)
+                Button("Add", action: addLabel).quiet().disabled(newLabel.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             Text("Use labels on any email from the right-click menu, ⌘K, or press L.").font(.scaled(.caption)).foregroundStyle(.secondary)
         }
@@ -201,7 +201,7 @@ struct SignatureSyncRow: View {
                     .disabled(theirs.isEmpty || same || working)
                     .help("Replace Keymail's signature with Gmail's")
                 }
-                .buttonBorderShape(.capsule).controlSize(.small).fixedSize()
+                .buttonStyle(ToolStyle(padded: true)).font(.scaled(.callout)).fixedSize()
                 preview("In Gmail", theirs, empty: "No signature in Gmail")
             }
             if let blocked, !same { Label(blocked, systemImage: "info.circle").font(.scaled(.caption)).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }

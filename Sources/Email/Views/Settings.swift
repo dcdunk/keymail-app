@@ -373,10 +373,10 @@ struct GeneralSettings: View {
                             .font(.scaled(.caption)).foregroundStyle(.orange)
                         Button("Open System Settings") {
                             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!)
-                        }.controlSize(.small)
+                        }.quiet()
                     }
                 }
-                LabeledContent("Try it") { Button("Send a test notification") { notifier.sendTest() } }
+                LabeledContent("Try it") { Button("Send a test notification") { notifier.sendTest() }.quiet() }
             } header: { Text("Notifications") } footer: {
                 Text("Banners show only while you're in another app. Muted threads never notify. Click a notification to open the email.").settingsFooter()
             }
@@ -398,16 +398,16 @@ struct GeneralSettings: View {
             }
             Section("Sync") {
                 LabeledContent {
-                    Button("Fetch now") { Task { await store.tick() } }.disabled(store.syncing)
+                    Button("Fetch now") { Task { await store.tick() } }.quiet().disabled(store.syncing)
                 } label: { Text("Fetch mail"); Text("Every 30 seconds, or ⌘R") }.settingAnchor("Fetch mail")
                 LabeledContent {
                     if store.calendar.authorized { Text("Connected to the Calendar app").foregroundStyle(.secondary) }
-                    else { Button("Allow calendar access") { Task { _ = await store.calendar.requestAccess() } } }
+                    else { Button("Allow calendar access") { Task { _ = await store.calendar.requestAccess() } }.quiet() }
                 } label: { Text("Calendar"); Text("For invites and adding events") }.settingAnchor("Calendar")
             }
             Section("Help") {
                 LabeledContent("Tips") {
-                    Button("Show the getting-started tips again") { UserDefaults.standard.set(0, forKey: "coachStep") }
+                    Button("Show the getting-started tips again") { UserDefaults.standard.set(0, forKey: "coachStep") }.quiet()
                 }
             }
         }
@@ -453,7 +453,7 @@ struct AccountsSettings: View {
                         }
                         Spacer()
                         KeyHint("⌘\(i + 1)")
-                        Button("Remove") { removing = acct }
+                        Button("Remove") { removing = acct }.quiet().foregroundStyle(.red)
                     }.padding(.vertical, 4)
                 }
             }
@@ -472,7 +472,7 @@ struct AccountsSettings: View {
                     Text(GoogleClient.isBuiltIn ? "Google sign-in uses the client built into this app." :
                          store.hasClient ? "Google sign-in uses your own Google Cloud client." : "This build has no Google client.")
                         .font(.scaled(.callout)).foregroundStyle(.secondary)
-                    Button("Use my own Google Cloud client…") { showGoogleSetup = true }.controlSize(.small)
+                    Button("Use my own Google Cloud client…") { showGoogleSetup = true }.quiet().font(.scaled(.callout))
                 }.padding(.top, 4)
             }.font(.scaled(.callout))
             }
@@ -534,7 +534,7 @@ struct HotkeySettings: View {
                         HStack(spacing: 8) {
                             if Hotkeys.key(for: c.key, overrides) != c.key {
                                 Button("Reset") { Hotkeys.set(c.key, to: nil); overrides = Hotkeys.overrides }
-                                    .buttonStyle(.link).font(.scaled(.caption))
+                                    .quiet().font(.scaled(.caption))
                             }
                             Button { recording == c.key ? stop() : record(c.key) } label: {
                                 Text(recording == c.key ? "Press a key…" : Hotkeys.key(for: c.key, overrides).uppercased())
@@ -548,7 +548,7 @@ struct HotkeySettings: View {
                 HStack {
                     Text("Single-key commands")
                     Spacer()
-                    Button("Reset all") { Hotkeys.resetAll(); overrides = [:] }.disabled(overrides.isEmpty)
+                    Button("Reset all") { Hotkeys.resetAll(); overrides = [:] }.quiet().disabled(overrides.isEmpty)
                 }
             } footer: {
                 Text(note ?? "Click a key to change it. Esc cancels.").font(.scaled(.caption))

@@ -49,9 +49,9 @@ struct SignatureSettings: View {
                         Button { if let h = SignaturePasteboard.html() { binding.wrappedValue = extractBodyHTML(h) } else { note = "The clipboard has no formatted signature. Copy it from Mail, Gmail or a web page first." } } label: {
                             Label("Paste signature", systemImage: "doc.on.clipboard")
                         }
-                        Button { importFile(into: binding) } label: { Label("Import HTML file…", systemImage: "square.and.arrow.down") }
+                        Button { importFile(into: binding) } label: { Label("Import HTML file…", systemImage: "square.and.arrow.down") }.quiet()
                         Spacer()
-                        if !binding.wrappedValue.isEmpty { Button("Clear", role: .destructive) { binding.wrappedValue = "" } }
+                        if !binding.wrappedValue.isEmpty { Button("Clear", role: .destructive) { binding.wrappedValue = "" }.quiet().foregroundStyle(.red) }
                     }.controlSize(.small)
                     if htmlMode {
                         TextEditor(text: binding).font(.scaled(size: 12, design: .monospaced))

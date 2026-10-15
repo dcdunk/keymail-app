@@ -56,7 +56,7 @@ struct ThreadView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, layout.compact ? 16 : 40).padding(.top, 6).padding(.bottom, 60)
             }
-            HStack(spacing: 22) {
+            HStack(spacing: 4) {
                 let actions: [(String, String, String, () -> Void)] = [
                     (Hotkeys.label("r"), "Reply", "arrowshape.turn.up.left", { store.reply(all: false) }),
                     (Hotkeys.label("a"), "Reply all", "arrowshape.turn.up.left.2", { store.reply(all: true) }),
@@ -77,12 +77,12 @@ struct ThreadView: View {
                                 if emailButtons == "text" { Text(l) }
                                 if !k.isEmpty { KeyHint(k) }
                             }
-                        }.font(.scaled(.callout)).padding(.horizontal, 4)
-                    }.buttonBorderShape(.capsule).help(k.isEmpty ? l : "\(l) (\(k))")
+                        }.font(.scaled(.callout)).padding(.horizontal, 8).frame(height: 28)
+                    }.buttonStyle(ToolStyle()).help(k.isEmpty ? l : "\(l) (\(k))")
                 }
                 Spacer()
-                Button { store.move(-1) } label: { Image(systemName: "chevron.up") }.buttonBorderShape(.circle).help("Previous (\(Hotkeys.label("k")))")
-                Button { store.move(1) } label: { Image(systemName: "chevron.down") }.buttonBorderShape(.circle).help("Next (\(Hotkeys.label("j")))")
+                Button { store.move(-1) } label: { Image(systemName: "chevron.up").frame(width: 28, height: 28) }.buttonStyle(ToolStyle()).help("Previous (\(Hotkeys.label("k")))")
+                Button { store.move(1) } label: { Image(systemName: "chevron.down").frame(width: 28, height: 28) }.buttonStyle(ToolStyle()).help("Next (\(Hotkeys.label("j")))")
             }
             .font(.scaled(.callout)).foregroundStyle(.secondary)
             .padding(.horizontal, layout.compact ? 16 : 40).padding(.vertical, 12)
