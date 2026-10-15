@@ -17,6 +17,8 @@ OUT=$(mktemp -d); cp "$ZIP" "$OUT/"
 .build/artifacts/sparkle/Sparkle/bin/generate_appcast --account lightmail \
   --download-url-prefix "https://github.com/dcdunk/keymail-app/releases/download/$TAG/" "$OUT"
 git push
-gh release create "$TAG" "$OUT/$ZIP" "$OUT/appcast.xml" --title "Keymail $VERSION" --generate-notes
+# Hand-written notes in release-notes/<version>.md when present; GitHub's generated list otherwise.
+NOTES=(--generate-notes); [[ -f "release-notes/$VERSION.md" ]] && NOTES=(--notes-file "release-notes/$VERSION.md")
+gh release create "$TAG" "$OUT/$ZIP" "$OUT/appcast.xml" --title "Keymail $VERSION" "${NOTES[@]}"
 rm -rf "$OUT" "$ZIP"
 echo "Published $TAG. Installed copies will pick it up within a day, or right away from Settings → About → Check for Updates."
