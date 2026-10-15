@@ -15,7 +15,7 @@ if [[ -n "$(git status --porcelain)" ]]; then echo "Commit your changes first, s
 ZIP="Keymail-$VERSION.zip"
 OUT=$(mktemp -d); cp "$ZIP" "$OUT/"
 .build/artifacts/sparkle/Sparkle/bin/generate_appcast --account lightmail \
-  --download-url-prefix "https://github.com/dcdunk/lightmail-app/releases/download/$TAG/" "$OUT"
+  --download-url-prefix "https://github.com/dcdunk/keymail-app/releases/download/$TAG/" "$OUT"
 git push
 gh release create "$TAG" "$OUT/$ZIP" "$OUT/appcast.xml" --title "Keymail $VERSION" --generate-notes
 rm -rf "$OUT" "$ZIP"

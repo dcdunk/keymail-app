@@ -49,9 +49,9 @@ struct AboutSettings: View {
 
             HStack(spacing: 16) {
                 Link("Website", destination: URL(string: "https://keymailapp.com")!)
-                Link("GitHub", destination: URL(string: "https://github.com/dcdunk/lightmail-app")!)
-                Link("Release notes", destination: URL(string: "https://github.com/dcdunk/lightmail-app/releases")!)
-                Link("Report a problem", destination: URL(string: "https://github.com/dcdunk/lightmail-app/issues/new")!)
+                Link("GitHub", destination: URL(string: "https://github.com/dcdunk/keymail-app")!)
+                Link("Release notes", destination: URL(string: "https://github.com/dcdunk/keymail-app/releases")!)
+                Link("Report a problem", destination: URL(string: "https://github.com/dcdunk/keymail-app/issues/new")!)
             }
             .font(.callout).handCursor()
             Spacer()

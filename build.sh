@@ -28,7 +28,7 @@ BUILD=$(git rev-list --count HEAD 2>/dev/null || echo 1)   # always increases; S
 # Only release builds check for updates: dev and demo builds have different bundle IDs and signatures.
 FEED=""
 if [[ "$MODE" == "--release" ]]; then
-  FEED="<key>SUFeedURL</key><string>https://github.com/dcdunk/lightmail-app/releases/latest/download/appcast.xml</string>
+  FEED="<key>SUFeedURL</key><string>https://github.com/dcdunk/keymail-app/releases/latest/download/appcast.xml</string>
   <key>SUEnableAutomaticChecks</key><true/>"
 fi
 rm -rf "$APP"

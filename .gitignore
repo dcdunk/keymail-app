@@ -2,5 +2,4 @@
 .build/
 *.app/
 google_client.json
-Lightmail-*.zip
 Keymail-*.zip
