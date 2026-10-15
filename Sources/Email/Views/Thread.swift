@@ -12,7 +12,7 @@ struct ThreadView: View {
     @EnvironmentObject var store: AppStore
     @Environment(\.layout) private var layout
     let conversation: Conversation
-    @State private var expanded: Set<String> = []
+    @State private var toggled: Set<String> = []   // the latest message starts open, older ones closed; a click flips either
     @AppStorage("threadNewestFirst") private var newestFirst = false
     @AppStorage("emailButtons") private var emailButtons = "text"   // "icons" or "text"
     @AppStorage("emailContentTheme") private var contentTheme = "auto"
@@ -44,13 +44,12 @@ struct ThreadView: View {
             UnsubscribeBar(conversation: conversation)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
-                    let older = Array(conversation.messages.dropLast())
-                    if newestFirst { MessageCard(message: conversation.latest, collapsible: false) {} }
-                    ForEach(newestFirst ? older.reversed() : older) { m in
-                        if expanded.contains(m.key) { MessageCard(message: m, collapsible: true) { expanded.remove(m.key) } }
-                        else { CollapsedMessage(message: m) { expanded.insert(m.key) } }
+                    let all = conversation.messages, single = all.count == 1
+                    ForEach(newestFirst ? all.reversed() : all) { m in
+                        let open = (m.key == conversation.latest.key) != toggled.contains(m.key)
+                        if open || single { MessageCard(message: m, collapsible: !single) { toggled.formSymmetricDifference([m.key]) } }
+                        else { CollapsedMessage(message: m) { toggled.formSymmetricDifference([m.key]) } }
                     }
-                    if !newestFirst { MessageCard(message: conversation.latest, collapsible: false) {} }
                 }
                 .frame(maxWidth: 960)               // emails stay readable on big monitors
                 .frame(maxWidth: .infinity)
@@ -152,6 +151,7 @@ struct MessageCard: View {
     let collapsible: Bool
     let collapse: () -> Void
     @State private var showQuoted = false
+    @AppStorage("showQuotedHistory") private var showQuotedHistory = false
     @State private var loadImagesOnce = false   // "Load images" for just this message
     @AppStorage("loadRemoteImages") private var loadRemoteImages = false
     @AppStorage("cardOpacity") private var cardOpacity = 1.0
@@ -267,26 +267,42 @@ struct MessageCard: View {
                 }
             }
             // HTML emails are designed for a light page, so they sit on a white "paper" card, like Apple Mail does.
-            EmailWebView(html: inlineImages(html, store.inlineData[message.key] ?? [:]), cardOpacity: cardOpacity,
+            // Settings → General: hide the earlier conversation each reply carries (••• shows it). Forwards stay whole.
+            let fwd = message.subject.lowercased().hasPrefix("fw")
+            let parts = showQuotedHistory || fwd ? (body: html, quoted: nil) : splitQuotedHTML(html)
+            EmailWebView(html: inlineImages(parts.body, store.inlineData[message.key] ?? [:]), cardOpacity: cardOpacity,
                          dark: contentDark, blockRemote: !loadRemoteImages && !loadImagesOnce,
                          suspicious: Dictionary(suspiciousLinks(html).map { ($0.href, $0.reason) }, uniquingKeysWith: { a, _ in a }))
                 .id(loadImagesOnce) // the blocker is set when the web view is made, so a new one loads the images
                 .clipShape(RoundedRectangle(cornerRadius: 10))
+            if let q = parts.quoted {
+                quotedToggle
+                if showQuoted {
+                    EmailWebView(html: inlineImages(q, store.inlineData[message.key] ?? [:]), cardOpacity: cardOpacity,
+                                 dark: contentDark, blockRemote: !loadRemoteImages && !loadImagesOnce)
+                        .clipShape(RoundedRectangle(cornerRadius: 10)).opacity(0.8)
+                }
+            }
         } else {
-            let parts = splitQuoted(message.text ?? message.snippet)
+            let whole = message.text ?? message.snippet
+            let parts = showQuotedHistory ? (body: whole, quoted: nil) : splitQuoted(whole)
             VStack(alignment: .leading, spacing: 8) {
                 // Match app: plain text sits on the card in app colors. Forced light/dark: it gets the same "paper" as HTML emails.
                 EmailWebView(html: plainToHTML(parts.body), dark: contentDark, themed: contentTheme == "auto")
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 if let q = parts.quoted {
-                    Button { showQuoted.toggle() } label: {
-                        Text("•••").font(.scaled(size: 12, weight: .bold)).padding(.horizontal, 8).padding(.vertical, 1)
-                            .background(Capsule().fill(Color.primary.opacity(0.08)))
-                    }.buttonStyle(.plain).handCursor().help(showQuoted ? "Hide quoted text" : "Show quoted text")
+                    quotedToggle
                     if showQuoted { EmailWebView(html: plainToHTML(q), dark: contentDark, themed: contentTheme == "auto").opacity(0.7) }
                 }
             }
         }
+    }
+
+    var quotedToggle: some View {
+        Button { showQuoted.toggle() } label: {
+            Text("•••").font(.scaled(size: 12, weight: .bold)).padding(.horizontal, 8).padding(.vertical, 1)
+                .background(Capsule().fill(Color.primary.opacity(0.08)))
+        }.buttonStyle(.plain).handCursor().help(showQuoted ? "Hide earlier messages" : "Show earlier messages")
     }
 
     func icon(_ mime: String) -> String {

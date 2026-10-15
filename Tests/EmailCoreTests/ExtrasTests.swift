@@ -503,3 +503,27 @@ final class MCPTests: XCTestCase {
         XCTAssertNil(claudeDesktopConfig(existing: Data("{oops".utf8), name: "k", command: "c"))
     }
 }
+
+final class QuotedHTMLTests: XCTestCase {
+    func testSplitsGmailAppleOutlookQuotes() {
+        let gmail = #"<div dir="ltr">Sounds good!</div><br><div class="gmail_quote"><div>On Mon, Maya wrote:</div><blockquote>Earlier</blockquote></div>"#
+        XCTAssertEqual(splitQuotedHTML(gmail).body, #"<div dir="ltr">Sounds good!</div><br>"#)
+        XCTAssertTrue(splitQuotedHTML(gmail).quoted?.contains("Earlier") ?? false)
+        let apple = #"<div>Yes</div><div><blockquote type="cite">old</blockquote></div>"#
+        XCTAssertEqual(splitQuotedHTML(apple).body, "<div>Yes</div><div>")
+        let outlook = #"<p>Thanks</p><hr style="display:inline-block"><div id="divRplyFwdMsg" dir="ltr"><b>From:</b> Sam</div>"#
+        XCTAssertNotNil(splitQuotedHTML(outlook).quoted)
+    }
+    func testHelpDeskAndOnWroteDividers() {
+        let desk = #"<p>Warmly,<br>Maddie</p><p>--------------- Original Message ---------------<br><b>From:</b> Danny</p>"#
+        XCTAssertEqual(splitQuotedHTML(desk).body, "<p>Warmly,<br>Maddie</p><p>")
+        let wrote = #"<div>Great, thanks</div><div>On Mon, Sep 1, 2026 at 9:00 AM Maya &lt;m@x.co&gt; wrote:</div><div>older</div>"#
+        XCTAssertEqual(splitQuotedHTML(wrote).body, "<div>Great, thanks</div><div>")
+        XCTAssertNil(splitQuotedHTML("<p>I wrote: this is fine. On second thought</p>").quoted, "ordinary sentences aren't cut")
+    }
+    func testKeepsWholeEmailWhenNothingIsAboveTheQuote() {
+        let forward = #"<div dir="ltr"><br></div><div class="gmail_quote">---------- Forwarded message ---------<br>Hi</div>"#
+        XCTAssertNil(splitQuotedHTML(forward).quoted)
+        XCTAssertNil(splitQuotedHTML("<p>No quotes here</p>").quoted)
+    }
+}

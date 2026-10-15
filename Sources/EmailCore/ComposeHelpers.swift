@@ -63,3 +63,32 @@ public func splitQuoted(_ text: String) -> (body: String, quoted: String?) {
     let quoted = lines[c...].joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     return body.isEmpty ? (text, nil) : (body, quoted)
 }
+
+/// HTML replies carry the whole earlier conversation underneath. Splits at the first quote marker that Gmail, Apple Mail,
+/// Outlook (web and desktop), Yahoo or Proton write, so the thread view can show only what this email added.
+/// quoted is nil when there's no marker, or when nothing would be left above it (keep the email whole).
+public func splitQuotedHTML(_ html: String) -> (body: String, quoted: String?) {
+    let markers = [
+        #"<div[^>]*class="[^"]*gmail_quote"#,              // Gmail
+        #"<blockquote[^>]*type="cite""#,                   // Apple Mail
+        #"<div[^>]*id="(divRplyFwdMsg|appendonsend)""#,    // Outlook on the web / new Outlook
+        #"<hr[^>]*id="stopSpelling""#,                     // older Outlook web
+        #"<div[^>]*style="[^"]*border-top:\s*solid\s*#[eE]1[eE]1[eE]1"#,   // Outlook desktop's "From:" rule
+        #"<div[^>]*class="[^"]*(yahoo_quoted|protonmail_quote)"#,          // Yahoo, Proton
+        #"-{3,}\s*Original Message\s*-{3,}"#,                // help desks (Zendesk, Salesforce) and older Outlook
+        #"(?<=>)\s*On [^<>]{6,200} wrote:"#,                  // "On Mon, Sep 1, Maya wrote:" as its own line
+    ]
+    let ns = html as NSString
+    var cut = ns.length
+    for m in markers {
+        if let r = try? NSRegularExpression(pattern: m, options: .caseInsensitive).firstMatch(in: html, range: NSRange(location: 0, length: ns.length)),
+           r.range.location < cut { cut = r.range.location }
+    }
+    guard cut < ns.length else { return (html, nil) }
+    let body = ns.substring(to: cut)
+    // Only tags and whitespace above the quote (e.g. a forward): nothing would be left to read.
+    let text = body.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        .replacingOccurrences(of: "&nbsp;", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !text.isEmpty else { return (html, nil) }
+    return (body, ns.substring(from: cut))
+}
