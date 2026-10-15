@@ -71,6 +71,8 @@ extension AppStore {
             if Hotkeys.recording { return false } // Settings → Hotkeys is capturing this key
             if code == 53 { settingsOpen = false; return true } // Esc
             if cmd, ch == "," { settingsOpen = false; return true }
+            // ⌘K jumps to settings search, except in the signature editor where it adds a link.
+            if cmd, ch == "k", (NSApp.keyWindow?.firstResponder as? NSTextView)?.isFieldEditor != false { settingsSearchFocus += 1; return true }
             // ↑/↓ move through the Settings sidebar, unless a text box or a list inside the page has the keyboard.
             if code == 125 || code == 126, !cmd {
                 let fr = NSApp.keyWindow?.firstResponder

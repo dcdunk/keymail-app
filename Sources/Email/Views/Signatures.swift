@@ -56,8 +56,6 @@ struct SignatureSettings: View {
                     if htmlMode {
                         TextEditor(text: binding).font(.scaled(size: 12, design: .monospaced))
                             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.primary.opacity(0.1)))
-                        Text("Preview").font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary)
-                        EmailWebView(html: binding.wrappedValue, dark: scheme == .dark).frame(minHeight: 80).clipShape(RoundedRectangle(cornerRadius: 10))
                     } else if isComplexHTML(binding.wrappedValue) {
                         // Tables, logos and rounded corners can't go through the rich-text editor unchanged,
                         // so show it exactly as recipients will see it instead.
@@ -68,6 +66,12 @@ struct SignatureSettings: View {
                     } else {
                         RichTextEditor(html: binding)
                             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.primary.opacity(0.1)))
+                    }
+                    if !binding.wrappedValue.isEmpty && !isComplexHTML(binding.wrappedValue) {
+                        // Live: how the signature lands under a real message, as recipients see it.
+                        Text("In an email").font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary)
+                        EmailWebView(html: "<p>Hi Maya,</p><p>Sounds good, talk Thursday.</p><br>" + binding.wrappedValue, padding: "10px 14px", dark: scheme == .dark)
+                            .frame(maxHeight: 180).clipShape(RoundedRectangle(cornerRadius: 10))
                     }
                     if let note { Text(note).font(.scaled(.callout)).foregroundStyle(.orange) }
                     Text("Type with formatting (⌘B, ⌘I, ⌘K for links), paste a signature from Mail or Gmail (⌘V or Paste signature), or import an .html file. Logos embedded in the signature are sent as inline images so Gmail and Outlook show them.")

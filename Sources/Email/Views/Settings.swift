@@ -15,25 +15,46 @@ struct SettingsPanel: View {
     @AppStorage("settingsTab") private var tab = "general"
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var query = ""
+    @State private var highlight: String?    // the setting a search jumped to: scrolled into view and briefly tinted
+    @FocusState private var searchFocused: Bool
     @State private var showContent = false   // the settings themselves exist only while open or sliding out
 
-    struct Section: Identifiable { let id: String, title: String, icon: String, keywords: String }
+    struct Section: Identifiable { let id: String, title: String, icon: String, group: String, keywords: String; var items: [String] = [] }
+    /// Sidebar order, which ↑/↓ also follow. `items` are single settings search can jump to; each is a row marked `.settingAnchor`.
     static let sections: [Section] = [
-        .init(id: "general", title: "General", icon: "gearshape", keywords: "thread order undo send notifications badge opacity remote images privacy spelling grammar writing auto archive"),
-        .init(id: "appearance", title: "Appearance", icon: "textformat.size", keywords: "draft compose buttons icons links appearance text font size bigger larger zoom dark light email content opacity glass window card"),
-        .init(id: "accounts", title: "Accounts", icon: "person.crop.circle", keywords: "add remove google icloud alias send as nickname default from"),
-        .init(id: "gmail", title: "Gmail", icon: "envelope.badge", keywords: "out of office vacation auto reply labels signature sync"),
-        .init(id: "ai", title: "AI providers", icon: "sparkles", keywords: "claude codex gemini write summarize instant reply"),
-        .init(id: "splits", title: "Split inbox", icon: "rectangle.split.3x1", keywords: "tabs splits important other rules"),
-        .init(id: "signatures", title: "Signatures", icon: "signature", keywords: "signature html logo"),
-        .init(id: "hotkeys", title: "Hotkeys", icon: "keyboard", keywords: "keyboard shortcuts keys commands customize remap"),
-        .init(id: "snippets", title: "Snippets", icon: "text.quote", keywords: "templates snippets canned"),
-        .init(id: "about", title: "About", icon: "info.circle", keywords: "version updates privacy help"),
+        .init(id: "general", title: "General", icon: "gearshape", group: "Mail", keywords: "thread order undo send notifications badge remote images privacy spelling grammar writing auto archive calendar fetch sync tips",
+              items: ["Messages in a thread", "Show folders sidebar", "Show context panel", "Undo send", "Notify me about", "Dock badge counts",
+                      "Load remote images", "Check spelling while typing", "Check grammar", "Correct spelling automatically", "Smart quotes and dashes", "Fetch mail", "Calendar"]),
+        .init(id: "splits", title: "Split inbox", icon: "rectangle.split.3x1", group: "Mail", keywords: "tabs splits important other rules"),
+        .init(id: "signatures", title: "Signatures", icon: "signature", group: "Mail", keywords: "signature html logo"),
+        .init(id: "snippets", title: "Snippets", icon: "text.quote", group: "Mail", keywords: "templates snippets canned"),
+        .init(id: "accounts", title: "Accounts", icon: "person.crop.circle", group: "Accounts", keywords: "add remove google icloud microsoft outlook hotmail alias send as nickname default from"),
+        .init(id: "gmail", title: "Gmail", icon: "envelope.badge", group: "Accounts", keywords: "out of office vacation auto reply labels signature sync"),
+        .init(id: "appearance", title: "Appearance", icon: "textformat.size", group: "Personalize", keywords: "draft compose buttons icons links appearance text font size bigger larger zoom dark light email content opacity glass window card",
+              items: ["Text size", "Appearance", "Email content", "Draft buttons", "Window opacity", "Email card opacity"]),
+        .init(id: "hotkeys", title: "Hotkeys", icon: "keyboard", group: "Personalize", keywords: "keyboard shortcuts keys commands customize remap"),
+        .init(id: "ai", title: "AI providers", icon: "sparkles", group: "Personalize", keywords: "claude codex gemini write summarize instant reply"),
+        .init(id: "about", title: "About", icon: "info.circle", group: "", keywords: "version updates privacy help"),
     ]
+    static var groups: [(name: String, sections: [Section])] {
+        sections.reduce(into: []) { r, s in if r.last?.name == s.group { r[r.count - 1].sections.append(s) } else { r.append((s.group, [s])) } }
+    }
 
-    var matches: [Section] {
+    struct Hit: Identifiable { let section: Section; let item: String?; var id: String { section.id + "/" + (item ?? "") } }
+    /// A page matches on its title or keywords; a single setting matches on its own name.
+    static func search(_ query: String) -> [Hit] {
         let q = query.lowercased().trimmingCharacters(in: .whitespaces)
-        return q.isEmpty ? Self.sections : Self.sections.filter { ($0.title + " " + $0.keywords).lowercased().contains(q) }
+        return sections.flatMap { s -> [Hit] in
+            if q.isEmpty { return [Hit(section: s, item: nil)] }
+            let page = (s.title + " " + s.keywords).lowercased().contains(q) ? [Hit(section: s, item: nil)] : []
+            return page + s.items.filter { $0.lowercased().contains(q) }.map { Hit(section: s, item: $0) }
+        }
+    }
+
+    func jump(_ hit: Hit) {
+        tab = hit.section.id
+        highlight = nil
+        if let item = hit.item { DispatchQueue.main.async { highlight = item } }
     }
 
     var body: some View {
@@ -73,28 +94,39 @@ struct SettingsPanel: View {
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass").font(.scaled(size: 12)).foregroundStyle(.tertiary)
                     TextField("Search settings", text: $query).textFieldStyle(.plain).font(.scaled(size: 13))
-                        .onSubmit { if let first = matches.first { tab = first.id } }
+                        .focused($searchFocused)
+                        .onSubmit { if let first = Self.search(query).first { jump(first) } }
+                    if query.isEmpty { KeyHint("⌘K") }
+                    else {
+                        Button { query = "" } label: { Image(systemName: "xmark.circle.fill").font(.scaled(size: 12)) }
+                            .buttonStyle(.plain).foregroundStyle(.tertiary).help("Clear search")
+                    }
                 }
                 .padding(.horizontal, 10).padding(.vertical, 7)
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
-                .padding(.bottom, 10)
-                ForEach(matches) { s in
-                    Button { tab = s.id } label: {
-                        Label(s.title, systemImage: s.icon).font(.scaled(size: 13, weight: tab == s.id ? .medium : .regular))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 10).padding(.vertical, 7)
-                            .background(RoundedRectangle(cornerRadius: 8).fill(tab == s.id ? Theme.selection : .clear))
-                            .foregroundStyle(tab == s.id ? Theme.accent : .primary)
-                            .contentShape(Rectangle())
+                .padding(.bottom, 6)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 2) {
+                        if query.isEmpty {
+                            ForEach(Self.groups, id: \.name) { g in
+                                if !g.name.isEmpty {
+                                    Text(g.name).font(.scaled(size: 11, weight: .medium)).foregroundStyle(.tertiary)
+                                        .padding(.horizontal, 10).padding(.top, 12).padding(.bottom, 2)
+                                } else { Divider().padding(.vertical, 8).padding(.horizontal, 10) }
+                                ForEach(g.sections) { s in row(Hit(section: s, item: nil)) }
+                            }
+                        } else {
+                            let hits = Self.search(query)
+                            ForEach(hits) { row($0) }
+                            if hits.isEmpty { Text("No matches").font(.scaled(.caption)).foregroundStyle(.secondary).padding(.horizontal, 10).padding(.top, 6) }
+                        }
                     }
-                    .buttonStyle(.plain).handCursor()
                 }
-                if matches.isEmpty { Text("No matches").font(.scaled(.caption)).foregroundStyle(.secondary).padding(.horizontal, 10) }
-                Spacer()
-                Text("Esc to close").font(.scaled(.caption2)).foregroundStyle(.tertiary).padding(.horizontal, 10)
+                .scrollIndicators(.never)
+                Text("↑↓ to move · Esc to close").font(.scaled(.caption2)).foregroundStyle(.tertiary).padding(.horizontal, 10).padding(.top, 6)
             }
             .padding(14).padding(.top, 30)
-            .frame(width: 190)
+            .frame(width: 200)
             .background(Color.primary.opacity(0.03))
             Divider()
             VStack(spacing: 0) {
@@ -106,13 +138,43 @@ struct SettingsPanel: View {
                     }.buttonStyle(.plain).foregroundStyle(.secondary).handCursor().help("Close (Esc)")
                 }
                 .padding(.horizontal, 24).padding(.top, 38).padding(.bottom, 6)
-                content.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .id(tab)
-                    .transition(.opacity)
+                ScrollViewReader { proxy in
+                    content.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .environment(\.settingsHighlight, highlight)
+                        .onChange(of: highlight) { _, h in
+                            guard let h else { return }
+                            // Let a newly opened page lay out first, then bring the row into view and fade the tint.
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { withAnimation { proxy.scrollTo(h, anchor: .center) } }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { if highlight == h { withAnimation(.easeOut(duration: 0.6)) { highlight = nil } } }
+                        }
+                }
+                .id(tab)
+                .transition(.opacity)
             }
             .animation(.easeOut(duration: 0.15), value: tab)
         }
         .glassButtons()
+        .onChange(of: store.settingsSearchFocus) { searchFocused = true }
+    }
+
+    func row(_ hit: Hit) -> some View {
+        let on = tab == hit.section.id && hit.item == nil
+        return Button { jump(hit) } label: {
+            HStack(spacing: 8) {
+                Image(systemName: hit.item == nil ? hit.section.icon : "arrow.turn.down.right").frame(width: 18)
+                    .foregroundStyle(on ? Theme.accent : .secondary)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(hit.item ?? hit.section.title).lineLimit(1)
+                    if hit.item != nil { Text(hit.section.title).font(.scaled(.caption)).foregroundStyle(.secondary) }
+                }
+            }
+            .font(.scaled(size: 13, weight: on ? .medium : .regular))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: 8).fill(on ? Color.primary.opacity(0.09) : .clear))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).handCursor()
     }
 
     @ViewBuilder var content: some View {
@@ -131,6 +193,30 @@ struct SettingsPanel: View {
     }
 }
 
+private struct SettingsHighlightKey: EnvironmentKey { static let defaultValue: String? = nil }
+extension EnvironmentValues {
+    var settingsHighlight: String? { get { self[SettingsHighlightKey.self] } set { self[SettingsHighlightKey.self] = newValue } }
+}
+
+extension View {
+    /// A row Settings search can jump to. `title` must match an entry in `SettingsPanel.sections[].items`.
+    func settingAnchor(_ title: String) -> some View { modifier(SettingAnchor(title: title)) }
+}
+
+extension Text {
+    /// Note under a settings card, for text that covers the whole card rather than one row.
+    func settingsFooter() -> some View { font(.scaled(.caption)).foregroundStyle(.secondary).multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading) }
+}
+
+struct SettingAnchor: ViewModifier {
+    let title: String
+    @Environment(\.settingsHighlight) private var highlight
+    func body(content: Content) -> some View {
+        content.id(title)
+            .background(RoundedRectangle(cornerRadius: 6).fill(Theme.selection).padding(-6).opacity(highlight == title ? 1 : 0))
+    }
+}
+
 struct AppearanceSettings: View {
     @EnvironmentObject var store: AppStore
     @AppStorage("draftButtons") private var draftButtons = "icons"
@@ -139,43 +225,87 @@ struct AppearanceSettings: View {
     @AppStorage("cardOpacity") private var cardOpacity = 1.0
     @AppStorage("emailContentTheme") private var contentTheme = "auto"
     var body: some View {
-        Form {
-            Picker("Text size", selection: $textScale) {
-                ForEach(Font.textSizes, id: \.scale) { Text($0.label).tag($0.scale) }
-            }.pickerStyle(.segmented)
-            Text("Applies to the whole app and to email bodies. ⌘+ and ⌘− also change it.")
-                .font(.scaled(.caption)).foregroundStyle(.secondary)
-            Picker("Appearance", selection: Binding(get: { store.state.appearance }, set: { store.setAppearance($0) })) {
-                Text("Match system").tag("System"); Text("Light").tag("Light"); Text("Dark").tag("Dark")
-            }.pickerStyle(.segmented)
-            Picker("Email content", selection: $contentTheme) {
-                Text("Match app").tag("auto"); Text("Light").tag("light"); Text("Dark").tag("dark")
-            }.pickerStyle(.segmented)
-            Picker("Draft buttons", selection: $draftButtons) {
-                Text("Quiet icons").tag("icons"); Text("Text links").tag("text")
-            }.pickerStyle(.segmented)
-            Text("Attach, Signature, Snippet and Write in the bar under a draft. Send and its ▾ menu (Send later, Remind) stay as they are.")
-                .font(.scaled(.caption)).foregroundStyle(.secondary)
-            LabeledContent("Window opacity") {
-                HStack {
-                    Slider(value: $windowOpacity, in: 0.2...1.0, step: 0.05) { EmptyView() }
-                        minimumValueLabel: { Image(systemName: "circle.dotted") } maximumValueLabel: { Image(systemName: "circle.fill") }
-                        .frame(maxWidth: 260)
-                    Text("\(Int(windowOpacity * 100))%").monospacedDigit().foregroundStyle(.secondary).frame(width: 40, alignment: .trailing)
+        VStack(spacing: 0) {
+            AppearancePreview().padding(.horizontal, 20).padding(.top, 8)
+            Form {
+                Section("Text") {
+                    Picker(selection: $textScale) {
+                        ForEach(Font.textSizes, id: \.scale) { Text($0.label).tag($0.scale) }
+                    } label: { Text("Text size"); Text("The whole app and email bodies. ⌘+ and ⌘− also work.") }
+                    .pickerStyle(.segmented).settingAnchor("Text size")
+                }
+                Section("Theme") {
+                    Picker("Appearance", selection: Binding(get: { store.state.appearance }, set: { store.setAppearance($0) })) {
+                        Text("Match system").tag("System"); Text("Light").tag("Light"); Text("Dark").tag("Dark")
+                    }.pickerStyle(.segmented).settingAnchor("Appearance")
+                    Picker("Email content", selection: $contentTheme) {
+                        Text("Match app").tag("auto"); Text("Light").tag("light"); Text("Dark").tag("dark")
+                    }.pickerStyle(.segmented).settingAnchor("Email content")
+                }
+                Section {
+                    opacitySlider("Window opacity", $windowOpacity)
+                    opacitySlider("Email card opacity", $cardOpacity)
+                } header: { Text("Glass") } footer: {
+                    Text("Lower values let the glass show through emails. Emails that paint their own white backgrounds stay white in those areas.").settingsFooter()
+                }
+                Section("Drafts") {
+                    Picker(selection: $draftButtons) {
+                        Text("Quiet icons").tag("icons"); Text("Text links").tag("text")
+                    } label: { Text("Draft buttons"); Text("Attach, Signature, Snippet and Write under a draft. Send stays as it is.") }
+                    .pickerStyle(.segmented).settingAnchor("Draft buttons")
                 }
             }
-            LabeledContent("Email card opacity") {
-                HStack {
-                    Slider(value: $cardOpacity, in: 0.2...1.0, step: 0.05) { EmptyView() }
-                        minimumValueLabel: { Image(systemName: "circle.dotted") } maximumValueLabel: { Image(systemName: "circle.fill") }
-                        .frame(maxWidth: 260)
-                    Text("\(Int(cardOpacity * 100))%").monospacedDigit().foregroundStyle(.secondary).frame(width: 40, alignment: .trailing)
-                }
-            }
-            Text("Lower values let the glass show through emails. Emails that paint their own white backgrounds stay white in those areas.")
-                .font(.scaled(.caption)).foregroundStyle(.secondary)
+            .formStyle(.grouped).scrollContentBackground(.hidden)
         }
-        .formStyle(.grouped)
+    }
+
+    func opacitySlider(_ title: String, _ value: Binding<Double>) -> some View {
+        LabeledContent(title) {
+            HStack {
+                Slider(value: value, in: 0.2...1.0, step: 0.05) { EmptyView() }
+                    minimumValueLabel: { Image(systemName: "circle.dotted") } maximumValueLabel: { Image(systemName: "circle.fill") }
+                    .frame(maxWidth: 260)
+                Text("\(Int(value.wrappedValue * 100))%").monospacedDigit().foregroundStyle(.secondary).frame(width: 40, alignment: .trailing)
+            }
+        }.settingAnchor(title)
+    }
+}
+
+/// A sample email that redraws as Appearance settings change, so the effect shows before you close Settings.
+struct AppearancePreview: View {
+    @Environment(\.colorScheme) private var scheme
+    @AppStorage("draftButtons") private var draftButtons = "icons"
+    @AppStorage("cardOpacity") private var cardOpacity = 1.0
+    @AppStorage("emailContentTheme") private var contentTheme = "auto"
+    static let sample = "<p>Hi there,</p><p>The Q3 plan is attached. Could you look over the <a href=\"#\">budget section</a> before Thursday?</p><p>Thanks,<br>Maya</p>"
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Circle().fill(Theme.chip("Maya")).frame(width: 28, height: 28)
+                    .overlay(Text("M").font(.scaled(size: 13, weight: .semibold)).foregroundStyle(.white))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Maya Rodriguez").font(.scaled(.headline))
+                    Text("to me").font(.scaled(.caption)).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text("9:41 AM").font(.scaled(.caption)).foregroundStyle(.secondary)
+            }
+            EmailWebView(html: Self.sample, padding: "12px 16px", cardOpacity: cardOpacity,
+                         dark: contentTheme == "dark" || (contentTheme == "auto" && scheme == .dark))
+                .frame(maxHeight: 150).clipShape(RoundedRectangle(cornerRadius: 10))
+            HStack(spacing: 14) {
+                ForEach([("paperclip", "Attach"), ("signature", "Signature"), ("text.quote", "Snippet"), ("sparkles", "Write")], id: \.1) { icon, label in
+                    if draftButtons == "icons" { Image(systemName: icon) } else { Text(label) }
+                }
+                Spacer()
+                Text("Preview").font(.scaled(.caption2)).foregroundStyle(.tertiary)
+            }
+            .font(.scaled(.callout)).foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color.primary.opacity(0.04)))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.primary.opacity(0.06)))
+        .accessibilityElement(children: .contain).accessibilityLabel("Appearance preview")
     }
 }
 
@@ -193,13 +323,20 @@ struct GeneralSettings: View {
     @ObservedObject private var notifier = Notifier.shared
     var body: some View {
         Form {
-            Picker("Messages in a thread", selection: $newestFirst) {
-                Text("Oldest first").tag(false); Text("Newest first").tag(true)
-            }.pickerStyle(.segmented)
-            Picker("Undo send", selection: $store.state.undoSendSeconds) {
-                Text("Off").tag(0); Text("5 seconds").tag(5); Text("10 seconds").tag(10); Text("20 seconds").tag(20); Text("30 seconds").tag(30)
+            Section("Reading") {
+                Picker(selection: $newestFirst) {
+                    Text("Oldest first").tag(false); Text("Newest first").tag(true)
+                } label: { Text("Messages in a thread"); Text("How a conversation stacks") }
+                .pickerStyle(.segmented).settingAnchor("Messages in a thread")
+                Toggle("Show folders sidebar", isOn: $store.sidebarOpen).settingAnchor("Show folders sidebar")
+                Toggle("Show context panel", isOn: $store.contextOpen).settingAnchor("Show context panel")
             }
-            Section("Auto Archive") {
+            Section("Sending") {
+                Picker(selection: $store.state.undoSendSeconds) {
+                    Text("Off").tag(0); Text("5 seconds").tag(5); Text("10 seconds").tag(10); Text("20 seconds").tag(20); Text("30 seconds").tag(30)
+                } label: { Text("Undo send"); Text("Holds mail this long before it leaves") }.settingAnchor("Undo send")
+            }
+            Section {
                 ForEach(AutoArchiveCategory.allCases) { cat in
                     Toggle(cat.rawValue, isOn: Binding(
                         get: { store.state.autoArchive.contains(cat) },
@@ -208,21 +345,19 @@ struct GeneralSettings: View {
                             else { store.state.autoArchive.removeAll { $0 == cat } }
                         }))
                 }
-                Text("Applies to new mail from when you turn it on. Starred mail and returned reminders are never auto-archived. Find them under ☰ → Auto Archived.")
-                    .font(.scaled(.caption)).foregroundStyle(.secondary)
+            } header: { Text("Auto Archive") } footer: {
+                Text("Applies to new mail from when you turn it on. Starred mail and returned reminders are never auto-archived. Find them under ☰ → Auto Archived.").settingsFooter()
             }
-            LabeledContent("Calendar") {
-                if store.calendar.authorized { Text("Connected to the Calendar app").foregroundStyle(.secondary) }
-                else { Button("Allow calendar access") { Task { _ = await store.calendar.requestAccess() } } }
-            }
-            Section("Notifications") {
+            Section {
                 Picker("Notify me about", selection: $notifyMode) {
                     Text("Important mail").tag("important"); Text("All new mail").tag("all"); Text("Nothing").tag("off")
                 }
+                .settingAnchor("Notify me about")
                 .onChange(of: notifyMode) { _, v in if v != "off" { notifier.requestPermission() } }
                 Picker("Dock badge counts", selection: $badgeMode) {
                     Text("Unread important").tag("important"); Text("All unread").tag("all"); Text("Nothing").tag("off")
                 }
+                .settingAnchor("Dock badge counts")
                 .onChange(of: badgeMode) { _, v in if v != "off" { notifier.requestPermission() }; notifier.updateBadge() }
                 if (notifier.denied && notifyMode != "off") || (notifier.badgeBlocked && badgeMode != "off") {
                     HStack {
@@ -234,34 +369,38 @@ struct GeneralSettings: View {
                         }.controlSize(.small)
                     }
                 }
-                Button("Send a test notification") { notifier.sendTest() }.controlSize(.small)
-                Text("Banners show only while you're in another app. Muted threads never notify. Click a notification to open the email.")
-                    .font(.scaled(.caption)).foregroundStyle(.secondary)
+                LabeledContent("Try it") { Button("Send a test notification") { notifier.sendTest() } }
+            } header: { Text("Notifications") } footer: {
+                Text("Banners show only while you're in another app. Muted threads never notify. Click a notification to open the email.").settingsFooter()
             }
             .onAppear { notifier.refreshStatus() }
             Section("Privacy") {
-                Toggle("Load remote images", isOn: $loadRemoteImages)
-                Text("Senders can use remote images to see when, where and on what device you opened an email. Turning this off blocks all outside content in emails; images attached to the email still show.")
-                    .font(.scaled(.caption)).foregroundStyle(.secondary)
+                Toggle(isOn: $loadRemoteImages) {
+                    Text("Load remote images")
+                    Text("Senders can use them to see when, where and on what device you opened an email. Off blocks all outside content; attached images still show.")
+                }.settingAnchor("Load remote images")
             }
-            Section("Writing") {
-                Toggle("Check spelling while typing", isOn: $spellcheck)
-                Toggle("Check grammar", isOn: $grammar)
-                Toggle("Correct spelling automatically", isOn: $autocorrect)
-                Toggle("Smart quotes and dashes", isOn: $smartQuotes)
+            Section {
+                Toggle("Check spelling while typing", isOn: $spellcheck).settingAnchor("Check spelling while typing")
+                Toggle("Check grammar", isOn: $grammar).settingAnchor("Check grammar")
+                Toggle("Correct spelling automatically", isOn: $autocorrect).settingAnchor("Correct spelling automatically")
+                Toggle("Smart quotes and dashes", isOn: $smartQuotes).settingAnchor("Smart quotes and dashes")
                 Toggle("Show Apple's Writing Tools button while typing", isOn: $writingToolsButton)
-                Text("Uses macOS's built-in spelling and grammar checker, in your system language. Right-click an underlined word for suggestions.")
-                    .font(.scaled(.caption)).foregroundStyle(.secondary)
+            } header: { Text("Writing") } footer: {
+                Text("Uses macOS's built-in spelling and grammar checker, in your system language. Right-click an underlined word for suggestions.").settingsFooter()
             }
-            LabeledContent("Tips") {
-                Button("Show the getting-started tips again") { UserDefaults.standard.set(0, forKey: "coachStep") }
-            }
-            Toggle("Show folders sidebar", isOn: $store.sidebarOpen)
-            Toggle("Show context panel", isOn: $store.contextOpen)
-            LabeledContent("Fetch mail") {
-                HStack {
-                    Text("Every 30 seconds, or ⌘R").foregroundStyle(.secondary)
+            Section("Sync") {
+                LabeledContent {
                     Button("Fetch now") { Task { await store.tick() } }.disabled(store.syncing)
+                } label: { Text("Fetch mail"); Text("Every 30 seconds, or ⌘R") }.settingAnchor("Fetch mail")
+                LabeledContent {
+                    if store.calendar.authorized { Text("Connected to the Calendar app").foregroundStyle(.secondary) }
+                    else { Button("Allow calendar access") { Task { _ = await store.calendar.requestAccess() } } }
+                } label: { Text("Calendar"); Text("For invites and adding events") }.settingAnchor("Calendar")
+            }
+            Section("Help") {
+                LabeledContent("Tips") {
+                    Button("Show the getting-started tips again") { UserDefaults.standard.set(0, forKey: "coachStep") }
                 }
             }
         }
@@ -419,7 +558,7 @@ struct HotkeySettings: View {
                 }
             }
         }
-        .formStyle(.grouped)
+        .formStyle(.grouped).scrollContentBackground(.hidden)
         .onDisappear(perform: stop)
     }
 
