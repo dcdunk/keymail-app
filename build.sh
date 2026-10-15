@@ -11,10 +11,12 @@ NAME=Lightmail; BUNDLE_ID=local.email.app  # dev bundle id kept so settings and 
 MODE="${1:-}"
 if [[ "$MODE" == "--demo" ]]; then NAME="Lightmail Demo"; BUNDLE_ID=local.email.app.demo; fi
 if [[ "$MODE" == "--release" ]]; then
-  BUNDLE_ID="${RELEASE_BUNDLE_ID:-org.truecompetitors.lightmail}"
-  RELEASE_ID=$(security find-identity -v -p codesigning | grep -m1 "Developer ID Application" | awk '{print $2}' || true)
+  BUNDLE_ID="${RELEASE_BUNDLE_ID:-com.dannychait.lightmail}"   # permanent once people install the app
+  # Sign only with Danny Chait's personal team, never another team's certificate that happens to be installed.
+  RELEASE_TEAM="${RELEASE_TEAM:-PERSONAL_TEAM_ID}"
+  RELEASE_ID=$(security find-identity -v -p codesigning | grep "Developer ID Application" | grep -m1 "($RELEASE_TEAM)" | awk '{print $2}' || true)
   if [[ -z "$RELEASE_ID" ]]; then
-    echo "No 'Developer ID Application' certificate found. Create one at developer.apple.com → Certificates (Account Holder role), install it, then rerun."
+    echo "No 'Developer ID Application' certificate for team $RELEASE_TEAM. In Xcode → Settings → Accounts, pick your personal team → Manage Certificates → + → Developer ID Application, then rerun."
     exit 1
   fi
 fi

@@ -209,7 +209,17 @@ final class AppStore: ObservableObject {
     @Published var searchResults: Set<String>?   // conversation ids
     @Published var composing: ComposeModel? { didSet { if composing == nil && oldValue != nil { refreshHover(after: 0.25) } } }
     @Published var editingSnippet: Snippet?
-    @Published var banner: String?
+    /// Every banner closes itself: 5 seconds, plus reading time for longer messages (up to 12), unless another
+    /// banner replaced it first. The ✕ still closes it sooner.
+    @Published var banner: String? { didSet {
+        guard let text = banner, text != oldValue else { return }
+        bannerToken += 1
+        let token = bannerToken, seconds = min(12, max(5, Double(text.count) / 15))
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(seconds))
+            if bannerToken == token, banner == text { banner = nil }
+        }
+    } }
     @Published var summary: String?
     @Published var busy: String?
 
@@ -345,16 +355,6 @@ final class AppStore: ObservableObject {
     func report(_ e: Error) {
         if e is CancellationError || (e as? URLError)?.code == .cancelled { return } // -999: we stopped the request ourselves
         banner = friendlyNetworkError(e) ?? e.localizedDescription
-    }
-    /// A confirmation that closes itself after 5 seconds, unless another banner has replaced it.
-    func flash(_ text: String) {
-        banner = text
-        bannerToken += 1
-        let token = bannerToken
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            if bannerToken == token, banner == text { banner = nil }
-        }
     }
 
 
