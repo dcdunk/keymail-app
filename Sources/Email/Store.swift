@@ -275,6 +275,7 @@ final class AppStore: ObservableObject {
         refreshHover(after: 0.5)
     } }
     /// Opens Settings on `tab` (e.g. "signatures"). A draft that's open stays open underneath and is there when Settings closes.
+    @Published var settingsSearchFocus = 0   // bumped by ⌘K while Settings is open
     func openSettings(tab: String) {
         UserDefaults.standard.set(tab, forKey: "settingsTab")
         openSettings()
