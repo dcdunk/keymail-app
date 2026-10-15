@@ -130,11 +130,14 @@ struct Header: View {
                 .help("Search (/)").coachAnchor("search")
             Button { Task { await store.tick() } } label: {
                 Group {
-                    if store.syncing { ProgressView().controlSize(.small) } else { Image(systemName: "arrow.clockwise") }
+                    if store.syncing { ProgressView().controlSize(.small) } else { Image(systemName: "arrow.triangle.2.circlepath") }
                 }.frame(width: 34, height: 34).contentShape(Circle())
             }
             .buttonStyle(.plain).foregroundStyle(.secondary).glass(Circle(), interactive: true)
             .disabled(store.syncing).help("Fetch mail (⌘R)")
+            Button { store.openSettings() } label: { Image(systemName: "gearshape").frame(width: 34, height: 34).contentShape(Circle()) }
+                .buttonStyle(.plain).foregroundStyle(.secondary).glass(Circle(), interactive: true)
+                .help("Settings (⌘,)")
             MenuButton(width: 320, trailing: true, entries: { store.accountEntries() }) {
                 HStack(spacing: 10) {
                     if store.state.accounts.count > 1 {

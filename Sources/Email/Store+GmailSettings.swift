@@ -125,9 +125,60 @@ extension AppStore {
         modify(c, add: ["INBOX"], remove: snoozed.map { [$0] } ?? [])
     }
 
+    /// Moves a conversation, sender or domain between Important and Other, in Keymail and at the provider,
+    /// so Gmail and Outlook (and their phone apps) sort it the same way.
     func setImportance(_ key: String, important: Bool) {
         state.importance[key] = important
         banner = ("Moved \(key.contains("|") ? "conversation" : key) to \(important ? importantTab : otherTab).")
+        let affected = allConversations.filter { importanceKey(key, matches: $0) }
+        for c in affected where !isICloud(c.account) {   // iCloud and Yahoo have no importance to teach
+            for m in c.messages {
+                var l = m.labelIds.filter { $0 != "IMPORTANT" }
+                if important { l.append("IMPORTANT") }
+                messages[m.key]?.labelIds = l
+            }
+        }
+        Task { await teachImportance(key, important: important, affected: affected) }
+    }
+
+    /// key is a conversation id ("account|thread"), a sender address, or a domain.
+    func importanceKey(_ key: String, matches c: Conversation) -> Bool {
+        if key.contains("|") { return c.id == key }
+        let from = parseAddresses(c.messages.first?.from ?? "").first?.email.lowercased() ?? ""
+        return key.contains("@") ? from == key.lowercased() : from.hasSuffix("@" + key.lowercased()) || from.hasSuffix("." + key.lowercased())
+    }
+
+    func teachImportance(_ key: String, important: Bool, affected: [Conversation]) async {
+        // Existing mail: Gmail's Important label, Outlook's Focused/Other.
+        // ponytail: capped at 50 conversations per move; older mail from a big domain keeps its old sorting.
+        for c in affected.prefix(50) {
+            do {
+                if isGmail(c.account) {
+                    try await gmail(c.account).modifyThread(c.threadId, add: important ? ["IMPORTANT"] : [], remove: important ? [] : ["IMPORTANT"])
+                } else if isMicrosoft(c.account) {
+                    for m in c.messages { try await graph(c.account).setFocused(m.id, important) }
+                }
+            } catch { log("importance \(c.account): \(error.localizedDescription.prefix(200))") }
+        }
+        guard !key.contains("|") else { return }
+        // Future mail: a Gmail filter ("always/never mark as important") and an Outlook Focused rule for the sender.
+        let accounts = Set(affected.map(\.account))
+        for a in accounts where isGmail(a) {
+            _ = await settingsCall(a) { try await self.gmail(a).setImportanceFilter(from: key, important: important) }
+        }
+        if key.contains("@") {
+            for a in accounts where isMicrosoft(a) {
+                do { try await graph(a).setFocusedOverride(sender: key, focused: important) }
+                catch { log("focused rule \(a): \(error.localizedDescription.prefix(200))") }
+            }
+        }
+    }
+
+    func setSplitImportance(_ on: Bool) {
+        UserDefaults.standard.set(on, forKey: "splitImportance")
+        tabCache = nil
+        objectWillChange.send()
+        goTab(shownTabs.first ?? inboxTab)
     }
 
     func open(_ c: Conversation) {

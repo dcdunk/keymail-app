@@ -25,7 +25,7 @@ struct SettingsPanel: View {
         .init(id: "general", title: "General", icon: "gearshape", group: "Mail", keywords: "thread order undo send notifications badge remote images sender logos privacy spelling grammar writing auto archive calendar fetch sync tips",
               items: ["Messages in a thread", "Show folders sidebar", "Show context panel", "Undo send", "Notify me about", "Dock badge counts",
                       "Load remote images", "Show sender logos", "Check spelling while typing", "Check grammar", "Correct spelling automatically", "Smart quotes and dashes", "Fetch mail", "Calendar"]),
-        .init(id: "splits", title: "Split inbox", icon: "rectangle.split.3x1", group: "Mail", keywords: "tabs splits important other rules"),
+        .init(id: "splits", title: "Inbox", icon: "tray", group: "Mail", keywords: "tabs splits split inbox important other single one inbox focused rules", items: ["Important and Other"]),
         .init(id: "signatures", title: "Signatures", icon: "signature", group: "Mail", keywords: "signature html logo"),
         .init(id: "snippets", title: "Snippets", icon: "text.quote", group: "Mail", keywords: "templates snippets canned"),
         .init(id: "accounts", title: "Accounts", icon: "person.crop.circle", group: "Accounts", keywords: "add remove google icloud microsoft outlook hotmail alias send as nickname default from"),

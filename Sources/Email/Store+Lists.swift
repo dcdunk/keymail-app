@@ -54,7 +54,7 @@ extension AppStore {
         var out: [String: [Conversation]] = [:]
         let snoozed = Set(state.snoozes.map(\.conversationId))
         for c in all where c.inInbox && !snoozed.contains(c.id) {
-            for t in tabs(for: c, splits: state.splits, ctx: ctx) { out[t, default: []].append(c) }
+            for t in tabs(for: c, splits: state.splits, ctx: ctx, splitImportance: splitImportance) { out[t, default: []].append(c) }
         }
         tabCache = out
         return out
@@ -63,8 +63,11 @@ extension AppStore {
     var shownTabs: [String] {
         let members = tabMembers
         return state.splits.filter { $0.enabled && !($0.hideWhenEmpty && members[$0.name] == nil && $0.name != tabName) }.map(\.name)
-            + [importantTab, otherTab]
+            + (splitImportance ? [importantTab, otherTab] : [inboxTab])
     }
+
+    /// Settings → Inbox: Important and Other tabs, or one inbox.
+    var splitImportance: Bool { UserDefaults.standard.object(forKey: "splitImportance") as? Bool ?? true }
 
     var visible: [Conversation] {
         var list: [Conversation]

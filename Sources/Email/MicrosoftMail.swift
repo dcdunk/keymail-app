@@ -73,6 +73,24 @@ struct GraphMail {
         return d
     }
 
+    /// Focused (true) or Other (false) for one email.
+    func setFocused(_ id: String, _ focused: Bool) async throws {
+        try await call("/messages/\(id)", method: "PATCH", json: ["inferenceClassification": focused ? "focused" : "other"])
+    }
+
+    /// Outlook's rule for a sender: always Focused, or always Other. Updates the existing rule if there is one.
+    func setFocusedOverride(sender: String, focused: Bool) async throws {
+        let kind = focused ? "focused" : "other"
+        let list = try await call("/inferenceClassification/overrides")["value"] as? [[String: Any]] ?? []
+        if let o = list.first(where: { (($0["senderEmailAddress"] as? [String: Any])?["address"] as? String)?.lowercased() == sender.lowercased() }),
+           let id = o["id"] as? String {
+            try await call("/inferenceClassification/overrides/\(id)", method: "PATCH", json: ["classifyAs": kind])
+        } else {
+            try await call("/inferenceClassification/overrides", method: "POST",
+                           json: ["classifyAs": kind, "senderEmailAddress": ["address": sender]])
+        }
+    }
+
     func setRead(_ id: String, _ read: Bool) async throws { try await call("/messages/\(id)", method: "PATCH", json: ["isRead": read]) }
     func setFlagged(_ id: String, _ on: Bool) async throws {
         try await call("/messages/\(id)", method: "PATCH", json: ["flag": ["flagStatus": on ? "flagged" : "notFlagged"]])

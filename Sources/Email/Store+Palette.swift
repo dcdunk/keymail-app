@@ -44,11 +44,13 @@ extension AppStore {
             if let from = parseAddresses(c.latest.from).first {
                 let e = from.email.lowercased(), domain = e.split(separator: "@").last.map(String.init) ?? ""
                 terms += [("sender \(e)", "from:\(e)"), ("domain \(domain)", "from:\(domain)")]
-                let important = isImportant(c, context(allConversations))
-                let dest = important ? otherTab : importantTab
-                list.append(Command(title: "Move to \(dest): this conversation") { self.setImportance(c.id, important: !important) })
-                list.append(Command(title: "Move to \(dest): everything from \(e)") { self.setImportance(e, important: !important) })
-                list.append(Command(title: "Move to \(dest): everything from \(domain)") { self.setImportance(domain, important: !important) })
+                if splitImportance {
+                    let important = isImportant(c, context(allConversations))
+                    let dest = important ? otherTab : importantTab
+                    list.append(Command(title: "Move to \(dest): this conversation") { self.setImportance(c.id, important: !important) })
+                    list.append(Command(title: "Move to \(dest): everything from \(e)") { self.setImportance(e, important: !important) })
+                    list.append(Command(title: "Move to \(dest): everything from \(domain)") { self.setImportance(domain, important: !important) })
+                }
                 list.append(Command(title: "New split: from \(from.display)") { self.addSplit(Split(name: from.display, query: "from:\(e)")) })
                 list.append(Command(title: "New split: anyone @\(domain)") { self.addSplit(Split(name: domain, query: "from:\(domain)")) })
             }

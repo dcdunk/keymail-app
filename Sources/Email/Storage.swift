@@ -10,13 +10,16 @@ import CryptoKit
 /// so it starts fresh like a new user and never touches the real app's accounts.
 enum AppFlavor {
     static let isDemo = Bundle.main.bundleIdentifier?.hasSuffix(".demo") == true
+    /// Running under XCTest: data, cache key and Keychain entries go to throwaway places, never the real app's.
+    static let isTesting = NSClassFromString("XCTestCase") != nil
 }
 
 // MARK: Disk
 
 enum Disk {
     static let dir: URL = {
-        let d = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let d = AppFlavor.isTesting ? FileManager.default.temporaryDirectory.appendingPathComponent("Keymail-Tests-\(ProcessInfo.processInfo.processIdentifier)")
+            : FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent(AppFlavor.isDemo ? "Email-Demo" : "Email")
         if AppFlavor.isDemo { try? FileManager.default.removeItem(at: d) } // the demo starts over at the welcome screen every launch
         try? FileManager.default.createDirectory(at: d, withIntermediateDirectories: true)
@@ -74,6 +77,7 @@ enum CacheKey {
     /// True only on the first launch after installing (or upgrading from a build without encryption).
     private(set) static var createdThisLaunch = false
     static let key: SymmetricKey? = {
+        if AppFlavor.isTesting { return SymmetricKey(size: .bits256) }
         switch lookup(Keychain.service) {
         case .found(let k): return k
         case .refused: return nil
@@ -146,7 +150,7 @@ func setAsideToRestore(_ names: [String]) -> [(String, String)] {
 enum Keychain {
     /// Entries written by this and later builds. The older name stays readable: entries some earlier builds
     /// created can't be replaced by a differently signed build, which silently kept stale sign-ins.
-    static let service = AppFlavor.isDemo ? "Email-Demo.google-refresh-token.v2" : "Email.google-refresh-token.v2"
+    static let service = AppFlavor.isTesting ? "Keymail-Tests.token" : AppFlavor.isDemo ? "Email-Demo.google-refresh-token.v2" : "Email.google-refresh-token.v2"
     static let legacyService = AppFlavor.isDemo ? "Email-Demo.google-refresh-token" : "Email.google-refresh-token"
 
     static func set(_ value: String, for account: String) {

@@ -1,0 +1,10 @@
+#!/bin/zsh
+# Refuses to push if any test fails, including CoreFlowsTests (send/receive, every keyboard command, row actions).
+# Enabled per clone with: git config core.hooksPath .githooks
+echo "pre-push: running tests…"
+if ! swift test > /tmp/keymail-prepush.log 2>&1; then
+  grep -E "error: -|failed" /tmp/keymail-prepush.log | head -20
+  echo "pre-push: tests failed, push blocked. Full log: /tmp/keymail-prepush.log"
+  exit 1
+fi
+echo "pre-push: all tests passed."

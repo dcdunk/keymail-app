@@ -17,6 +17,7 @@ public struct Split: Codable, Identifiable, Hashable {
 
 public let importantTab = "Important"
 public let otherTab = "Other"
+public let inboxTab = "Inbox"   // the single tab when Important/Other is turned off
 
 /// Superhuman's Split Inbox Library, minus the team-collaboration ones.
 public let splitLibrary: [Split] = [
@@ -120,13 +121,13 @@ public func isImportant(_ c: Conversation, _ ctx: QueryContext) -> Bool {
 }
 
 /// Every tab a conversation shows in. Splits can claim it, or share it with Important/Other.
-public func tabs(for c: Conversation, splits: [Split], ctx: QueryContext) -> [String] {
+public func tabs(for c: Conversation, splits: [Split], ctx: QueryContext, splitImportance: Bool = true) -> [String] {
     var out: [String] = [], main = true
     for s in splits where s.enabled && matchesQuery(s.query, c, ctx) {
         out.append(s.name)
         if !s.alsoInMain { main = false }
     }
-    if main { out.append(isImportant(c, ctx) ? importantTab : otherTab) }
+    if main { out.append(!splitImportance ? inboxTab : isImportant(c, ctx) ? importantTab : otherTab) }
     return out
 }
 

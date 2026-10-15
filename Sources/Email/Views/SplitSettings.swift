@@ -14,6 +14,17 @@ struct SplitSettingsView: View {
     var embedded = false
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            if embedded {
+                Toggle(isOn: Binding(get: { store.splitImportance }, set: { store.setSplitImportance($0) })) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Important and Other").font(.scaled(.headline))
+                        Text("Sort the inbox into two tabs. Off shows one inbox with everything, newest first.")
+                            .font(.scaled(.callout)).foregroundStyle(.secondary)
+                    }
+                }
+                .toggleStyle(.switch).settingAnchor("Important and Other")
+                Divider()
+            }
             HStack {
                 Text("Split Inbox").font(.scaled(.title2).weight(.semibold))
                 Spacer()

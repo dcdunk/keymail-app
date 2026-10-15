@@ -165,6 +165,20 @@ struct Gmail {
 
     // MARK: Settings: out of office, send-as signatures, labels
 
+    /// One Keymail-made filter per sender or domain: "always" or "never mark as important". Replaces an earlier one.
+    func setImportanceFilter(from: String, important: Bool) async throws {
+        let filters = try await call("settings/filters")["filter"] as? [[String: Any]] ?? []
+        for f in filters where ((f["criteria"] as? [String: Any])?["from"] as? String)?.lowercased() == from.lowercased() {
+            let action = f["action"] as? [String: Any] ?? [:]
+            let labels = (action["addLabelIds"] as? [String] ?? []) + (action["removeLabelIds"] as? [String] ?? [])
+            if labels == ["IMPORTANT"], let id = f["id"] as? String { _ = try await call("settings/filters/\(id)", method: "DELETE") }
+        }
+        _ = try await call("settings/filters", method: "POST", json: [
+            "criteria": ["from": from],
+            "action": important ? ["addLabelIds": ["IMPORTANT"]] : ["removeLabelIds": ["IMPORTANT"]],
+        ])
+    }
+
     func vacation() async throws -> Vacation { Vacation(json: try await call("settings/vacation")) }
     func setVacation(_ v: Vacation) async throws { _ = try await call("settings/vacation", method: "PUT", json: v.json) }
 
