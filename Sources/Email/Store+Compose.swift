@@ -145,6 +145,25 @@ extension AppStore {
         } catch { model.savedNote = "Draft not saved: \(error.localizedDescription.prefix(80))" }
     }
 
+    /// The compose trash can. Removes the draft from the screen at once (thread card and Drafts folder), then from
+    /// the server, finding its ID first if a reopened draft's ID hadn't been looked up yet.
+    func discardCompose(_ model: ComposeModel) {
+        model.saveTask?.cancel()
+        var d = model.draft
+        let acct = account(for: d.from), shown = model.draftMessage
+        if let shown { messages[shown.key] = nil }
+        if isMicrosoft(acct), let id = d.draftId { messages[acct + "|" + id] = nil } // Microsoft draft IDs are message IDs
+        banner = "Draft discarded."
+        Task {
+            if d.draftId == nil, let shown {
+                if isMicrosoft(acct) { d.draftId = shown.id }
+                else if isGmail(acct) { d.draftId = (try? await gmail(acct).draftIds())?[shown.id] }
+            }
+            if d.messageId == nil, let shown, !shown.messageIdHeader.isEmpty { d.messageId = shown.messageIdHeader } // iCloud finds drafts by Message-ID
+            await deleteDraft(d)
+        }
+    }
+
     func deleteDraft(_ d: Draft) async {
         let acct = account(for: d.from)
         if isICloud(acct) { if let mid = d.messageId { try? await icloud(acct).deleteDraft(messageId: mid) } }
@@ -173,14 +192,15 @@ extension AppStore {
     }
 
     /// Opening a Gmail draft from the Drafts folder continues editing it.
-    func openDraft(_ c: Conversation) {
-        let m = c.latest
+    func openDraft(_ c: Conversation, message: Message? = nil) {
+        let m = message ?? c.latest
         var d = Draft(from: m.account)
         d.to = m.to; d.cc = m.cc; d.subject = m.subject; d.body = m.plainText
         d.threadId = c.messages.count > 1 ? m.threadId : nil
         d.messageId = m.messageIdHeader.isEmpty ? nil : m.messageIdHeader
         d.references = m.references
         let model = ComposeModel(draft: d, context: c.messages.count > 1 ? c : nil)
+        model.draftMessage = m
         composing = model
         guard isGmail(m.account) else { return }
         Task { model.draft.draftId = (try? await gmail(m.account).draftIds())?[m.id] }

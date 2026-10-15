@@ -134,6 +134,7 @@ final class ComposeModel: ObservableObject, Identifiable {
     @Published var error: String?
     @Published var savedNote: String?
     var saveTask: Task<Void, Never>?
+    var draftMessage: Message?   // the saved draft this compose was reopened from, if any
     let context: Conversation?
     init(draft: Draft, context: Conversation?) { self.draft = draft; self.context = context }
 }

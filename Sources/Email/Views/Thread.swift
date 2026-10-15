@@ -145,6 +145,17 @@ struct MessageCard: View {
                     Text(recipients).font(.scaled(.callout)).foregroundStyle(.secondary).lineLimit(2)
                 }
                 Spacer()
+                if message.labelIds.contains("DRAFT") && !message.labelIds.contains("SENT") {
+                    // Your unsent reply in this conversation: marked clearly, one click to keep writing.
+                    Text("Draft").font(.scaled(.caption).weight(.semibold)).foregroundStyle(.orange)
+                        .padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(Color.orange.opacity(0.14)))
+                    Button {
+                        if let c = store.allConversations.first(where: { $0.account == message.account && $0.threadId == message.threadId }) {
+                            store.openDraft(c, message: message)
+                        }
+                    } label: { Label("Continue editing", systemImage: "pencil") }
+                        .controlSize(.small).buttonBorderShape(.capsule).help("Open this draft in compose")
+                }
                 PhishingPill(senderReasons: senderWarnings(message, known: store.knownContacts),
                              links: message.html.map(suspiciousLinks) ?? [])
                 Text(message.date.formatted(date: .abbreviated, time: .shortened)).font(.scaled(.callout)).foregroundStyle(.secondary)
@@ -362,8 +373,8 @@ struct EmailWebView: NSViewRepresentable {
         /* 1. Light backgrounds become dark, keeping their hue, including gradients used as a solid fill (a common way
               senders block dark mode). Borders that would vanish get lighter. Images are never touched. */
         all.forEach(function(el){var cs=getComputedStyle(el),bg=rgb(cs.backgroundColor),bi=cs.backgroundImage;
-        if(bg&&bg[3]>0&&lum(bg)>.6)el.style.setProperty('background-color',dark(bg),'important');
-        if(bi&&bi!=='none'&&!/url\\(/.test(bi)){var g=rgb(bi);if(g&&lum(g)>.6){el.style.setProperty('background-image','none','important');el.style.setProperty('background-color',dark(g),'important')}}
+        if(bg&&bg[3]>0&&lum(bg)>.6){el.style.setProperty('background-color',dark(bg),'important');el.setAttribute('data-lm-bg','1')}
+        if(bi&&bi!=='none'&&!/url\\(/.test(bi)){var g=rgb(bi);if(g&&lum(g)>.6){el.style.setProperty('background-image','none','important');el.style.setProperty('background-color',dark(g),'important');el.setAttribute('data-lm-bg','1')}}
         ['top','right','bottom','left'].forEach(function(side){var w=parseFloat(cs['border-'+side+'-width']),bc=rgb(cs['border-'+side+'-color']);
         if(w>0&&bc&&lum(bc)<.35)el.style.setProperty('border-'+side+'-color',setL(bc,.45),'important')})});
         /* 2. Dark text becomes light only where the colour behind it really is dark now, so text can never end up
@@ -376,6 +387,8 @@ struct EmailWebView: NSViewRepresentable {
         if(document.documentElement.classList.contains('lm-dark'))document.querySelectorAll('img').forEach(function(i){var w=i.clientWidth,h=i.clientHeight;
         if(!i.complete||!i.naturalWidth||w<=12||h<=12||w/h>=12||h/w>=12)return;
         for(var p=i.parentElement,n=0;p&&n<6;p=p.parentElement,n++){if(getComputedStyle(p).backgroundImage!=='none')return;}
+        for(var q=i.parentElement;q&&q!==document.body;q=q.parentElement){var c=getComputedStyle(q).backgroundColor;
+        if(c&&c!=='transparent'&&!/rgba\\([^)]*,\\s*0\\)$/.test(c)){if(!q.hasAttribute('data-lm-bg'))return;break}}
         i.classList.add('lm-plate')});0
         """
         var last = ""

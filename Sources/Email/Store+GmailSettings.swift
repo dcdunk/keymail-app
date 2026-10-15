@@ -132,7 +132,9 @@ extension AppStore {
 
     func open(_ c: Conversation) {
         searchOpen = false
-        if c.latest.labelIds.contains("DRAFT") && !c.latest.labelIds.contains("SENT") { openDraft(c); return }
+        // Only a standalone draft (nothing but unsent drafts) opens straight into compose. A reply you've started
+        // inside a conversation must never block reading it: the thread opens and the draft shows as a card.
+        if c.messages.allSatisfy({ $0.labelIds.contains("DRAFT") && !$0.labelIds.contains("SENT") }) { openDraft(c); return }
         selectedID = c.id
         threadOpen = true
         recentlyOpened.removeAll { $0 == c.id }

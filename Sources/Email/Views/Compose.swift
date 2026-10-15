@@ -266,9 +266,7 @@ struct ComposeView: View {
     }
 
     func discard() {
-        model.saveTask?.cancel()
-        let d = model.draft
-        Task { await store.deleteDraft(d) }
+        store.discardCompose(model)
         dismiss()
     }
 
