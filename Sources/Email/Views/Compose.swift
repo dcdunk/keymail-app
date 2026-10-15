@@ -9,6 +9,7 @@ import QuickLook
 // MARK: Compose
 
 struct ComposeView: View {
+    @AppStorage("draftButtons") private var draftButtons = "icons"   // "icons" or "text"
     @EnvironmentObject var store: AppStore
     @ObservedObject var model: ComposeModel
     @Environment(\.closeCard) private var dismiss
@@ -115,31 +116,20 @@ struct ComposeView: View {
         }
     }
 
+    /// Send with a ▾ for the other ways to send (later, with a reminder); the rest as quiet icons or text links
+    /// (Settings → Appearance → Draft buttons).
     var toolbar: some View {
         HStack(spacing: 6) {
-            Button { send(at: nil) } label: {
-                HStack(spacing: 8) { Text("Send").fontWeight(.semibold); KeyHint("⌘↵") }
-                    .padding(.horizontal, 6)
+            sendButton
+            if let d = model.remindDays {
+                Button { model.remindDays = nil } label: {
+                    Label(d == 7 ? "Remind in 1 week" : "Remind in \(d)d", systemImage: "bell.fill").font(.scaled(.caption))
+                }.buttonStyle(.plain).foregroundStyle(Theme.accent).help("\(remindLabel). Click to remove.")
             }
-            .keyboardShortcut(.return, modifiers: .command).prominentGlassButton().controlSize(.large).buttonBorderShape(.capsule)
-            .disabled(model.busy || model.draft.to.trimmingCharacters(in: .whitespaces).isEmpty)
-            .padding(.trailing, 8)
-
-            pillMenu("clock", "Later", help: "Send later") {
-                [.header("Send later")] + snoozePresets().map { name, date in
-                    MenuEntry(title: name, subtitle: date.formatted(.dateTime.weekday(.abbreviated).hour().minute()), icon: "paperplane") { send(at: date) }
-                }
-            }
-            pillMenu(model.remindDays == nil ? "bell" : "bell.fill", model.remindDays.map { $0 == 7 ? "1 week" : "\($0)d" } ?? "Remind",
-                     help: remindLabel, on: model.remindDays != nil) {
-                [.header("Remind me if no reply")] + [(nil, "No reminder"), (1, "In 1 day"), (3, "In 3 days"), (7, "In 1 week")].map { (d: Int?, t: String) in
-                    MenuEntry(title: t, icon: d == nil ? "bell.slash" : "bell", checked: model.remindDays == d) { model.remindDays = d }
-                }
-            }
-            pill("paperclip", model.draft.files.isEmpty ? "Attach" : "\(model.draft.files.count)", help: "Attach files (⇧⌘A), or drag them in",
-                 on: !model.draft.files.isEmpty) { pickFiles() }
+            Spacer().frame(width: 10)
+            tool("paperclip", model.draft.files.isEmpty ? "Attach" : "Attach (\(model.draft.files.count))", help: "Attach files (⇧⌘A), or drag them in") { pickFiles() }
                 .keyboardShortcut("a", modifiers: [.command, .shift])
-            pillMenu("signature", "Signature", help: "Signature", on: model.draft.signaturePlain != nil) {
+            toolMenu("signature", "Signature", help: "Signature") {
                 [.header("Signature"),
                  MenuEntry(title: "No signature", icon: "minus.circle", checked: model.draft.signaturePlain == nil) { store.applySignature(&model.draft, from: nil) }]
                 + store.addressesWithSignatures.map { a in
@@ -148,9 +138,9 @@ struct ComposeView: View {
                         store.applySignature(&model.draft, from: a)
                     }
                 }
-                + [.divider, MenuEntry(title: "Edit signatures", icon: "pencil") { store.openSettings() }]
+                + [.divider, MenuEntry(title: "Edit signatures", icon: "pencil") { editSignature() }]
             }
-            pillMenu("text.badge.plus", "Snippet", help: "Insert snippet") {
+            toolMenu("text.badge.plus", "Snippet", help: "Insert snippet") {
                 [.header("Insert snippet")] + (store.state.snippets.isEmpty
                     ? [MenuEntry(title: "No snippets yet", subtitle: "Add them in Settings → Snippets", icon: "text.badge.plus", disabled: true)]
                     : store.state.snippets.map { s in
@@ -159,42 +149,83 @@ struct ComposeView: View {
                         }
                     })
             }
-            Button { store.aiDraft(model) } label: {
-                HStack(spacing: 6) {
-                    if model.busy { ProgressView().controlSize(.small) } else { Image(systemName: "sparkles") }
-                    Text(model.busy ? "Writing…" : "Write")
-                }.font(.scaled(.callout)).padding(.horizontal, 4)
-            }
-            .buttonBorderShape(.capsule)
-            .keyboardShortcut("j", modifiers: .command).disabled(model.busy)
-            .help("Write with \(store.ai.name) (⌘J). Type a few notes first, e.g. \"yes to Thursday, ask about budget\".")
+            tool(model.busy ? "hourglass" : "sparkles", model.busy ? "Writing…" : "Write",
+                 help: "Write with \(store.ai.name) (⌘J). Type a few notes first, e.g. \"yes to Thursday, ask about budget\".") { store.aiDraft(model) }
+                .keyboardShortcut("j", modifiers: .command).disabled(model.busy)
 
             Spacer(minLength: 12)
             if let n = model.savedNote { Text(n).font(.scaled(.caption)).foregroundStyle(.tertiary).lineLimit(1) }
-            iconButton("trash", help: "Discard draft") { discard() }
+            tool("trash", "Discard", help: "Discard draft", iconOnly: true) { discard() }
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
         .background(Color.primary.opacity(0.03))
         .overlay(alignment: .top) { Divider() }
     }
 
+    /// Send, joined to a ▾ menu with Send later and Remind me if no reply.
+    var sendButton: some View {
+        HStack(spacing: 1) {
+            Button { trySend(at: nil) } label: {
+                HStack(spacing: 8) { Text("Send").fontWeight(.semibold); KeyHint("⌘↵") }.padding(.leading, 4)
+            }
+            .keyboardShortcut(.return, modifiers: .command)
+            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 20, bottomLeadingRadius: 20))
+            MenuButton(width: 280, entries: { sendMenu }) {
+                Image(systemName: "chevron.down").font(.scaled(size: 11, weight: .bold)).frame(height: 16)
+            }
+            .clipShape(UnevenRoundedRectangle(bottomTrailingRadius: 20, topTrailingRadius: 20))
+            .help("Send later, or remind me if there's no reply")
+        }
+        .prominentGlassButton().buttonBorderShape(.roundedRectangle(radius: 0)).controlSize(.large)
+        .disabled(model.busy)
+    }
+
+    var sendMenu: [MenuEntry] {
+        [.header("Send later")] + snoozePresets().map { name, date in
+            MenuEntry(title: name, subtitle: date.formatted(.dateTime.weekday(.abbreviated).hour().minute()), icon: "paperplane") { trySend(at: date) }
+        }
+        + [.divider, .header("Remind me if no reply")]
+        + [(nil, "No reminder"), (1, "In 1 day"), (3, "In 3 days"), (7, "In 1 week")].map { (d: Int?, t: String) in
+            MenuEntry(title: t, icon: d == nil ? "bell.slash" : "bell", checked: model.remindDays == d) { model.remindDays = d }
+        }
+    }
+
+    /// Opens Settings → Signatures on the address this draft's signature comes from, over the draft. Closing Settings
+    /// returns to the draft with the edited signature in place.
+    func editSignature() {
+        let fromEmail = parseAddresses(model.draft.from).first?.email ?? model.draft.from
+        let address = store.addressesWithSignatures.first { model.draft.signaturePlain != nil && store.plainSignature(for: $0) == model.draft.signaturePlain }
+            ?? store.fromAddresses.first { $0.lowercased() == fromEmail.lowercased() } ?? fromEmail
+        store.resumeSignature = model.draft.signaturePlain == nil ? nil : (model, address)
+        store.signatureFocus = address
+        store.openSettings(tab: "signatures")
+    }
+
+    /// Send stays clickable: with no recipient it says so instead of looking broken.
+    func trySend(at date: Date?) {
+        guard !model.draft.to.trimmingCharacters(in: .whitespaces).isEmpty else { store.banner = "Add a recipient first."; return }
+        send(at: date)
+    }
+
+    /// A draft tool in the chosen style: a quiet icon (name and shortcut on hover) or a text link.
+    func tool(_ symbol: String, _ title: String, help: String, iconOnly: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) { toolLabel(symbol, title, iconOnly: iconOnly) }.buttonStyle(ToolStyle()).help(help)
+    }
+    func toolMenu(_ symbol: String, _ title: String, help: String, _ entries: @escaping () -> [MenuEntry]) -> some View {
+        MenuButton(width: 280, entries: entries) { toolLabel(symbol, title, iconOnly: false) }.buttonStyle(ToolStyle()).fixedSize().help(help)
+    }
+    @ViewBuilder func toolLabel(_ symbol: String, _ title: String, iconOnly: Bool) -> some View {
+        if iconOnly || draftButtons == "icons" {
+            Image(systemName: symbol).font(.scaled(size: 15)).frame(width: 30, height: 28).accessibilityLabel(title)
+        } else {
+            HStack(spacing: 5) { Image(systemName: symbol).font(.scaled(size: 12)); Text(title) }
+                .font(.scaled(.callout)).padding(.horizontal, 8).frame(height: 28)
+        }
+    }
+
     var remindLabel: String {
         guard let d = model.remindDays else { return "Remind me if no reply" }
         return "Remind me if no reply in \(d == 7 ? "1 week" : "\(d) day\(d == 1 ? "" : "s")")"
-    }
-
-    func iconButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Image(systemName: symbol).frame(width: 18, height: 18) }.buttonBorderShape(.circle).help(help)
-    }
-
-    /// A capsule button with icon + short label. `on` tints it when a setting is active (reminder set, files attached).
-    func pill(_ symbol: String, _ title: String, help: String, on: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) { pillLabel(symbol, title, on: on) }.buttonBorderShape(.capsule).help(help)
-    }
-
-    func pillMenu(_ symbol: String, _ title: String, help: String, on: Bool = false, _ entries: @escaping () -> [MenuEntry]) -> some View {
-        MenuButton(width: 280, entries: entries) { pillLabel(symbol, title, on: on) }
-            .buttonBorderShape(.capsule).fixedSize().help(help)
     }
 
     /// Accounts with their send-as aliases grouped underneath.
@@ -209,12 +240,6 @@ struct ComposeView: View {
             }
         }
         return e
-    }
-
-    func pillLabel(_ symbol: String, _ title: String, on: Bool) -> some View {
-        HStack(spacing: 5) { Image(systemName: symbol); Text(title) }
-            .font(.scaled(.callout)).padding(.horizontal, 4)
-            .foregroundStyle(on ? Theme.accent : .primary)
     }
 
     func row<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {
@@ -325,5 +350,23 @@ struct SnippetEditor: View {
                 }.keyboardShortcut(.defaultAction).disabled(snippet.name.isEmpty)
             }
         }.padding(24).frame(width: 480)
+    }
+}
+
+/// Draft tools: no border, a soft wash on hover, so Send is the only filled button in the bar.
+struct ToolStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View { ToolBody(configuration: configuration) }
+    struct ToolBody: View {
+        let configuration: ButtonStyleConfiguration
+        @Environment(\.isEnabled) private var enabled
+        @State private var hover = false
+        var body: some View {
+            configuration.label
+                .foregroundStyle(hover ? Color.primary : Color.secondary)
+                .background(RoundedRectangle(cornerRadius: 7).fill(Color.primary.opacity(configuration.isPressed ? 0.12 : hover ? 0.07 : 0)))
+                .contentShape(Rectangle())
+                .opacity(enabled ? 1 : 0.5)
+                .onHover { hover = $0 }.handCursor()
+        }
     }
 }

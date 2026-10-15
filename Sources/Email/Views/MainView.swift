@@ -55,8 +55,8 @@ struct MainView: View {
         .environment(\.layout, layout)
         .overlay(alignment: .top) { if store.paletteOpen { PaletteView().padding(.top, 90) } }
         .overlay(alignment: .bottom) { StatusBar() }
-        .overlay { SettingsPanel() }
         .overlay { ModalLayer() }
+        .overlay { SettingsPanel() }   // above drafts, so Settings opened from a draft (Edit signatures) is usable
         .overlay { PopupLayer() }
         .coordinateSpace(name: "main")
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { store.mainFrame = $0 }

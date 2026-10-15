@@ -77,7 +77,10 @@ struct SignatureSettings: View {
                 Text("Select an address").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .onAppear { if selection == nil { selection = store.fromAddresses.first } }
+        .onAppear {
+            if let f = store.signatureFocus { selection = f; store.signatureFocus = nil }
+            else if selection == nil { selection = store.fromAddresses.first }
+        }
     }
 }
 

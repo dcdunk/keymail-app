@@ -67,10 +67,20 @@ extension AppStore {
             }
             return true
         }
-        if settingsOpen && !modalOpen {
+        if settingsOpen { // Settings sits above everything, including an open draft
             if Hotkeys.recording { return false } // Settings → Hotkeys is capturing this key
             if code == 53 { settingsOpen = false; return true } // Esc
             if cmd, ch == "," { settingsOpen = false; return true }
+            // ↑/↓ move through the Settings sidebar, unless a text box or a list inside the page has the keyboard.
+            if code == 125 || code == 126, !cmd {
+                let fr = NSApp.keyWindow?.firstResponder
+                if !(fr is NSTextView || fr is NSTableView) {
+                    let ids = SettingsPanel.sections.map(\.id)
+                    let cur = ids.firstIndex(of: UserDefaults.standard.string(forKey: "settingsTab") ?? "general") ?? 0
+                    UserDefaults.standard.set(ids[max(0, min(ids.count - 1, cur + (code == 125 ? 1 : -1)))], forKey: "settingsTab")
+                    return true
+                }
+            }
             return false // typing in settings fields must never trigger inbox shortcuts
         }
         if linkPrompt != nil { if code == 53 || code == 36 { linkPrompt = nil }; return true } // Esc / Return = don't open

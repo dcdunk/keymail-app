@@ -20,7 +20,7 @@ struct SettingsPanel: View {
     struct Section: Identifiable { let id: String, title: String, icon: String, keywords: String }
     static let sections: [Section] = [
         .init(id: "general", title: "General", icon: "gearshape", keywords: "thread order undo send notifications badge opacity remote images privacy spelling grammar writing auto archive"),
-        .init(id: "appearance", title: "Appearance", icon: "textformat.size", keywords: "appearance text font size bigger larger zoom dark light email content opacity glass window card"),
+        .init(id: "appearance", title: "Appearance", icon: "textformat.size", keywords: "draft compose buttons icons links appearance text font size bigger larger zoom dark light email content opacity glass window card"),
         .init(id: "accounts", title: "Accounts", icon: "person.crop.circle", keywords: "add remove google icloud alias send as nickname default from"),
         .init(id: "gmail", title: "Gmail", icon: "envelope.badge", keywords: "out of office vacation auto reply labels signature sync"),
         .init(id: "ai", title: "AI providers", icon: "sparkles", keywords: "claude codex gemini write summarize instant reply"),
@@ -133,6 +133,7 @@ struct SettingsPanel: View {
 
 struct AppearanceSettings: View {
     @EnvironmentObject var store: AppStore
+    @AppStorage("draftButtons") private var draftButtons = "icons"
     @AppStorage("textScale") private var textScale = 1.0
     @AppStorage("windowOpacity") private var windowOpacity = 0.7
     @AppStorage("cardOpacity") private var cardOpacity = 1.0
@@ -150,6 +151,11 @@ struct AppearanceSettings: View {
             Picker("Email content", selection: $contentTheme) {
                 Text("Match app").tag("auto"); Text("Light").tag("light"); Text("Dark").tag("dark")
             }.pickerStyle(.segmented)
+            Picker("Draft buttons", selection: $draftButtons) {
+                Text("Quiet icons").tag("icons"); Text("Text links").tag("text")
+            }.pickerStyle(.segmented)
+            Text("Attach, Signature, Snippet and Write in the bar under a draft. Send and its ▾ menu (Send later, Remind) stay as they are.")
+                .font(.scaled(.caption)).foregroundStyle(.secondary)
             LabeledContent("Window opacity") {
                 HStack {
                     Slider(value: $windowOpacity, in: 0.2...1.0, step: 0.05) { EmptyView() }

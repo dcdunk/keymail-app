@@ -262,12 +262,24 @@ final class AppStore: ObservableObject {
     }
 
     /// Settings slide in from the right inside the main window (⌘,). Esc or clicking the inbox closes them.
+    /// Set while Settings → Signatures is open from a draft's Signature menu: which draft and address to refresh after.
+    var resumeSignature: (model: ComposeModel, address: String)?
+    @Published var signatureFocus: String?   // address Settings → Signatures should select when it opens
     @Published var settingsOpen = false { didSet {
         guard !settingsOpen && oldValue else { return }
+        // Back from editing a signature mid-draft: put the updated signature into that draft.
+        if let r = resumeSignature, r.model === composing { applySignature(&r.model.draft, from: r.address) }
+        resumeSignature = nil
         // Hand the keyboard back to the inbox, or a settings text box keeps it and arrows/Return stop working.
         NSApp.keyWindow?.makeFirstResponder(nil)
         refreshHover(after: 0.5)
     } }
+    /// Opens Settings on `tab` (e.g. "signatures"). A draft that's open stays open underneath and is there when Settings closes.
+    func openSettings(tab: String) {
+        UserDefaults.standard.set(tab, forKey: "settingsTab")
+        openSettings()
+    }
+
     func openSettings() {
         paletteOpen = false; sidebarOpen = false; closePopup()
         settingsOpen = true
