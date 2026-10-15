@@ -48,6 +48,7 @@ struct AboutSettings: View {
             .font(.callout).frame(maxWidth: 460, alignment: .leading)
 
             HStack(spacing: 16) {
+                Link("Website", destination: URL(string: "https://keymailapp.com")!)
                 Link("GitHub", destination: URL(string: "https://github.com/dcdunk/lightmail-app")!)
                 Link("Release notes", destination: URL(string: "https://github.com/dcdunk/lightmail-app/releases")!)
                 Link("Report a problem", destination: URL(string: "https://github.com/dcdunk/lightmail-app/issues/new")!)
