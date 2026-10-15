@@ -10,7 +10,8 @@ struct GraphMail {
     /// One call with the account's token. Asks for immutable IDs so a message keeps its ID when it moves between
     /// folders (archive, delete, undo all rely on that). Waits and retries when Microsoft says "slow down".
     @discardableResult
-    func call(_ pathOrURL: String, method: String = "GET", json: [String: Any]? = nil) async throws -> [String: Any] {
+    func call(_ pathOrURL: String, method: String = "GET", json: [String: Any]? = nil,
+              raw: (body: Data, type: String)? = nil) async throws -> [String: Any] {
         let url = URL(string: pathOrURL.hasPrefix("https://") ? pathOrURL : Self.base + pathOrURL)!
         for attempt in 0..<4 {
             var req = URLRequest(url: url)
@@ -20,6 +21,9 @@ struct GraphMail {
             if let json {
                 req.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 req.httpBody = try JSONSerialization.data(withJSONObject: json)
+            } else if let raw {
+                req.setValue(raw.type, forHTTPHeaderField: "Content-Type")
+                req.httpBody = raw.body
             }
             let (data, resp) = try await GoogleNet.session.data(for: req)
             let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
@@ -73,6 +77,30 @@ struct GraphMail {
     func setFlagged(_ id: String, _ on: Bool) async throws {
         try await call("/messages/\(id)", method: "PATCH", json: ["flag": ["flagStatus": on ? "flagged" : "notFlagged"]])
     }
+    // MARK: Sending and drafts
+    //
+    // Microsoft takes a whole email in standard MIME form, base64-encoded: the same message Keymail builds for
+    // Gmail, so signatures, inline logos, attachments, Cc/Bcc and reply threading all carry over unchanged.
+
+    /// Graph caps a request at 4 MB, and base64 adds a third, so the email itself must stay under about 3 MB.
+    static let maxMIMEBytes = 2_900_000
+
+    /// Saves the email in Drafts. Returns its ID and the conversation it belongs to.
+    func createDraft(mime: String) async throws -> (id: String, conversationId: String) {
+        let bytes = Data(mime.utf8)
+        guard bytes.count <= Self.maxMIMEBytes else {
+            throw AppError("Attachments from Microsoft accounts can total about 2.5 MB for now. Remove some, or send a link instead.")
+        }
+        let j = try await call("/messages", method: "POST", raw: (Data(bytes.base64EncodedString().utf8), "text/plain"))
+        guard let id = j["id"] as? String else { throw AppError("Microsoft didn't save the email. Try again.") }
+        return (id, j["conversationId"] as? String ?? "")
+    }
+
+    /// Sends a saved draft. Microsoft files the copy in Sent Items.
+    func sendDraft(_ id: String) async throws { try await call("/messages/\(id)/send", method: "POST") }
+
+    func delete(_ id: String) async throws { try await call("/messages/\(id)", method: "DELETE") }
+
     /// Moves to a well-known folder: "inbox", "archive" or "deleteditems".
     func move(_ id: String, to folder: String) async throws { try await call("/messages/\(id)/move", method: "POST", json: ["destinationId": folder]) }
 }

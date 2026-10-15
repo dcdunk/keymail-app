@@ -78,7 +78,17 @@ extension AppStore {
         if d.messageId == nil { d.messageId = "<\(UUID().uuidString)@\(domain)>" }
         let acct = account(for: d.from)
         if isMicrosoft(acct) {
-            throw AppError("Sending from Microsoft accounts is coming in the next update. Pick another account in From for now.")
+            // Save as a draft, then send it: the draft step tells us the conversation for "remind me if no reply".
+            // The autosaved draft (if any) is replaced, not left behind.
+            let g = graph(acct)
+            if let old = d.draftId { try? await g.delete(old) }
+            let sent = try await g.createDraft(mime: buildRaw(d))
+            try await g.sendDraft(sent.id)
+            if let days = remindDays, !sent.conversationId.isEmpty {
+                state.followUps.append(FollowUp(account: acct, threadId: sent.conversationId, sentAt: Date().addingTimeInterval(-5),
+                                                due: Date().addingTimeInterval(Double(days) * 86400)))
+            }
+            return
         }
         defer { Task { await self.deleteDraft(d) } }
         if isICloud(acct) {
@@ -120,7 +130,15 @@ extension AppStore {
         }
         let acct = account(for: d.from)
         do {
-            if isMicrosoft(acct) { model.savedNote = nil; return } // Microsoft drafts sync comes with sending
+            if isMicrosoft(acct) {
+                // Microsoft can't edit a draft's raw contents, so each save replaces the previous copy.
+                let g = graph(acct)
+                let saved = try await g.createDraft(mime: buildRaw(d))
+                if let old = model.draft.draftId { try? await g.delete(old) }
+                model.draft.draftId = saved.id
+                model.savedNote = "Draft saved"
+                return
+            }
             if isICloud(acct) { try await icloud(acct).saveDraft(d) }
             else { model.draft.draftId = try await gmail(acct).saveDraft(d) }
             model.savedNote = "Draft saved"
@@ -130,6 +148,7 @@ extension AppStore {
     func deleteDraft(_ d: Draft) async {
         let acct = account(for: d.from)
         if isICloud(acct) { if let mid = d.messageId { try? await icloud(acct).deleteDraft(messageId: mid) } }
+        else if isMicrosoft(acct), let id = d.draftId { try? await graph(acct).delete(id) }
         else if isGmail(acct), let id = d.draftId { try? await gmail(acct).deleteDraft(id) }
     }
 
@@ -143,6 +162,8 @@ extension AppStore {
             do {
                 if isICloud(c.account) {
                     for m in c.messages where !m.messageIdHeader.isEmpty { try await icloud(c.account).deleteDraft(messageId: m.messageIdHeader) }
+                } else if isMicrosoft(c.account) {
+                    for m in c.messages { try await graph(c.account).delete(m.id) }
                 } else if isGmail(c.account) {
                     let ids = try await gmail(c.account).draftIds()
                     for m in c.messages { if let d = ids[m.id] { try await gmail(c.account).deleteDraft(d) } }
