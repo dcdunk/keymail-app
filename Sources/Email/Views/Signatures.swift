@@ -87,6 +87,7 @@ struct RichTextEditor: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         let scroll = NSScrollView()
         let tv = SignatureTextView()
+        if #available(macOS 15.1, *), !UserDefaults.standard.bool(forKey: "writingToolsButton") { tv.writingToolsBehavior = .none }
         tv.minSize = .zero; tv.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         tv.isVerticallyResizable = true; tv.autoresizingMask = [.width]
         tv.textContainer?.widthTracksTextView = true

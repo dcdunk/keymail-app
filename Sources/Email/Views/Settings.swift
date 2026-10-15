@@ -286,6 +286,7 @@ struct AccountsSettings: View {
                 Button { showICloud = true } label: { Label("Add iCloud account", systemImage: "plus") }
             }
             if let b = store.busy { Text(b).font(.callout).foregroundStyle(.secondary) }
+            if !GoogleClient.isBuiltIn { // developer builds only; customers never see Google Cloud
             DisclosureGroup("Advanced") {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(GoogleClient.isBuiltIn ? "Google sign-in uses the client built into this app." :
@@ -294,6 +295,7 @@ struct AccountsSettings: View {
                     Button("Use my own Google Cloud client…") { showGoogleSetup = true }.controlSize(.small)
                 }.padding(.top, 4)
             }.font(.callout)
+            }
             Text("iCloud uses an app-specific password stored in your Keychain.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }

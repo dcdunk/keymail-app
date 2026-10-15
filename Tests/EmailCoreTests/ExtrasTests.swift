@@ -183,7 +183,7 @@ final class ExtrasTests: XCTestCase {
         XCTAssertFalse(isTransientGoogleError(status: 404, body: ""))
         XCTAssertTrue(friendlyGoogleError(status: 401, body: "").contains("sign-in expired"))
         XCTAssertTrue(friendlyGoogleError(status: 400, body: #"{"error":"invalid_grant"}"#).contains("sign-in expired"))
-        XCTAssertTrue(friendlyGoogleError(status: 403, body: #"{"error":{"message":"Gmail API has not been used in project 1"}}"#).contains("Gmail API is turned off"))
+        XCTAssertTrue(friendlyGoogleError(status: 403, body: #"{"error":{"message":"Gmail API has not been used in project 1"}}"#).contains("isn't available to Lightmail"))
         XCTAssertTrue(friendlyGoogleError(status: 403, body: #"{"error":{"message":"Request had insufficient authentication scopes."}}"#).contains("permission"))
         XCTAssertTrue(friendlyGoogleError(status: 400, body: #"{"error":{"message":"Invalid To header"}}"#).hasSuffix("Invalid To header"))
         for status in [400, 401, 403, 404, 409, 413, 429, 500, 502, 503, 418] {

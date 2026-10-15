@@ -32,11 +32,22 @@ struct EmailApp: App {
 
 struct RootView: View {
     @EnvironmentObject var store: AppStore
+    @AppStorage("writingToolsButton") private var writingToolsButton = false
     var body: some View {
         Group {
             if !store.state.onboarded || store.state.accounts.isEmpty { OnboardingView() }
             else { MainView() }
         }
         .glassButtons()
+        .modifier(WritingToolsSetting(on: writingToolsButton))
+    }
+}
+
+/// Settings → General → "Show Apple's Writing Tools button while typing", for every text field in the app
+/// (search, settings, compose fields), not only the email body.
+struct WritingToolsSetting: ViewModifier {
+    let on: Bool
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) { content.writingToolsBehavior(on ? .automatic : .disabled) } else { content }
     }
 }

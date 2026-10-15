@@ -248,9 +248,9 @@ public func friendlyGoogleError(status: Int, body: String) -> String {
     case 401:
         return "Your Google sign-in expired. Re-add the account in Settings → Accounts."
     case 403 where lower.contains("ratelimit") || lower.contains("quota"):
-        return "Gmail is asking Email to slow down. It will retry automatically."
+        return "Gmail is asking Lightmail to slow down. It will retry automatically."
     case 403 where lower.contains("accessnotconfigured") || lower.contains("has not been used") || lower.contains("disabled"):
-        return "The Gmail API is turned off for your Google Cloud project. Enable it at console.cloud.google.com → APIs & Services."
+        return "Gmail isn't available to Lightmail right now. Try again in a few minutes."
     case 403 where lower.contains("insufficient") || lower.contains("scope"):
         return "Lightmail doesn't have permission for that. Remove the account and add it again to grant access."
     case 403:

@@ -217,7 +217,7 @@ final class GoogleAuth {
         req.setValue("Bearer \(access)", forHTTPHeaderField: "Authorization")
         let (data, _) = try await GoogleNet.session.data(for: req)
         guard let email = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["emailAddress"] as? String else {
-            throw AppError("Couldn't read the Gmail profile. Is the Gmail API enabled in your Google Cloud project?")
+            throw AppError("Couldn't load this Gmail account. Try signing in again in a few minutes.")
         }
         Keychain.set(refresh, for: email)
         cache[email] = (access, Date().addingTimeInterval(j["expires_in"] as? Double ?? 3000))
@@ -270,7 +270,6 @@ final class GoogleAuth {
                         let target = q["code"] != nil ? "/signed-in" : "/not-signed-in?reason=" + (q["error"] ?? "").addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
                         reply("HTTP/1.1 303 See Other\r\nLocation: \(target)")
                         finish(.success(q))
-                        if q["code"] != nil { NSApp.activate(ignoringOtherApps: true) } // bring Lightmail back to the front
                     } else if path.hasPrefix("/signed-in") {
                         reply("HTTP/1.1 200 OK", SignInPage.html(ok: true))
                     } else if path.hasPrefix("/not-signed-in") {

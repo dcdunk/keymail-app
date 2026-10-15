@@ -61,13 +61,10 @@ struct GmailSettings: View {
     var accessCallout: some View {
         Section {
             VStack(alignment: .leading, spacing: 8) {
-                Label("Lightmail needs one more Google permission for out of office and signatures", systemImage: "lock.shield").font(.headline)
-                Text("First, in Google Cloud Console → Google Auth Platform → Data Access → Add or remove scopes, add “…/auth/gmail.settings.basic” and save. Then click below and approve in your browser.")
+                Label("Allow Lightmail to manage these settings", systemImage: "lock.shield").font(.headline)
+                Text("To change out of office and signatures here, Google needs your OK. Click below and approve in your browser.")
                     .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                HStack {
-                    Button("Open Google Cloud Console") { NSWorkspace.shared.open(URL(string: "https://console.cloud.google.com/auth/scopes")!) }
-                    Button("Grant access") { store.grantSettingsAccess() }.prominentGlassButton().buttonBorderShape(.capsule)
-                }
+                Button("Grant access") { store.grantSettingsAccess() }.prominentGlassButton().buttonBorderShape(.capsule)
             }
         }
     }
