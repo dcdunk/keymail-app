@@ -108,4 +108,24 @@ extension AppStore {
         let me = try? store.unifiedMeContactWithKeys(toFetch: [CNContactImageDataKey as CNKeyDescriptor, CNContactThumbnailImageDataKey as CNKeyDescriptor])
         return me?.imageData ?? me?.thumbnailImageData
     }
+
+    /// Signs an existing Google or Microsoft account in again (new permissions, expired sign-in) without removing it.
+    func reauthenticate(_ a: String) {
+        if AppFlavor.isDemo { banner = "Signed in again."; return }
+        Task {
+            busy = "Finish signing in to \(a) in your browser…"
+            defer { busy = nil }
+            do {
+                let email: String
+                if isMicrosoft(a) { email = try await microsoft.signIn(hint: a) }
+                else { email = try await auth.signIn(hint: a).email; await checkSettingsAccess(a) }
+                guard email.lowercased() == a.lowercased() else {
+                    banner = "You signed in as \(email), not \(a). Try again and pick \(a)."; return
+                }
+                banner = "Signed in again as \(a)."
+                await loadAccountPhotos()
+                await tick()
+            } catch { report(error) }
+        }
+    }
 }

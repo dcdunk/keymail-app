@@ -34,6 +34,7 @@ struct SettingsPanel: View {
               items: ["Text size", "Appearance", "Email content", "Draft buttons", "Window opacity", "Email card opacity"]),
         .init(id: "hotkeys", title: "Hotkeys", icon: "keyboard", group: "Personalize", keywords: "keyboard shortcuts keys commands customize remap"),
         .init(id: "ai", title: "AI providers", icon: "sparkles", group: "Personalize", keywords: "claude codex gemini write summarize instant reply"),
+        .init(id: "agents", title: "MCP", icon: "point.3.connected.trianglepath.dotted", group: "Personalize", keywords: "mcp claude desktop chatgpt codex gemini agent connect automation"),
         .init(id: "about", title: "About", icon: "info.circle", group: "", keywords: "version updates privacy help"),
     ]
     static var groups: [(name: String, sections: [Section])] {
@@ -183,6 +184,7 @@ struct SettingsPanel: View {
         case "accounts": AccountsSettings()
         case "gmail": GmailSettings()
         case "ai": AIProviderSettings()
+        case "agents": AgentSettings()
         case "splits": SplitSettingsView(embedded: true)
         case "signatures": SignatureSettings()
         case "hotkeys": HotkeySettings()
@@ -431,6 +433,7 @@ struct AccountsSettings: View {
                 ForEach(Array(store.state.accounts.enumerated()), id: \.element) { i, acct in
                     let cloud = store.isICloud(acct)
                     HStack(spacing: 12) {
+                        Image(systemName: "line.3.horizontal").foregroundStyle(.tertiary).help("Drag to reorder")
                         BrandLogo(brand: store.brand(acct), size: 22)
                         VStack(alignment: .leading, spacing: 4) {
                             TextField("Name (e.g. Work, Personal)", text: Binding(
@@ -454,9 +457,13 @@ struct AccountsSettings: View {
                         }
                         Spacer()
                         KeyHint("⌘\(i + 1)")
+                        Button("Sign in again") { if cloud { showICloud = true } else { store.reauthenticate(acct) } }.quiet()
+                            .help(cloud ? "Enter a new app-specific password" : "Refresh this account's sign-in and permissions. Your mail stays as it is.")
                         Button("Remove") { removing = acct }.quiet().foregroundStyle(.red)
                     }.padding(.vertical, 4)
                 }
+                // Order sets ⌘1, ⌘2… and the account switcher.
+                .onMove { store.state.accounts.move(fromOffsets: $0, toOffset: $1) }
             }
             .frame(minHeight: 200)
             HStack {

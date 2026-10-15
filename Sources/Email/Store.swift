@@ -233,6 +233,9 @@ final class AppStore: ObservableObject {
     @Published var instantLoading: String?
     @Published var eventDraft: EventDraft?
     @Published var claudeTask: ClaudeTask?
+    @Published var agentApproval: AgentApproval?
+    @Published var agentLog: [AgentLogEntry] = []
+    var agentSocket: Int32?
     let calendar = CalendarService()
     var pendingG: Date?
     @Published var selectedID: String?
@@ -306,6 +309,7 @@ final class AppStore: ObservableObject {
         guard timer == nil else { return }
         RemoteContent.prepare()
         Disk.clearPreviewCache()
+        updateAgentBridge()
         Task {
             await loadVacations()
             await loadAccountPhotos()

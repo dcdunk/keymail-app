@@ -40,6 +40,7 @@ CLIENT="${GOOGLE_CLIENT_JSON:-$HOME/Library/Application Support/Email/google_cli
 if [[ -f "$CLIENT" ]]; then cp "$CLIENT" "$APP/Contents/Resources/google_client.json"
 else echo "Note: no Google client file at $CLIENT; this build will ask users to set one up."; fi
 cp .build/release/Email "$APP/Contents/MacOS/Email"
+cp .build/release/KeymailMCP "$APP/Contents/MacOS/keymail-mcp"   # the MCP server AI agents launch (Settings → MCP)
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -68,6 +69,7 @@ if [[ "$MODE" == "--release" ]]; then
   for item in "$SP/XPCServices/Installer.xpc" "$SP/XPCServices/Downloader.xpc" "$SP/Autoupdate" "$SP/Updater.app" "$APP/Contents/Frameworks/Sparkle.framework"; do
     codesign --force --options runtime --timestamp --preserve-metadata=entitlements --sign "$RELEASE_ID" "$item"
   done
+  codesign --force --options runtime --timestamp --sign "$RELEASE_ID" "$APP/Contents/MacOS/keymail-mcp"
   codesign --force --options runtime --timestamp --entitlements Email.entitlements --sign "$RELEASE_ID" "$APP"
   ZIP="$NAME-$VERSION.zip"
   ditto -c -k --keepParent "$APP" "$ZIP"
