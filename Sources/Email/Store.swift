@@ -62,6 +62,7 @@ struct SavedState: Codable {
     var autoArchive: [AutoArchiveCategory] = []
     var autoArchiveSince: Date?                // only mail arriving after this is auto-archived
     var autoArchived: [String] = []            // conversation ids, newest last (for the folder)
+    var microsoftPreview: [String] = []        // Microsoft accounts signed in for testing; not in the inbox until mail support lands
 
     init() {}
     /// Tolerates missing keys so adding a setting never wipes your accounts and splits.
@@ -87,6 +88,7 @@ struct SavedState: Codable {
         onboarded = v(.onboarded, !accounts.isEmpty)
         muted = v(.muted, base.muted); autoArchive = v(.autoArchive, base.autoArchive)
         autoArchiveSince = v(.autoArchiveSince, base.autoArchiveSince); autoArchived = v(.autoArchived, base.autoArchived)
+        microsoftPreview = v(.microsoftPreview, base.microsoftPreview)
     }
 }
 
@@ -251,6 +253,8 @@ final class AppStore: ObservableObject {
     @Published var busy: String?
 
     let auth = GoogleAuth()
+    let microsoft = MicrosoftAuth()
+    @Published var microsoftStatus: [String: String] = [:]   // preview account → what the inbox check found
     var timer: Timer?
     var keyMonitor: Any?
 
