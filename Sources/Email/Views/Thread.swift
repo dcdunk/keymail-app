@@ -40,6 +40,7 @@ struct ThreadView: View {
             }
             .padding(.horizontal, layout.compact ? 16 : 40).padding(.top, 4).padding(.bottom, 10)
             InstantReplyBar(conversation: conversation)
+            UnsubscribeBar(conversation: conversation)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     let older = Array(conversation.messages.dropLast())
@@ -432,5 +433,30 @@ final class PassThroughWebView: WKWebView {
         super.mouseExited(with: event)
         overLink = false
         NSCursor.arrow.set()
+    }
+}
+
+/// When the sender supports one-click unsubscribe (RFC 8058), say so at the top of the thread.
+/// Hidden for senders that failed authentication: unsubscribing would only confirm the address to a spammer.
+struct UnsubscribeBar: View {
+    @EnvironmentObject var store: AppStore
+    let conversation: Conversation
+    var body: some View {
+        if let m = conversation.messages.last(where: { !$0.listUnsubscribe.isEmpty }), m.authFailed != true,
+           case .oneClick = unsubscribeAction(header: m.listUnsubscribe, oneClickPost: m.listUnsubscribePost) {
+            let sender = parseAddresses(m.from).first.map { $0.name.isEmpty ? $0.email : $0.name } ?? "this sender"
+            HStack(spacing: 10) {
+                Image(systemName: "hand.raised").foregroundStyle(Theme.accent)
+                Text("You can unsubscribe from \(sender) with one click.").font(.scaled(.callout))
+                Spacer()
+                Button { store.unsubscribe() } label: {
+                    HStack(spacing: 6) { Text("Unsubscribe"); KeyHint("⇧U") }.padding(.horizontal, 4)
+                }.buttonBorderShape(.capsule)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Theme.accent.opacity(0.07)))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.accent.opacity(0.18)))
+            .padding(.horizontal, 40).padding(.bottom, 8)
+        }
     }
 }

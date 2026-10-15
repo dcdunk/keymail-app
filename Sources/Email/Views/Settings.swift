@@ -405,7 +405,7 @@ struct HotkeySettings: View {
                 ForEach(Hotkeys.fixed, id: \.title) { c in
                     LabeledContent(c.title) {
                         // Same size as the editable keys above, drawn as a flat keycap since these can't be clicked.
-                        Text(c.key).font(.scaled(size: 14, weight: .semibold, design: .monospaced))
+                        Text(KeyHint.display(c.key)).font(.scaled(size: 14, weight: .semibold, design: .monospaced))
                             .frame(minWidth: 32, minHeight: 22).padding(.horizontal, 7)
                             .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.07)))
                     }

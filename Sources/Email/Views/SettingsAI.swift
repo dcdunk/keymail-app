@@ -48,7 +48,7 @@ struct AIProviderSettings: View {
                     }.padding(.vertical, 6)
                 }
             }
-            Text("Used for: Write with AI (⌘J), Instant reply (⇧R), Summarize (I) and split suggestions.")
+            Text("Used for: Write with AI (⌘J), Instant reply (Shift R), Summarize (I) and split suggestions.")
                 .font(.scaled(.caption)).foregroundStyle(.secondary)
         }
         .padding(24)

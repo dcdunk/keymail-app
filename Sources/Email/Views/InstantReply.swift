@@ -30,7 +30,7 @@ struct InstantReplyBar: View {
                 Spacer()
             } else {
                 Button { store.instantReply() } label: { Label("Instant reply", systemImage: "sparkles") }
-                Text("⇧R, then 1 · 2 · 3").font(.scaled(.caption)).foregroundStyle(.tertiary)
+                HStack(spacing: 4) { KeyHint("⇧R"); Text("then").font(.scaled(.caption)).foregroundStyle(.secondary); KeyHint("1"); KeyHint("2"); KeyHint("3") }
                 Spacer()
             }
         }

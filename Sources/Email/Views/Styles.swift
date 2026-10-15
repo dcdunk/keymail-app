@@ -89,12 +89,14 @@ struct KeyHint: View {
     var size: CGFloat = 11
     init(_ key: String, size: CGFloat = 11) { self.key = key; self.size = size }
     var body: some View {
-        Text(key).font(.scaled(size: size, weight: .semibold, design: .rounded)).monospacedDigit()
+        Text(Self.display(key)).font(.scaled(size: size, weight: .semibold, design: .rounded)).monospacedDigit()
             .foregroundStyle(.primary.opacity(0.9))
             .padding(.horizontal, 5).padding(.vertical, 1.5)
             .frame(minWidth: size * 1.7 * Font.scale)
             .background(RoundedRectangle(cornerRadius: 5).fill(.primary.opacity(0.16)))
             .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(.primary.opacity(0.3), lineWidth: 0.75))
-            .accessibilityLabel("Shortcut \(key)")
+            .accessibilityLabel("Shortcut \(Self.display(key))")
     }
+    /// ⇧ reads as an up arrow to many people, so Shift is spelled out ("⇧U" → "Shift U").
+    static func display(_ key: String) -> String { key.replacingOccurrences(of: "⇧", with: "Shift ") }
 }
