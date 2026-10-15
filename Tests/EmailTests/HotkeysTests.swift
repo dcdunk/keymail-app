@@ -66,3 +66,25 @@ final class RecoveryTests: XCTestCase {
         XCTAssertEqual(r.map(\.1), ["cache2.json", "state.json"])
     }
 }
+
+final class SignatureColorTests: XCTestCase {
+    func attr(_ html: String) -> NSAttributedString {
+        try! NSAttributedString(data: Data(html.utf8), options: [.documentType: NSAttributedString.DocumentType.html,
+                                .characterEncoding: String.Encoding.utf8.rawValue], documentAttributes: nil)
+    }
+    func color(_ s: NSAttributedString, at i: Int) -> NSColor? { s.attribute(.foregroundColor, at: i, effectiveRange: nil) as? NSColor }
+
+    func testBlackFollowsTheScreenButIsSavedBlack() {
+        let original = attr(#"<p>Thank you, Danny</p><p style="color:#cc0000">PGA</p>"#)
+        let screen = SignatureColors.forScreen(original)
+        XCTAssertEqual(color(screen, at: 0), .textColor)                       // follows light/dark on screen
+        let red = color(screen, at: screen.length - 2)?.usingColorSpace(.sRGB)
+        XCTAssertEqual(red?.redComponent ?? 0, 0.8, accuracy: 0.02)              // a chosen colour is untouched
+        let saved = SignatureColors.forSending(screen)
+        XCTAssertTrue(SignatureColors.isBlack(color(saved, at: 0)!))           // recipients get black, never white
+        // Saved even while the app is in dark mode: the HTML must not carry light text.
+        NSApp?.appearance = NSAppearance(named: .darkAqua)
+        let html = RichTextEditor.Coordinator.bodyHTML(saved).lowercased()
+        XCTAssertFalse(html.contains("#ffffff") || html.contains("255, 255, 255") || html.contains("#fff;"), html)
+    }
+}

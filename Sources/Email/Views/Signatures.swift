@@ -9,6 +9,7 @@ import QuickLook
 // MARK: Settings → Signatures
 
 struct SignatureSettings: View {
+    @Environment(\.colorScheme) private var scheme
     @EnvironmentObject var store: AppStore
     @State private var selection: String?
     @State private var htmlMode = false
@@ -56,11 +57,11 @@ struct SignatureSettings: View {
                         TextEditor(text: binding).font(.scaled(size: 12, design: .monospaced))
                             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.primary.opacity(0.1)))
                         Text("Preview").font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary)
-                        EmailWebView(html: binding.wrappedValue).frame(minHeight: 80).clipShape(RoundedRectangle(cornerRadius: 10))
+                        EmailWebView(html: binding.wrappedValue, dark: scheme == .dark).frame(minHeight: 80).clipShape(RoundedRectangle(cornerRadius: 10))
                     } else if isComplexHTML(binding.wrappedValue) {
                         // Tables, logos and rounded corners can't go through the rich-text editor unchanged,
                         // so show it exactly as recipients will see it instead.
-                        EmailWebView(html: binding.wrappedValue).frame(minHeight: 100).clipShape(RoundedRectangle(cornerRadius: 10))
+                        EmailWebView(html: binding.wrappedValue, dark: scheme == .dark).frame(minHeight: 100).clipShape(RoundedRectangle(cornerRadius: 10))
                         Text("This signature has a designed layout (table, logo or rounded corners). It's kept exactly as is. Edit it in HTML, or paste/import a new one.")
                             .font(.scaled(.caption)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         Spacer()
@@ -122,12 +123,13 @@ struct RichTextEditor: NSViewRepresentable {
                 : (try? NSAttributedString(data: Data(source.utf8),
                                            options: [.documentType: NSAttributedString.DocumentType.html, .characterEncoding: String.Encoding.utf8.rawValue],
                                            documentAttributes: nil)) ?? NSAttributedString(string: html)
-            tv.textStorage?.setAttributedString(attr)
+            tv.textStorage?.setAttributedString(SignatureColors.forScreen(attr))
+            tv.typingAttributes[.foregroundColor] = NSColor.textColor
         }
 
         func textDidChange(_ n: Notification) {
             guard let tv = n.object as? NSTextView, let storage = tv.textStorage else { return }
-            let html = storage.length == 0 ? "" : Self.bodyHTML(storage)
+            let html = storage.length == 0 ? "" : Self.bodyHTML(SignatureColors.forSending(storage))
             lastHTML = html
             parent.html = html
         }
@@ -152,6 +154,25 @@ struct RichTextEditor: NSViewRepresentable {
             }
             return out.trimmingCharacters(in: .whitespacesAndNewlines)
         }
+    }
+}
+
+/// HTML's default text colour is black, which disappears on a dark editor. On screen, black (or unset) text uses
+/// the system text colour so it follows light/dark mode; when saved it goes back to black, so recipients never get
+/// white text. Any colour the signature chose on purpose (a red name, a grey title) is left alone both ways.
+enum SignatureColors {
+    static func forScreen(_ s: NSAttributedString) -> NSAttributedString { remap(s) { c in c == nil || isBlack(c!) ? .textColor : nil } }
+    static func forSending(_ s: NSAttributedString) -> NSAttributedString { remap(s) { c in c == .textColor ? .black : nil } }
+    static func isBlack(_ c: NSColor) -> Bool {
+        guard let rgb = c.usingColorSpace(.sRGB) else { return false }
+        return rgb.redComponent < 0.08 && rgb.greenComponent < 0.08 && rgb.blueComponent < 0.08
+    }
+    private static func remap(_ s: NSAttributedString, _ f: (NSColor?) -> NSColor?) -> NSAttributedString {
+        let out = NSMutableAttributedString(attributedString: s)
+        out.enumerateAttribute(.foregroundColor, in: NSRange(location: 0, length: out.length)) { v, r, _ in
+            if let c = f(v as? NSColor) { out.addAttribute(.foregroundColor, value: c, range: r) }
+        }
+        return out
     }
 }
 
@@ -182,12 +203,13 @@ final class SignatureTextView: NSTextView {
 /// The signature as recipients will see it, below what you type. Not editable here, so it can't be deleted by accident.
 struct ComposeSignature: View {
     @EnvironmentObject var store: AppStore
+    @Environment(\.colorScheme) private var scheme
     @ObservedObject var model: ComposeModel
     var body: some View {
         if let plain = model.draft.signaturePlain {
             HStack(alignment: .top, spacing: 8) {
                 if let html = model.draft.signatureHTML {
-                    EmailWebView(html: html, padding: "10px 14px").frame(maxWidth: 520).clipShape(RoundedRectangle(cornerRadius: 10))
+                    EmailWebView(html: html, padding: "10px 14px", dark: scheme == .dark).frame(maxWidth: 520).clipShape(RoundedRectangle(cornerRadius: 10))
                 } else {
                     Text(plain).font(.scaled(size: 14)).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
                 }
