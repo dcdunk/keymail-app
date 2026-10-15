@@ -470,3 +470,36 @@ final class SenderLogoTests: XCTestCase {
         XCTAssertEqual(logoSites(for: "trinet.com", senderName: "DoNotReply").first, "trinet.com")
     }
 }
+
+final class MCPTests: XCTestCase {
+    func reply(_ line: String) async -> [String: Any]? {
+        let out = await mcpReply(to: line, tools: { [["name": "list_inbox"]] }, call: { name, args in ("called \(name) \(args["limit"] ?? "")", false) })
+        return out.flatMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any] }
+    }
+    func testHandshakeListAndCall() async throws {
+        let iniRaw = await reply(#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}"#)
+        let ini = try XCTUnwrap(iniRaw)
+        XCTAssertEqual((ini["result"] as? [String: Any])?["protocolVersion"] as? String, "2025-06-18")
+        let none = await mcpReply(to: #"{"jsonrpc":"2.0","method":"notifications/initialized"}"#, tools: { [] }, call: { _, _ in ("", false) })
+        XCTAssertNil(none)
+        let listRaw = await reply(#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#)
+        let list = try XCTUnwrap(listRaw)
+        XCTAssertEqual(((list["result"] as? [String: Any])?["tools"] as? [[String: Any]])?.first?["name"] as? String, "list_inbox")
+        let callRaw = await reply(#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_inbox","arguments":{"limit":5}}}"#)
+        let call = try XCTUnwrap(callRaw)
+        let content = ((call["result"] as? [String: Any])?["content"] as? [[String: Any]])?.first?["text"] as? String
+        XCTAssertEqual(content, "called list_inbox 5")
+        let badRaw = await reply(#"{"jsonrpc":"2.0","id":4,"method":"nope"}"#)
+        let bad = try XCTUnwrap(badRaw)
+        XCTAssertEqual((bad["error"] as? [String: Any])?["code"] as? Int, -32601)
+    }
+    func testClaudeDesktopConfigKeepsOtherServers() throws {
+        let old = Data(#"{"mcpServers":{"other":{"command":"x"}},"theme":"dark"}"#.utf8)
+        let out = try XCTUnwrap(claudeDesktopConfig(existing: old, name: "keymail", command: "/A/keymail-mcp"))
+        let j = try XCTUnwrap(JSONSerialization.jsonObject(with: out) as? [String: Any])
+        let servers = try XCTUnwrap(j["mcpServers"] as? [String: Any])
+        XCTAssertNotNil(servers["other"]); XCTAssertEqual((servers["keymail"] as? [String: Any])?["command"] as? String, "/A/keymail-mcp")
+        XCTAssertEqual(j["theme"] as? String, "dark")
+        XCTAssertNil(claudeDesktopConfig(existing: Data("{oops".utf8), name: "k", command: "c"))
+    }
+}

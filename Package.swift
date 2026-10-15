@@ -9,6 +9,7 @@ let package = Package(
         .target(name: "EmailCore"),
         .executableTarget(name: "Email", dependencies: ["EmailCore", .product(name: "Sparkle", package: "Sparkle")],
                           linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]),
+        .executableTarget(name: "KeymailMCP", dependencies: ["EmailCore"]),   // the keymail-mcp helper that AI agents launch
         .testTarget(name: "EmailCoreTests", dependencies: ["EmailCore"]),
         .testTarget(name: "EmailTests", dependencies: ["Email"]),
     ]
