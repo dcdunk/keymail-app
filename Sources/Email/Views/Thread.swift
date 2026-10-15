@@ -21,21 +21,21 @@ struct ThreadView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                Text(conversation.latest.subject).font(.system(size: 22, weight: .semibold)).textSelection(.enabled).lineLimit(2)
+                Text(conversation.latest.subject).font(.scaled(size: 22, weight: .semibold)).textSelection(.enabled).lineLimit(2)
                 Spacer()
                 if conversation.messages.count > 1 {
                     Button { newestFirst.toggle() } label: {
-                        Label(newestFirst ? "Newest first" : "Oldest first", systemImage: "arrow.up.arrow.down").font(.callout).padding(.horizontal, 6)
+                        Label(newestFirst ? "Newest first" : "Oldest first", systemImage: "arrow.up.arrow.down").font(.scaled(.callout)).padding(.horizontal, 6)
                     }.buttonBorderShape(.capsule).help("Change the order of messages in this thread")
                 }
                 // Shows the email's current look; click to flip it (saved, same as Settings → Email content).
                 Button { contentTheme = contentDark ? "light" : "dark" } label: {
-                    Image(systemName: contentDark ? "moon.fill" : "sun.max.fill").font(.callout).frame(width: 18).padding(.horizontal, 2)
+                    Image(systemName: contentDark ? "moon.fill" : "sun.max.fill").font(.scaled(.callout)).frame(width: 18).padding(.horizontal, 2)
                 }
                 .buttonBorderShape(.capsule)
                 .help(contentDark ? "Emails are dark. Click for light." : "Emails are light. Click for dark.")
                 Button { store.threadOpen = false } label: {
-                    Label("Back", systemImage: "chevron.left").font(.callout).padding(.horizontal, 6)
+                    Label("Back", systemImage: "chevron.left").font(.scaled(.callout)).padding(.horizontal, 6)
                 }.buttonBorderShape(.capsule).help("Back to the list (Esc)")
             }
             .padding(.horizontal, layout.compact ? 16 : 40).padding(.top, 4).padding(.bottom, 10)
@@ -71,16 +71,16 @@ struct ThreadView: View {
                             Image(systemName: icon)
                             if !layout.compact {
                                 Text(l)
-                                Text(k).font(.system(size: 10, weight: .semibold)).foregroundStyle(.tertiary)
+                                Text(k).font(.scaled(size: 10, weight: .semibold)).foregroundStyle(.tertiary)
                             }
-                        }.font(.callout).padding(.horizontal, 4)
+                        }.font(.scaled(.callout)).padding(.horizontal, 4)
                     }.buttonBorderShape(.capsule).help("\(l) (\(k))")
                 }
                 Spacer()
                 Button { store.move(-1) } label: { Image(systemName: "chevron.up") }.buttonBorderShape(.circle).help("Previous (K)")
                 Button { store.move(1) } label: { Image(systemName: "chevron.down") }.buttonBorderShape(.circle).help("Next (J)")
             }
-            .font(.callout).foregroundStyle(.secondary)
+            .font(.scaled(.callout)).foregroundStyle(.secondary)
             .padding(.horizontal, layout.compact ? 16 : 40).padding(.vertical, 12)
         }
         .id(conversation.id) // fresh expand state per thread
@@ -98,9 +98,9 @@ struct CollapsedMessage: View {
                 Text(parseAddresses(message.from).first?.display ?? message.from).fontWeight(.medium).lineLimit(1)
                 Text(message.snippet).foregroundStyle(.secondary).lineLimit(1)
                 Spacer()
-                Text(shortDate(message.date)).font(.callout).foregroundStyle(.secondary)
+                Text(shortDate(message.date)).font(.scaled(.callout)).foregroundStyle(.secondary)
             }
-            .font(.system(size: 14))
+            .font(.scaled(size: 14))
             .padding(.horizontal, 14).padding(.vertical, 10)
             .background(RoundedRectangle(cornerRadius: 14).fill(Color.primary.opacity(0.04)))
             .contentShape(Rectangle())
@@ -115,7 +115,7 @@ struct Avatar: View {
         let key = address?.email ?? "?"
         Circle().fill(Theme.chip(key).opacity(0.2)).frame(width: size, height: size)
             .overlay(Text(String((address?.display ?? "?").prefix(1)).uppercased())
-                .font(.system(size: size * 0.42, weight: .semibold)).foregroundStyle(Theme.chip(key)))
+                .font(.scaled(size: size * 0.42, weight: .semibold)).foregroundStyle(Theme.chip(key)))
     }
 }
 
@@ -138,15 +138,15 @@ struct MessageCard: View {
                 Avatar(address: from)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 8) {
-                        Text(from?.display ?? message.from).font(.system(size: 15, weight: .semibold))
-                        if let e = from?.email, from?.name.isEmpty == false { Text(e).font(.callout).foregroundStyle(.secondary) }
+                        Text(from?.display ?? message.from).font(.scaled(size: 15, weight: .semibold))
+                        if let e = from?.email, from?.name.isEmpty == false { Text(e).font(.scaled(.callout)).foregroundStyle(.secondary) }
                     }
-                    Text(recipients).font(.callout).foregroundStyle(.secondary).lineLimit(2)
+                    Text(recipients).font(.scaled(.callout)).foregroundStyle(.secondary).lineLimit(2)
                 }
                 Spacer()
                 PhishingPill(senderReasons: senderWarnings(message, known: store.knownContacts),
                              links: message.html.map(suspiciousLinks) ?? [])
-                Text(message.date.formatted(date: .abbreviated, time: .shortened)).font(.callout).foregroundStyle(.secondary)
+                Text(message.date.formatted(date: .abbreviated, time: .shortened)).font(.scaled(.callout)).foregroundStyle(.secondary)
                 if collapsible {
                     Button(action: collapse) { Image(systemName: "chevron.up") }.buttonStyle(.plain).foregroundStyle(.secondary)
                 }
@@ -187,7 +187,7 @@ struct MessageCard: View {
                                         Text(a.name).lineLimit(1)
                                         Text(ByteCountFormatter.string(fromByteCount: Int64(a.size), countStyle: .file)).foregroundStyle(.secondary)
                                     } icon: { Image(systemName: icon(a.mimeType)) }
-                                    .font(.callout)
+                                    .font(.scaled(.callout))
                                 }.buttonStyle(.plain).handCursor().help("Click to preview")
                                 Divider().frame(height: 16).padding(.horizontal, 6)
                                 Button { store.preview(account: message.account, messageId: message.id, attachmentId: a.id, name: a.name) } label: {
@@ -230,7 +230,7 @@ struct MessageCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 if let q = parts.quoted {
                     Button { showQuoted.toggle() } label: {
-                        Text("•••").font(.system(size: 12, weight: .bold)).padding(.horizontal, 8).padding(.vertical, 1)
+                        Text("•••").font(.scaled(size: 12, weight: .bold)).padding(.horizontal, 8).padding(.vertical, 1)
                             .background(Capsule().fill(Color.primary.opacity(0.08)))
                     }.buttonStyle(.plain).handCursor().help(showQuoted ? "Hide quoted text" : "Show quoted text")
                     if showQuoted { EmailWebView(html: plainToHTML(q), dark: contentDark, themed: contentTheme == "auto").opacity(0.7) }
@@ -270,6 +270,7 @@ struct EmailWebView: NSViewRepresentable {
         config.userContentController.addUserScript(WKUserScript(source: Coordinator.darkScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         let v = PassThroughWebView(frame: .zero, configuration: config)
         v.navigationDelegate = context.coordinator
+        v.pageZoom = Font.scale
         v.uiDelegate = context.coordinator
         if !themed { v.appearance = NSAppearance(named: .aqua) } // HTML emails render as their senders designed them (light)
         v.setValue(false, forKey: "drawsBackground") // the page's own background (below) decides how see-through it is

@@ -15,31 +15,31 @@ struct SplitSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("Split Inbox").font(.title2.weight(.semibold))
+                Text("Split Inbox").font(.scaled(.title2).weight(.semibold))
                 Spacer()
                 Button("Build your own") { store.state.splits.append(Split(name: "New split", query: "")) }
                 Button { store.suggestSplits() } label: { Label("Suggest with \(store.ai.name)", systemImage: "sparkles") }
             }
             Text("Define each split with a search, e.g. `from:hubspot.com OR subject:\"new lead\"`. Also works: to:, cc:, label:, has:attachment, is:unread, is:starred, -term to exclude. Drag to reorder. Aim for 3 to 7.")
-                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                .font(.scaled(.callout)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             List {
                 ForEach($store.state.splits) { $split in
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
                             Image(systemName: "line.3.horizontal").foregroundStyle(.tertiary)
-                            TextField("Name", text: $split.name).font(.headline).textFieldStyle(.plain)
+                            TextField("Name", text: $split.name).font(.scaled(.headline)).textFieldStyle(.plain)
                             Spacer()
                             Toggle("On", isOn: $split.enabled).toggleStyle(.switch).controlSize(.small)
                             Button(role: .destructive) { store.state.splits.removeAll { $0.id == split.id } } label: { Image(systemName: "trash") }
                                 .buttonStyle(.plain).foregroundStyle(.secondary)
                         }
                         TextField(split.query.hasPrefix("is:") ? "" : "Definition, e.g. from:boss@company.com", text: $split.query)
-                            .textFieldStyle(.roundedBorder).font(.system(.callout, design: .monospaced))
+                            .textFieldStyle(.roundedBorder).font(.scaled(.callout, design: .monospaced))
                             .disabled(split.query == "is:reminder" || split.query == "is:team")
                         HStack(spacing: 18) {
                             Toggle("Also show in Important / Other", isOn: $split.alsoInMain)
                             Toggle("Hide when empty", isOn: $split.hideWhenEmpty)
-                        }.font(.callout).toggleStyle(.checkbox)
+                        }.font(.scaled(.callout)).toggleStyle(.checkbox)
                     }.padding(.vertical, 6)
                 }
                 .onMove { store.state.splits.move(fromOffsets: $0, toOffset: $1) }
@@ -47,7 +47,7 @@ struct SplitSettingsView: View {
             .frame(minHeight: 220)
             let library = splitLibrary.filter { lib in !store.state.splits.contains { $0.name == lib.name } }
             if !library.isEmpty || !store.splitSuggestions.isEmpty {
-                Text("Add a split").font(.headline)
+                Text("Add a split").font(.scaled(.headline))
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack {
                         ForEach(library) { lib in Button(lib.name) { store.state.splits.append(lib) } }
@@ -60,7 +60,7 @@ struct SplitSettingsView: View {
                 }
             }
             HStack {
-                Text("Important and Other are always last.").font(.callout).foregroundStyle(.secondary)
+                Text("Important and Other are always last.").font(.scaled(.callout)).foregroundStyle(.secondary)
                 Spacer()
                 if !embedded { Button("Done") { dismiss() }.keyboardShortcut(.defaultAction) }
             }

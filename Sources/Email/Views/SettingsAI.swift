@@ -13,30 +13,29 @@ struct AIProviderSettings: View {
     @State private var installed: [String: String] = [:]   // id → path
     @State private var status: [String: String] = [:]      // id → last test result
     @State private var testing: String?
+    @State private var customizing: Set<String> = []       // providers showing the "Other…" model field
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("AI providers").font(.headline)
+            Text("AI providers").font(.scaled(.headline))
             Text("Keymail uses an AI command-line tool that's already signed in on this Mac, billed to that tool's own plan. It runs read-only: email content can only produce text, never run commands or change files.")
-                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                .font(.scaled(.callout)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             List {
                 ForEach(AIProvider.all) { p in
                     let isOn = store.state.aiProvider == p.id
                     HStack(alignment: .top, spacing: 12) {
                         Image(systemName: isOn ? "largecircle.fill.circle" : "circle")
-                            .foregroundStyle(isOn ? Theme.accent : .secondary).font(.title3)
+                            .foregroundStyle(isOn ? Theme.accent : .secondary).font(.scaled(.title3))
                             .onTapGesture { store.state.aiProvider = p.id }
                         VStack(alignment: .leading, spacing: 5) {
                             HStack {
-                                Text(p.name).font(.headline)
-                                Text(p.maker).font(.caption).foregroundStyle(.secondary)
-                                if isOn { Text("In use").font(.caption.weight(.semibold)).foregroundStyle(Theme.accent) }
+                                BrandLogo(brand: p.id, size: 18)
+                                Text(p.name).font(.scaled(.headline))
+                                Text(p.maker).font(.scaled(.caption)).foregroundStyle(.secondary)
+                                if isOn { Text("In use").font(.scaled(.caption).weight(.semibold)).foregroundStyle(Theme.accent) }
                             }
                             statusLine(p)
                             if installed[p.id] != nil {
-                                TextField("Model (blank = the tool's default)", text: Binding(
-                                    get: { store.state.aiModels[p.id] ?? "" },
-                                    set: { store.state.aiModels[p.id] = $0 }))
-                                    .textFieldStyle(.roundedBorder).font(.caption).frame(maxWidth: 280)
+                                modelPicker(p)
                             }
                         }
                         Spacer()
@@ -50,7 +49,7 @@ struct AIProviderSettings: View {
                 }
             }
             Text("Used for: Write with AI (⌘J), Instant reply (⇧R), Summarize (I) and split suggestions.")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.scaled(.caption)).foregroundStyle(.secondary)
         }
         .padding(24)
         .task {
@@ -64,19 +63,48 @@ struct AIProviderSettings: View {
     @ViewBuilder func statusLine(_ p: AIProvider) -> some View {
         if let s = status[p.id] {
             Label(s, systemImage: s == "Connected" ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .font(.caption).foregroundStyle(s == "Connected" ? .green : .orange).fixedSize(horizontal: false, vertical: true)
+                .font(.scaled(.caption)).foregroundStyle(s == "Connected" ? .green : .orange).fixedSize(horizontal: false, vertical: true)
         } else if let path = installed[p.id] {
-            Text("Installed at \(path) · press Test to check sign-in").font(.caption).foregroundStyle(.secondary)
+            Text("Installed at \(path) · press Test to check sign-in").font(.scaled(.caption)).foregroundStyle(.secondary)
         } else {
-            Text("Not installed").font(.caption).foregroundStyle(.secondary)
+            Text("Not installed").font(.scaled(.caption)).foregroundStyle(.secondary)
+        }
+    }
+
+    /// Picking a model saves its CLI ID (passed as --model / -m) and runs Test, so a model your plan
+    /// doesn't include shows its error right away. "Other…" takes any ID the tool accepts.
+    @ViewBuilder func modelPicker(_ p: AIProvider) -> some View {
+        let current = store.state.aiModels[p.id] ?? ""
+        let known = current.isEmpty || p.models.contains { $0.id == current }
+        HStack(spacing: 8) {
+            Picker("Model", selection: Binding(
+                get: { known && !customizing.contains(p.id) ? current : "other" },
+                set: { v in
+                    if v == "other" { customizing.insert(p.id); return }
+                    customizing.remove(p.id); store.state.aiModels[p.id] = v; test(p)
+                })) {
+                Text("Default (the tool decides)").tag("")
+                ForEach(p.models, id: \.id) { Text($0.name).tag($0.id) }
+                Divider()
+                Text("Other…").tag("other")
+            }
+            .font(.scaled(.caption)).fixedSize()
+            if !known || customizing.contains(p.id) {
+                TextField("Model ID", text: Binding(get: { current }, set: { store.state.aiModels[p.id] = $0 }))
+                    .textFieldStyle(.roundedBorder).font(.scaled(.caption)).frame(maxWidth: 200)
+                    .onSubmit { test(p) }
+            }
         }
     }
 
     func test(_ p: AIProvider) {
         testing = p.id
         Task {
-            do { _ = try await AI.run("Reply with the single word OK.", with: p, model: store.state.aiModels[p.id]); status[p.id] = "Connected" }
-            catch { status[p.id] = "\(error.localizedDescription) \(p.signInHint)" }
+            let model = store.state.aiModels[p.id]
+            let result: String
+            do { _ = try await AI.run("Reply with the single word OK.", with: p, model: model); result = "Connected" }
+            catch { result = "\(error.localizedDescription) \(p.signInHint)" }
+            if store.state.aiModels[p.id] == model { status[p.id] = result } // ignore a test of a model since switched away from
             testing = nil
         }
     }

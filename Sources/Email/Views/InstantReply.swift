@@ -19,18 +19,18 @@ struct InstantReplyBar: View {
                 ForEach(Array(options.enumerated()), id: \.offset) { i, text in
                     Button { store.useInstantReply(i) } label: {
                         HStack(alignment: .top, spacing: 6) {
-                            Text("\(i + 1)").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                            Text("\(i + 1)").font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary)
                             Text(text).lineLimit(2).multilineTextAlignment(.leading)
-                        }.font(.callout).frame(maxWidth: .infinity, alignment: .leading)
+                        }.font(.scaled(.callout)).frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             } else if store.instantLoading == conversation.id {
                 ProgressView().controlSize(.small)
-                Text("\(store.ai.name) is writing replies…").font(.callout).foregroundStyle(.secondary)
+                Text("\(store.ai.name) is writing replies…").font(.scaled(.callout)).foregroundStyle(.secondary)
                 Spacer()
             } else {
                 Button { store.instantReply() } label: { Label("Instant reply", systemImage: "sparkles") }
-                Text("⇧R, then 1 · 2 · 3").font(.caption).foregroundStyle(.tertiary)
+                Text("⇧R, then 1 · 2 · 3").font(.scaled(.caption)).foregroundStyle(.tertiary)
                 Spacer()
             }
         }

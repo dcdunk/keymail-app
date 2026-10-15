@@ -22,19 +22,19 @@ extension AppStore {
         var e: [MenuEntry] = [
             MenuEntry(title: "Open", icon: "envelope.open", key: "↵") { self.open(c) },
             .divider,
-            MenuEntry(title: "Reply", icon: "arrowshape.turn.up.left", key: "R") { self.act(on: c) { self.reply(all: false) } },
-            MenuEntry(title: "Reply all", icon: "arrowshape.turn.up.left.2", key: "A") { self.act(on: c) { self.reply(all: true) } },
-            MenuEntry(title: "Forward", icon: "arrowshape.turn.up.right", key: "F") { self.act(on: c) { self.forward() } },
+            MenuEntry(title: "Reply", icon: "arrowshape.turn.up.left", key: Hotkeys.label("r")) { self.act(on: c) { self.reply(all: false) } },
+            MenuEntry(title: "Reply all", icon: "arrowshape.turn.up.left.2", key: Hotkeys.label("a")) { self.act(on: c) { self.reply(all: true) } },
+            MenuEntry(title: "Forward", icon: "arrowshape.turn.up.right", key: Hotkeys.label("f")) { self.act(on: c) { self.forward() } },
             .divider,
-            MenuEntry(title: "Mark done", icon: "checkmark", key: "E") { self.act(on: c) { self.markDone() } },
-            MenuEntry(title: c.isStarred ? "Unstar" : "Star", icon: c.isStarred ? "star.slash" : "star", key: "S") { self.act(on: c) { self.toggleStar() } },
-            MenuEntry(title: c.isUnread ? "Mark as read" : "Mark as unread", icon: c.isUnread ? "envelope.open" : "envelope.badge", key: "U") { self.act(on: c) { self.toggleUnread() } },
-            MenuEntry(title: "Remind me", icon: "clock", key: "H",
+            MenuEntry(title: "Mark done", icon: "checkmark", key: Hotkeys.label("e")) { self.act(on: c) { self.markDone() } },
+            MenuEntry(title: c.isStarred ? "Unstar" : "Star", icon: c.isStarred ? "star.slash" : "star", key: Hotkeys.label("s")) { self.act(on: c) { self.toggleStar() } },
+            MenuEntry(title: c.isUnread ? "Mark as read" : "Mark as unread", icon: c.isUnread ? "envelope.open" : "envelope.badge", key: Hotkeys.label("u")) { self.act(on: c) { self.toggleUnread() } },
+            MenuEntry(title: "Remind me", icon: "clock", key: Hotkeys.label("h"),
                       submenu: remindEntries(c, ifNoReply: true) + [.divider] + remindEntries(c, ifNoReply: false)),
             MenuEntry(title: state.muted.contains(c.id) ? "Unmute" : "Mute", icon: state.muted.contains(c.id) ? "bell" : "bell.slash", key: "⇧M") { self.act(on: c) { self.toggleMute() } },
         ]
         if !isICloud(c.account), let labels = gmailLabels[c.account], !labels.isEmpty {
-            e.append(MenuEntry(title: "Label", icon: "tag", key: "L", submenu: labels.map { l in
+            e.append(MenuEntry(title: "Label", icon: "tag", key: Hotkeys.label("l"), submenu: labels.map { l in
                 MenuEntry(title: l.name, icon: "tag", checked: c.labels.contains(l.id)) { self.setLabel(l.id, on: c, !c.labels.contains(l.id)) }
             }))
         }
@@ -127,7 +127,7 @@ struct PopupLayer: View {
         switch e.kind {
         case .divider: Divider().padding(.vertical, 4).padding(.horizontal, 8)
         case .header:
-            Text(e.title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.tertiary)
+            Text(e.title).font(.scaled(size: 11, weight: .semibold)).foregroundStyle(.tertiary)
                 .padding(.horizontal, 10).padding(.top, 6).padding(.bottom, 3)
         case .item:
             let on = store.popupIndex == i
@@ -135,20 +135,20 @@ struct PopupLayer: View {
                 HStack(spacing: 10) {
                     if let l = e.letter {
                         Circle().fill(Theme.chip(l).opacity(0.2)).frame(width: 26, height: 26)
-                            .overlay(Text(String(e.title.prefix(1)).uppercased()).font(.system(size: 11.5, weight: .semibold)).foregroundStyle(Theme.chip(l)))
+                            .overlay(Text(String(e.title.prefix(1)).uppercased()).font(.scaled(size: 11.5, weight: .semibold)).foregroundStyle(Theme.chip(l)))
                     } else if let icon = e.icon {
-                        Image(systemName: icon).font(.system(size: 13)).frame(width: 22)
+                        Image(systemName: icon).font(.scaled(size: 13)).frame(width: 22)
                             .foregroundStyle(e.destructive ? Color.red : Color.secondary)
                     }
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(e.title).font(.system(size: 13, weight: e.letter != nil ? .medium : .regular)).lineLimit(1)
+                        Text(e.title).font(.scaled(size: 13, weight: e.letter != nil ? .medium : .regular)).lineLimit(1)
                             .foregroundStyle(e.destructive ? Color.red : Color.primary)
-                        if let sub = e.subtitle { Text(sub).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1) }
+                        if let sub = e.subtitle { Text(sub).font(.scaled(size: 11)).foregroundStyle(.secondary).lineLimit(1) }
                     }
                     Spacer(minLength: 8)
-                    if e.checked { Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(Theme.accent) }
-                    if let k = e.key { Text(k).font(.system(size: 11, weight: .medium)).foregroundStyle(.tertiary).monospacedDigit() }
-                    if e.submenu != nil { Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(.tertiary) }
+                    if e.checked { Image(systemName: "checkmark").font(.scaled(size: 11, weight: .bold)).foregroundStyle(Theme.accent) }
+                    if let k = e.key { Text(k).font(.scaled(size: 11, weight: .medium)).foregroundStyle(.tertiary).monospacedDigit() }
+                    if e.submenu != nil { Image(systemName: "chevron.right").font(.scaled(size: 10, weight: .semibold)).foregroundStyle(.tertiary) }
                 }
                 .padding(.horizontal, 8).frame(minHeight: e.subtitle != nil || e.letter != nil ? 40 : 30)
                 .background(RoundedRectangle(cornerRadius: 8).fill(on ? Color.primary.opacity(0.08) : e.checked ? Theme.selection : .clear))
@@ -208,9 +208,9 @@ struct SummaryCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Label("Summary", systemImage: "text.append").font(.title3.weight(.semibold))
+                Label("Summary", systemImage: "text.append").font(.scaled(.title3).weight(.semibold))
                 Spacer()
-                Button { store.summary = nil } label: { Image(systemName: "xmark").font(.system(size: 12, weight: .semibold)).frame(width: 26, height: 26) }
+                Button { store.summary = nil } label: { Image(systemName: "xmark").font(.scaled(size: 12, weight: .semibold)).frame(width: 26, height: 26) }
                     .buttonStyle(.plain).foregroundStyle(.secondary).handCursor().help("Close (Esc)")
             }
             ScrollView { Text(text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
@@ -225,15 +225,15 @@ struct LinkWarningCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
-                Image(systemName: "exclamationmark.shield.fill").font(.system(size: 22)).foregroundStyle(.orange)
+                Image(systemName: "exclamationmark.shield.fill").font(.scaled(size: 22)).foregroundStyle(.orange)
                     .frame(width: 44, height: 44).background(Circle().fill(Color.orange.opacity(0.14)))
-                Text("This link may not be safe").font(.title3.weight(.semibold))
+                Text("This link may not be safe").font(.scaled(.title3).weight(.semibold))
             }
             Text(prompt.reason).fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 4) {
-                Text("It really opens").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                Text(prompt.url.host ?? prompt.url.absoluteString).font(.system(.callout, design: .monospaced).weight(.semibold))
-                Text(prompt.url.absoluteString).font(.caption).foregroundStyle(.secondary).lineLimit(2).truncationMode(.middle).textSelection(.enabled)
+                Text("It really opens").font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary)
+                Text(prompt.url.host ?? prompt.url.absoluteString).font(.scaled(.callout, design: .monospaced).weight(.semibold))
+                Text(prompt.url.absoluteString).font(.scaled(.caption)).foregroundStyle(.secondary).lineLimit(2).truncationMode(.middle).textSelection(.enabled)
             }
             .padding(12).frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.05)))
@@ -255,9 +255,9 @@ extension View {
                 ZStack {
                     Color.black.opacity(0.28).onTapGesture(perform: cancel)
                     VStack(alignment: .leading, spacing: 12) {
-                        Image(systemName: icon).font(.system(size: 20)).foregroundStyle(.red)
+                        Image(systemName: icon).font(.scaled(size: 20)).foregroundStyle(.red)
                             .frame(width: 42, height: 42).background(Circle().fill(Color.red.opacity(0.12)))
-                        Text(title).font(.title3.weight(.semibold)).fixedSize(horizontal: false, vertical: true)
+                        Text(title).font(.scaled(.title3).weight(.semibold)).fixedSize(horizontal: false, vertical: true)
                         Text(message).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         HStack {
                             Spacer()
@@ -286,7 +286,7 @@ extension View {
                         .overlay(alignment: .topTrailing) {
                             if closeButton {
                                 Button { isPresented.wrappedValue = false } label: {
-                                    Image(systemName: "xmark").font(.system(size: 12, weight: .semibold)).frame(width: 28, height: 28).contentShape(Circle())
+                                    Image(systemName: "xmark").font(.scaled(size: 12, weight: .semibold)).frame(width: 28, height: 28).contentShape(Circle())
                                 }
                                 .buttonStyle(.plain).foregroundStyle(.secondary).handCursor().keyboardShortcut(.cancelAction).help("Close (Esc)")
                                 .padding(14)

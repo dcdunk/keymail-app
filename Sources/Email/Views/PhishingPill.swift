@@ -17,7 +17,7 @@ struct PhishingPill: View {
             MenuButton(width: 340, entries: { [] }, custom: { AnyView(details) }) {
                 Label(senderReasons.isEmpty ? "\(links.count) suspicious link\(links.count == 1 ? "" : "s")" : "Check sender",
                       systemImage: "exclamationmark.shield.fill")
-                    .font(.caption.weight(.medium)).foregroundStyle(.orange)
+                    .font(.scaled(.caption).weight(.medium)).foregroundStyle(.orange)
                     .padding(.horizontal, 8).padding(.vertical, 3)
                     .background(Capsule().fill(Color.orange.opacity(0.12)))
             }
@@ -27,16 +27,16 @@ struct PhishingPill: View {
 
     var details: some View {
                 VStack(alignment: .leading, spacing: 10) {
-                    Label("This email might be phishing", systemImage: "exclamationmark.shield.fill").font(.headline).foregroundStyle(.orange)
+                    Label("This email might be phishing", systemImage: "exclamationmark.shield.fill").font(.scaled(.headline)).foregroundStyle(.orange)
                     ForEach(senderReasons, id: \.self) { Text("• " + $0).fixedSize(horizontal: false, vertical: true) }
                     ForEach(links.prefix(5), id: \.href) { l in
                         VStack(alignment: .leading, spacing: 2) {
                             Text("• " + l.reason).fixedSize(horizontal: false, vertical: true)
-                            Text(l.href).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                            Text(l.href).font(.scaled(.caption)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                         }
                     }
                     Text("Don't enter passwords or payment details from this email. If unsure, go to the company's site directly.")
-                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        .font(.scaled(.callout)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(16)
     }

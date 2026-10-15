@@ -14,17 +14,17 @@ struct AboutSettings: View {
         VStack(spacing: 18) {
             VStack(spacing: 6) {
                 Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 88, height: 88)
-                Text("Keymail").font(.system(size: 24, weight: .semibold))
-                Text("Version \(Updates.version) (\(Updates.build))").font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
-                Text("Fast, keyboard-first email for Gmail and iCloud.").font(.callout).foregroundStyle(.secondary)
+                Text("Keymail").font(.scaled(size: 24, weight: .semibold))
+                Text("Version \(Updates.version) (\(Updates.build))").font(.scaled(.callout)).foregroundStyle(.secondary).textSelection(.enabled)
+                Text("Fast, keyboard-first email for Gmail and iCloud.").font(.scaled(.callout)).foregroundStyle(.secondary)
             }
             .padding(.top, 8)
 
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Updates").font(.headline)
-                        Text(updateStatus).font(.caption).foregroundStyle(.secondary)
+                        Text("Updates").font(.scaled(.headline))
+                        Text(updateStatus).font(.scaled(.caption)).foregroundStyle(.secondary)
                     }
                     Spacer()
                     Button("Check for Updates") { updates.check() }.disabled(!updates.enabled || !updates.canCheck)
@@ -45,7 +45,7 @@ struct AboutSettings: View {
                     Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([Disk.dir]) }.buttonStyle(.link).handCursor()
                 }
             }
-            .font(.callout).frame(maxWidth: 460, alignment: .leading)
+            .font(.scaled(.callout)).frame(maxWidth: 460, alignment: .leading)
 
             HStack(spacing: 16) {
                 Link("Website", destination: URL(string: "https://keymailapp.com")!)
@@ -53,9 +53,9 @@ struct AboutSettings: View {
                 Link("Release notes", destination: URL(string: "https://github.com/dcdunk/keymail-app/releases")!)
                 Link("Report a problem", destination: URL(string: "https://github.com/dcdunk/keymail-app/issues/new")!)
             }
-            .font(.callout).handCursor()
+            .font(.scaled(.callout)).handCursor()
             Spacer()
-            Text("© 2026 Danny Chait. Updates by Sparkle (MIT license).").font(.caption2).foregroundStyle(.tertiary)
+            Text("© 2026 Danny Chait. Updates by Sparkle (MIT license).").font(.scaled(.caption2)).foregroundStyle(.tertiary)
         }
         .padding(24).frame(maxWidth: .infinity)
     }

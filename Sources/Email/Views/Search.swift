@@ -45,7 +45,7 @@ struct SearchFilters: View {
                 Button("Search") { store.runSearch() }.keyboardShortcut(.defaultAction).prominentGlassButton().buttonBorderShape(.capsule)
             }
         }
-        .font(.callout)
+        .font(.scaled(.callout))
         .padding(16)
         .glass(RoundedRectangle(cornerRadius: 20))
         .padding(.horizontal, 32).padding(.bottom, 10)
@@ -69,7 +69,7 @@ struct SearchFilters: View {
                     ForEach(people, id: \.email) { a in
                         Button { text.wrappedValue = a.email } label: {
                             HStack(spacing: 5) { Avatar(address: a, size: 16); Text(a.name.isEmpty ? a.email : a.name).lineLimit(1) }
-                                .font(.caption).padding(.leading, 3).padding(.trailing, 8).padding(.vertical, 3)
+                                .font(.scaled(.caption)).padding(.leading, 3).padding(.trailing, 8).padding(.vertical, 3)
                                 .background(Capsule().fill(Color.primary.opacity(0.07)))
                         }.buttonStyle(.plain).handCursor().help(a.email)
                     }
@@ -80,7 +80,7 @@ struct SearchFilters: View {
 
     func chip(_ title: String, _ icon: String, on: Binding<Bool>) -> some View {
         Button { on.wrappedValue.toggle() } label: {
-            Label(title, systemImage: icon).font(.callout).padding(.horizontal, 12).padding(.vertical, 5)
+            Label(title, systemImage: icon).font(.scaled(.callout)).padding(.horizontal, 12).padding(.vertical, 5)
                 .foregroundStyle(on.wrappedValue ? Theme.accent : .primary)
                 .background(Capsule().fill(on.wrappedValue ? Theme.selection : Color.primary.opacity(0.06)))
         }.buttonStyle(.plain).handCursor()
@@ -115,11 +115,11 @@ struct TokenSearchBar: View {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
                 ForEach(tokens, id: \.label) { t in
                     HStack(spacing: 5) {
-                        Image(systemName: t.icon).font(.system(size: 10)).foregroundStyle(.secondary)
+                        Image(systemName: t.icon).font(.scaled(size: 10)).foregroundStyle(.secondary)
                         Text(t.label).lineLimit(1)
                         ChipRemoveButton { remove(t.kind) }
                     }
-                    .font(.callout).padding(.leading, 9).padding(.trailing, 3).padding(.vertical, 2)
+                    .font(.scaled(.callout)).padding(.leading, 9).padding(.trailing, 3).padding(.vertical, 2)
                     .background(Capsule().fill(Theme.selection))
                 }
                 TextField(tokens.isEmpty ? "Search people, subjects, dates or words" : "Add more…", text: $store.searchText)
@@ -167,26 +167,26 @@ struct TokenSearchBar: View {
             }
             let matches = quickMatches
             if !matches.isEmpty {
-                Text("Emails").font(.caption.weight(.semibold)).foregroundStyle(.secondary).padding(.horizontal, 12).padding(.top, 8)
+                Text("Emails").font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary).padding(.horizontal, 12).padding(.top, 8)
                 ForEach(matches) { c in
                     Button { jump(c) } label: {
                         HStack(spacing: 10) {
                             Avatar(address: parseAddresses(c.latest.from).first, size: 22)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(c.latest.subject).lineLimit(1)
-                                Text(parseAddresses(c.latest.from).first?.display ?? "").font(.caption).foregroundStyle(.secondary)
+                                Text(parseAddresses(c.latest.from).first?.display ?? "").font(.scaled(.caption)).foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Text(shortDate(c.latest.date)).font(.caption).foregroundStyle(.secondary)
+                            Text(shortDate(c.latest.date)).font(.scaled(.caption)).foregroundStyle(.secondary)
                         }
                         .padding(.horizontal, 12).padding(.vertical, 6).contentShape(Rectangle())
                     }.buttonStyle(.plain).handCursor()
                 }
             }
-            Text("Tab to pick the top match · ↑↓ to choose · Return to search").font(.caption2).foregroundStyle(.tertiary)
+            Text("Tab to pick the top match · ↑↓ to choose · Return to search").font(.scaled(.caption2)).foregroundStyle(.tertiary)
                 .padding(.horizontal, 12).padding(.top, 6)
         }
-        .font(.system(size: 14))
+        .font(.scaled(size: 14))
         .padding(8)
         .frame(width: 560, alignment: .leading)
         .solidPanel(RoundedRectangle(cornerRadius: 20))
@@ -208,7 +208,7 @@ struct TokenSearchBar: View {
             case .hasAttachment:
                 Image(systemName: "paperclip").frame(width: 22); Text("Has attachment"); Spacer(); tag("Filter")
             case .unread:
-                Image(systemName: "circle.fill").font(.system(size: 8)).frame(width: 22); Text("Unread"); Spacer(); tag("Filter")
+                Image(systemName: "circle.fill").font(.scaled(size: 8)).frame(width: 22); Text("Unread"); Spacer(); tag("Filter")
             case .words(let w):
                 Image(systemName: "magnifyingglass").frame(width: 22); Text("Search for “\(w)”"); Spacer(); tag("Words")
             }
@@ -218,7 +218,7 @@ struct TokenSearchBar: View {
         .contentShape(Rectangle())
     }
 
-    func tag(_ t: String) -> some View { Text(t).font(.caption).foregroundStyle(.secondary) }
+    func tag(_ t: String) -> some View { Text(t).font(.scaled(.caption)).foregroundStyle(.secondary) }
 
     // Locked-in filters shown as chips
     enum Kind { case from, to, subject, date, attachment, unread, words }

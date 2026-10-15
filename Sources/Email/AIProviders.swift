@@ -10,6 +10,8 @@ import CryptoKit
 struct AIProvider: Identifiable, Hashable {
     let id: String, name: String, maker: String, binary: String
     let installURL: String, signInHint: String
+    /// Models offered in Settings, newest first, as (CLI model ID, display name). Blank in settings = the tool's own default.
+    let models: [(id: String, name: String)]
     /// Arguments for a one-shot, read-only run. The prompt always goes in on stdin.
     let args: (_ model: String?) -> [String]
 
@@ -19,14 +21,21 @@ struct AIProvider: Identifiable, Hashable {
     static let all: [AIProvider] = [
         AIProvider(id: "claude", name: "Claude", maker: "Anthropic", binary: "claude",
                    installURL: "https://claude.com/claude-code", signInHint: "Run `claude` in Terminal and log in.",
+                   // support.claude.com/en/articles/11940350 (checked Oct 2026)
+                   models: [("claude-fable-5-1", "Fable 5.1"), ("claude-opus-5-5", "Opus 5.5"), ("claude-sonnet-5-5", "Sonnet 5.5"), ("claude-haiku-5-5", "Haiku 5.5")],
                    // --tools "" turns every tool off: email text can only produce text.
                    args: { m in ["-p", "--tools", "", "--output-format", "text"] + (m.map { ["--model", $0] } ?? []) }),
         AIProvider(id: "codex", name: "Codex", maker: "OpenAI", binary: "codex",
                    installURL: "https://github.com/openai/codex", signInHint: "Run `codex login` in Terminal.",
+                   // learn.chatgpt.com/docs/models (checked Oct 2026). Astra and 6.1 Sol need an API key, not a ChatGPT sign-in.
+                   models: [("gpt-6-astra", "GPT-6 Astra"), ("gpt-6.1-sol", "GPT-6.1 Sol"), ("gpt-6-luna", "GPT-6 Luna")],
                    // Read-only sandbox: it can't write files or run commands that change anything.
                    args: { m in ["exec", "--sandbox", "read-only", "--skip-git-repo-check", "--ephemeral"] + (m.map { ["-m", $0] } ?? []) }),
         AIProvider(id: "gemini", name: "Gemini", maker: "Google", binary: "gemini",
                    installURL: "https://github.com/google-gemini/gemini-cli", signInHint: "Run `gemini` in Terminal and sign in, or set GEMINI_API_KEY.",
+                   // geminicli.com/docs/reference/configuration (checked Oct 2026)
+                   models: [("gemini-3.1-pro-preview", "Gemini 3.1 Pro (preview)"), ("gemini-3.8-flash", "Gemini 3.8 Flash"),
+                            ("gemini-3.5-flash-lite", "Gemini 3.5 Flash-Lite"), ("gemini-2.5-pro", "Gemini 2.5 Pro")],
                    // plan = read-only approval mode; --skip-trust lets it run headless outside a trusted project folder.
                    args: { m in ["-p", "Respond to the request above. Output only the answer.", "--approval-mode", "plan", "--skip-trust"]
                        + (m.map { ["-m", $0] } ?? []) }),

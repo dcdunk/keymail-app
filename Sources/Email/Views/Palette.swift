@@ -15,7 +15,7 @@ struct PaletteView: View {
         let list = store.filteredCommands
         VStack(spacing: 0) {
             TextField("Type a command, or \"remind friday 3pm\"…", text: $store.paletteText)
-                .textFieldStyle(.plain).font(.system(size: 18)).focused($focused)
+                .textFieldStyle(.plain).font(.scaled(size: 18)).focused($focused)
                 .padding(18)
                 .onChange(of: store.paletteText) { _, _ in store.paletteIndex = 0 }
                 .onAppear { focused = true }
@@ -27,7 +27,7 @@ struct PaletteView: View {
                             HStack {
                                 Text(c.title)
                                 Spacer()
-                                if !c.key.isEmpty { Text(c.key).font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary) }
+                                if !c.key.isEmpty { Text(c.key).font(.scaled(size: 12, weight: .medium)).foregroundStyle(.secondary) }
                             }
                             .padding(.horizontal, 14).padding(.vertical, 9)
                             .background(RoundedRectangle(cornerRadius: 10).fill(i == store.paletteIndex ? Theme.selection : .clear))

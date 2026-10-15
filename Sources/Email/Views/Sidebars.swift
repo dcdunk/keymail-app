@@ -21,10 +21,10 @@ struct FolderPanel: View {
                 HStack(spacing: 10) {
                     let name = account.map(store.label) ?? (store.state.accounts.count > 1 ? "All accounts" : store.state.accounts.first.map(store.label) ?? "")
                     Circle().fill(Theme.chip(name).opacity(0.25)).frame(width: 30, height: 30)
-                        .overlay(Text(String(name.prefix(1)).uppercased()).font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.chip(name)))
-                    Text(name).font(.system(size: 14, weight: .medium)).lineLimit(1).truncationMode(.middle)
+                        .overlay(Text(String(name.prefix(1)).uppercased()).font(.scaled(size: 13, weight: .semibold)).foregroundStyle(Theme.chip(name)))
+                    Text(name).font(.scaled(size: 14, weight: .medium)).lineLimit(1).truncationMode(.middle)
                     Spacer()
-                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 10)).foregroundStyle(.tertiary)
+                    Image(systemName: "chevron.up.chevron.down").font(.scaled(size: 10)).foregroundStyle(.tertiary)
                 }.contentShape(Rectangle())
             }
             .buttonStyle(.plain).handCursor()
@@ -42,7 +42,7 @@ struct FolderPanel: View {
                     }
                     if !labels.isEmpty {
                         Divider().padding(.vertical, 12).padding(.horizontal, 18)
-                        Text("Labels").font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.accent)
+                        Text("Labels").font(.scaled(size: 12, weight: .semibold)).foregroundStyle(Theme.accent)
                             .padding(.horizontal, 18).padding(.bottom, 6)
                         ForEach(Array(labels.enumerated()), id: \.element) { i, l in
                             let idx = AppStore.panelFolders.count + i
@@ -69,11 +69,11 @@ struct FolderPanel: View {
              highlighted: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                Text(title).font(.system(size: 14, weight: on ? .semibold : .regular)).lineLimit(1)
-                if let subtitle { Text(subtitle).font(.system(size: 12)).foregroundStyle(.tertiary) }
+                Text(title).font(.scaled(size: 14, weight: on ? .semibold : .regular)).lineLimit(1)
+                if let subtitle { Text(subtitle).font(.scaled(size: 12)).foregroundStyle(.tertiary) }
                 Spacer()
-                if count > 0 { Text("\(count)").font(.system(size: 12).monospacedDigit()).foregroundStyle(.secondary) }
-                else if !key.isEmpty { Text(key).font(.system(size: 10, weight: .medium)).foregroundStyle(.quaternary) }
+                if count > 0 { Text("\(count)").font(.scaled(size: 12).monospacedDigit()).foregroundStyle(.secondary) }
+                else if !key.isEmpty { Text(key).font(.scaled(size: 10, weight: .medium)).foregroundStyle(.quaternary) }
             }
             .padding(.leading, indent ? 30 : 18).padding(.trailing, 18).padding(.vertical, 8)
             .background(alignment: .leading) {
@@ -114,19 +114,19 @@ struct ContextPanel: View {
                 if let person {
                     VStack(alignment: .leading, spacing: 6) {
                         Circle().fill(Theme.chip(email).opacity(0.18)).frame(width: 44, height: 44)
-                            .overlay(Text(String(person.display.prefix(1)).uppercased()).font(.title3.weight(.semibold)).foregroundStyle(Theme.chip(email)))
-                        Text(person.display).font(.headline).lineLimit(1)
-                        Text(person.email).font(.callout).foregroundStyle(.secondary).textSelection(.enabled).lineLimit(1)
+                            .overlay(Text(String(person.display.prefix(1)).uppercased()).font(.scaled(.title3).weight(.semibold)).foregroundStyle(Theme.chip(email)))
+                        Text(person.display).font(.scaled(.headline)).lineLimit(1)
+                        Text(person.email).font(.scaled(.callout)).foregroundStyle(.secondary).textSelection(.enabled).lineLimit(1)
                     }
                 }
                 section("Recent with \(person?.firstName.isEmpty == false ? person!.firstName : "them")", history.prefix(5))
                 section("Recently opened", recent.prefix(5))
                 CalendarSection(conversation: conversation)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Today").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    Text(Date().formatted(date: .complete, time: .omitted)).font(.callout)
+                    Text("Today").font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary)
+                    Text(Date().formatted(date: .complete, time: .omitted)).font(.scaled(.callout))
                     let due = store.state.snoozes.filter { Calendar.current.isDateInToday($0.until) }.count
-                    Text("\(due) reminder\(due == 1 ? "" : "s") returning today · \(store.state.scheduled.count) scheduled").font(.callout).foregroundStyle(.secondary)
+                    Text("\(due) reminder\(due == 1 ? "" : "s") returning today · \(store.state.scheduled.count) scheduled").font(.scaled(.callout)).foregroundStyle(.secondary)
                 }
             }
             .padding(.horizontal, 18).padding(.top, 18).frame(maxWidth: .infinity, alignment: .leading)
@@ -139,12 +139,12 @@ struct ContextPanel: View {
     @ViewBuilder func section(_ title: String, _ items: ArraySlice<Conversation>) -> some View {
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Text(title).font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary)
                 ForEach(Array(items)) { c in
                     Button { store.open(c) } label: {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(c.latest.subject).font(.callout).lineLimit(1)
-                            Text(shortDate(c.latest.date)).font(.caption).foregroundStyle(.secondary)
+                            Text(c.latest.subject).font(.scaled(.callout)).lineLimit(1)
+                            Text(shortDate(c.latest.date)).font(.scaled(.caption)).foregroundStyle(.secondary)
                         }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                     }.buttonStyle(.plain)
                 }

@@ -26,12 +26,12 @@ struct ComposeView: View {
                 MenuButton(width: 320, entries: { fromEntries }) {
                     HStack(spacing: 5) {
                         Text(store.fullLabel(model.draft.from)).lineLimit(1)
-                        Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
+                        Image(systemName: "chevron.down").font(.scaled(size: 9, weight: .semibold)).foregroundStyle(.secondary)
                     }.contentShape(Rectangle())
                 }
                 .buttonStyle(.plain).handCursor().fixedSize()
                 Spacer()
-                Button { close() } label: { Image(systemName: "xmark").font(.system(size: 12, weight: .semibold)).frame(width: 26, height: 26).contentShape(Circle()) }
+                Button { close() } label: { Image(systemName: "xmark").font(.scaled(size: 12, weight: .semibold)).frame(width: 26, height: 26).contentShape(Circle()) }
                     .buttonStyle(.plain).foregroundStyle(.secondary).keyboardShortcut(.cancelAction).help("Close and keep draft (Esc)")
             }
             row("To") {
@@ -49,11 +49,11 @@ struct ComposeView: View {
                 suggestions(for: model.draft.bcc, .bcc) { model.draft.bcc = $0 }
             }
             TextField("Subject", text: $model.draft.subject)
-                .textFieldStyle(.plain).font(.system(size: 19, weight: .semibold))
+                .textFieldStyle(.plain).font(.scaled(size: 19, weight: .semibold))
                 .padding(.horizontal, 24).padding(.top, 16).padding(.bottom, 4)
 
             TextEditor(text: $model.draft.body)
-                .font(.system(size: 15)).lineSpacing(3).scrollContentBackground(.hidden)
+                .font(.scaled(size: 15)).lineSpacing(3).scrollContentBackground(.hidden)
                 .focused($bodyFocused).padding(.horizontal, 19).padding(.vertical, 6)
                 .frame(minHeight: 140)
                 .onAppear {
@@ -68,11 +68,11 @@ struct ComposeView: View {
                 ComposeSignature(model: model)
                 if let q = model.draft.quoted, !q.isEmpty {
                     Button { showQuote.toggle() } label: {
-                        Text("•••").font(.system(size: 12, weight: .bold)).padding(.horizontal, 8).padding(.vertical, 1)
+                        Text("•••").font(.scaled(size: 12, weight: .bold)).padding(.horizontal, 8).padding(.vertical, 1)
                             .background(Capsule().fill(Color.primary.opacity(0.08)))
                     }.buttonStyle(.plain).handCursor().help(showQuote ? "Hide quoted text" : "Show quoted text")
                     if showQuote {
-                        ScrollView { Text(q.trimmingCharacters(in: .newlines)).font(.callout).foregroundStyle(.secondary)
+                        ScrollView { Text(q.trimmingCharacters(in: .newlines)).font(.scaled(.callout)).foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled) }.frame(maxHeight: 140)
                     }
                 }
@@ -87,7 +87,7 @@ struct ComposeView: View {
                                     Button { model.draft.files.removeAll { $0.id == f.id } } label: { Image(systemName: "xmark.circle.fill") }
                                         .buttonStyle(.plain).foregroundStyle(.tertiary)
                                 }
-                                .font(.callout).padding(.horizontal, 10).padding(.vertical, 6)
+                                .font(.scaled(.callout)).padding(.horizontal, 10).padding(.vertical, 6)
                                 .background(Capsule().fill(Color.primary.opacity(0.06)))
                             }
                         }
@@ -97,7 +97,7 @@ struct ComposeView: View {
             .padding(.horizontal, 24).padding(.bottom, 12)
 
             if let e = model.error {
-                Label(e, systemImage: "exclamationmark.triangle.fill").font(.callout).foregroundStyle(.red)
+                Label(e, systemImage: "exclamationmark.triangle.fill").font(.scaled(.callout)).foregroundStyle(.red)
                     .padding(.horizontal, 24).padding(.bottom, 8)
             }
             toolbar
@@ -118,7 +118,7 @@ struct ComposeView: View {
     var toolbar: some View {
         HStack(spacing: 6) {
             Button { send(at: nil) } label: {
-                HStack(spacing: 8) { Text("Send").fontWeight(.semibold); Text("⌘↵").font(.caption).opacity(0.7) }
+                HStack(spacing: 8) { Text("Send").fontWeight(.semibold); Text("⌘↵").font(.scaled(.caption)).opacity(0.7) }
                     .padding(.horizontal, 6)
             }
             .keyboardShortcut(.return, modifiers: .command).prominentGlassButton().controlSize(.large).buttonBorderShape(.capsule)
@@ -163,14 +163,14 @@ struct ComposeView: View {
                 HStack(spacing: 6) {
                     if model.busy { ProgressView().controlSize(.small) } else { Image(systemName: "sparkles") }
                     Text(model.busy ? "Writing…" : "Write")
-                }.font(.callout).padding(.horizontal, 4)
+                }.font(.scaled(.callout)).padding(.horizontal, 4)
             }
             .buttonBorderShape(.capsule)
             .keyboardShortcut("j", modifiers: .command).disabled(model.busy)
             .help("Write with \(store.ai.name) (⌘J). Type a few notes first, e.g. \"yes to Thursday, ask about budget\".")
 
             Spacer(minLength: 12)
-            if let n = model.savedNote { Text(n).font(.caption).foregroundStyle(.tertiary).lineLimit(1) }
+            if let n = model.savedNote { Text(n).font(.scaled(.caption)).foregroundStyle(.tertiary).lineLimit(1) }
             iconButton("trash", help: "Discard draft") { discard() }
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
@@ -213,7 +213,7 @@ struct ComposeView: View {
 
     func pillLabel(_ symbol: String, _ title: String, on: Bool) -> some View {
         HStack(spacing: 5) { Image(systemName: symbol); Text(title) }
-            .font(.callout).padding(.horizontal, 4)
+            .font(.scaled(.callout)).padding(.horizontal, 4)
             .foregroundStyle(on ? Theme.accent : .primary)
     }
 
@@ -223,13 +223,13 @@ struct ComposeView: View {
                 Text(label).foregroundStyle(.secondary).frame(width: 44, alignment: .leading)
                 content()
             }
-            .font(.system(size: 14)).padding(.horizontal, 24).padding(.vertical, 6).frame(minHeight: 40)
+            .font(.scaled(size: 14)).padding(.horizontal, 24).padding(.vertical, 6).frame(minHeight: 40)
             Divider().padding(.leading, 24).opacity(0.6)
         }
     }
 
     func linkButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(title, action: action).buttonStyle(.plain).font(.callout).foregroundStyle(.secondary).handCursor()
+        Button(title, action: action).buttonStyle(.plain).font(.scaled(.callout)).foregroundStyle(.secondary).handCursor()
     }
 
     func close() {
@@ -290,7 +290,7 @@ struct ComposeView: View {
                                 if !a.name.isEmpty { Text(a.email).foregroundStyle(.secondary) }
                                 if i == 0 { Text("⇥").foregroundStyle(.tertiary) }
                             }
-                            .font(.callout).padding(.leading, 4).padding(.trailing, 10).padding(.vertical, 4)
+                            .font(.scaled(.callout)).padding(.leading, 4).padding(.trailing, 10).padding(.vertical, 4)
                             .background(Capsule().fill(i == 0 ? Theme.selection : Color.primary.opacity(0.06)))
                             .contentShape(Capsule())
                         }.buttonStyle(.plain)
@@ -307,11 +307,11 @@ struct SnippetEditor: View {
     @Environment(\.closeCard) private var dismiss
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Snippet").font(.title2.weight(.semibold))
+            Text("Snippet").font(.scaled(.title2).weight(.semibold))
             TextField("Name", text: $snippet.name)
-            TextEditor(text: $snippet.body).font(.system(size: 14)).frame(height: 180)
+            TextEditor(text: $snippet.body).font(.scaled(size: 14)).frame(height: 180)
                 .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.primary.opacity(0.1)))
-            Text("Use {first_name}, {name} or {email} for the first recipient.").font(.callout).foregroundStyle(.secondary)
+            Text("Use {first_name}, {name} or {email} for the first recipient.").font(.scaled(.callout)).foregroundStyle(.secondary)
             HStack {
                 if store.state.snippets.contains(where: { $0.id == snippet.id }) {
                     Button("Delete", role: .destructive) { store.state.snippets.removeAll { $0.id == snippet.id }; dismiss() }

@@ -68,7 +68,7 @@ struct CoachTips: View {
                         .allowsHitTesting(false)
                     // Arrow from the card to the target.
                     Image(systemName: below ? "arrowtriangle.up.fill" : "arrowtriangle.down.fill")
-                        .font(.system(size: 14)).foregroundStyle(Color(nsColor: .windowBackgroundColor))
+                        .font(.scaled(size: 14)).foregroundStyle(Color(nsColor: .windowBackgroundColor))
                         .position(x: min(max(r.midX, origin.x + 24), origin.x + card.width - 24),
                                   y: below ? origin.y - 6 : origin.y + card.height + 6)
                 }
@@ -82,14 +82,14 @@ struct CoachTips: View {
     func tipCard(_ t: (anchor: String, icon: String, title: String, body: String)) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Image(systemName: t.icon).font(.title3).foregroundStyle(Theme.accent)
-                Text(t.title).font(.headline)
+                Image(systemName: t.icon).font(.scaled(.title3)).foregroundStyle(Theme.accent)
+                Text(t.title).font(.scaled(.headline))
                 Spacer()
-                Text("\(step + 1) of \(Self.tips.count)").font(.caption).foregroundStyle(.secondary)
+                Text("\(step + 1) of \(Self.tips.count)").font(.scaled(.caption)).foregroundStyle(.secondary)
             }
             Text(t.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {
-                Button("Skip tips") { step = -1 }.buttonStyle(.plain).font(.callout).foregroundStyle(.secondary).handCursor()
+                Button("Skip tips") { step = -1 }.buttonStyle(.plain).font(.scaled(.callout)).foregroundStyle(.secondary).handCursor()
                 Spacer()
                 if step > 0 { Button("Back") { step -= 1 }.buttonBorderShape(.capsule) }
                 Button(step == Self.tips.count - 1 ? "Done" : "Next") { step = step == Self.tips.count - 1 ? -1 : step + 1 }

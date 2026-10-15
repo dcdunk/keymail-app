@@ -68,6 +68,7 @@ extension AppStore {
             return true
         }
         if settingsOpen && !modalOpen {
+            if Hotkeys.recording { return false } // Settings → Hotkeys is capturing this key
             if code == 53 { settingsOpen = false; return true } // Esc
             if cmd, ch == "," { settingsOpen = false; return true }
             return false // typing in settings fields must never trigger inbox shortcuts
@@ -117,7 +118,7 @@ extension AppStore {
             let dest = ["i": "Inbox", "s": "Starred", "t": "Sent", "e": "Done", "h": "Reminders", "d": "Drafts"][ch]
             if let dest { goFolder(dest); return true }
         }
-        switch (code, ch) {
+        switch (code, Hotkeys.resolve(ch)) {
         case (53, _) where sidebarOpen: sidebarOpen = false
         case (53, _):
             if threadOpen { threadOpen = false } else if searchResults != nil { clearSearch() } else { banner = nil }

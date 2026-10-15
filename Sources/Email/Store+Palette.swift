@@ -8,32 +8,32 @@ extension AppStore {
 
     var commands: [Command] {
         var list: [Command] = [
-            Command(title: "Compose", key: "C") { self.compose() },
-            Command(title: "Search", key: "/") { self.searchOpen = true },
+            Command(title: "Compose", key: Hotkeys.label("c")) { self.compose() },
+            Command(title: "Search", key: Hotkeys.label("/")) { self.searchOpen = true },
         ]
         if let c = selected {
             list += [
-                Command(title: "Reply", key: "R") { self.reply(all: false) },
-                Command(title: "Reply all", key: "A") { self.reply(all: true) },
-                Command(title: "Forward", key: "F") { self.forward() },
-                Command(title: "Mark done", key: "E") { self.markDone() },
-                Command(title: c.isStarred ? "Unstar" : "Star", key: "S") { self.toggleStar() },
-                Command(title: c.isUnread ? "Mark read" : "Mark unread", key: "U") { self.toggleUnread() },
+                Command(title: "Reply", key: Hotkeys.label("r")) { self.reply(all: false) },
+                Command(title: "Reply all", key: Hotkeys.label("a")) { self.reply(all: true) },
+                Command(title: "Forward", key: Hotkeys.label("f")) { self.forward() },
+                Command(title: "Mark done", key: Hotkeys.label("e")) { self.markDone() },
+                Command(title: c.isStarred ? "Unstar" : "Star", key: Hotkeys.label("s")) { self.toggleStar() },
+                Command(title: c.isUnread ? "Mark read" : "Mark unread", key: Hotkeys.label("u")) { self.toggleUnread() },
                 Command(title: "Trash", key: "⌫") { self.trash() },
                 Command(title: "Unsubscribe", key: "⇧U") { self.unsubscribe() },
-                Command(title: "Summarize thread with \(ai.name)", key: "I") { self.summarize() },
+                Command(title: "Summarize thread with \(ai.name)", key: Hotkeys.label("i")) { self.summarize() },
                 Command(title: "Instant reply with \(ai.name)", key: "⇧R") { self.instantReply() },
                 Command(title: state.muted.contains(c.id) ? "Unmute thread" : "Mute thread", key: "⇧M") { self.toggleMute() },
-                Command(title: "Create calendar event from email", key: "B") { self.createEventFromEmail() },
+                Command(title: "Create calendar event from email", key: Hotkeys.label("b")) { self.createEventFromEmail() },
             ]
             let typed = paletteText.lowercased().replacingOccurrences(of: "remind me", with: "").replacingOccurrences(of: "remind", with: "")
             if let when = parseWhen(typed) {
                 let label = when.formatted(date: .abbreviated, time: .shortened)
-                list.append(Command(title: "Remind me: \(label), if no reply", key: "H") { self.remind(until: when, ifNoReply: true) })
+                list.append(Command(title: "Remind me: \(label), if no reply", key: Hotkeys.label("h")) { self.remind(until: when, ifNoReply: true) })
                 list.append(Command(title: "Remind me: \(label), regardless") { self.remind(until: when, ifNoReply: false) })
             }
             for (name, date) in snoozePresets() {
-                list.append(Command(title: "Remind me: \(name), if no reply", key: "H") { self.remind(until: date, ifNoReply: true) })
+                list.append(Command(title: "Remind me: \(name), if no reply", key: Hotkeys.label("h")) { self.remind(until: date, ifNoReply: true) })
                 list.append(Command(title: "Remind me: \(name), regardless") { self.remind(until: date, ifNoReply: false) })
             }
             if state.snoozes.contains(where: { $0.conversationId == c.id }) {
@@ -70,10 +70,10 @@ extension AppStore {
         if let c = selected, !isICloud(c.account) {
             for l in gmailLabels[c.account] ?? labelNames.filter({ !isAppLabel($0.value) }).map({ Gmail.Label(id: $0.key, name: $0.value) }) {
                 let has = c.labels.contains(l.id)
-                list.append(Command(title: has ? "Remove label: \(l.name)" : "Label: \(l.name)", key: "L") { self.setLabel(l.id, on: c, !has) })
+                list.append(Command(title: has ? "Remove label: \(l.name)" : "Label: \(l.name)", key: Hotkeys.label("l")) { self.setLabel(l.id, on: c, !has) })
             }
         }
-        list.append(Command(title: "New email", key: "C") { self.compose() })
+        list.append(Command(title: "New email", key: Hotkeys.label("c")) { self.compose() })
         if let f = folder, f.hasPrefix("Search: "), !search.isEmpty {
             let q = gmailQuery(search)
             list.append(Command(title: "New split from this search") { self.addSplit(Split(name: q, query: q)) })

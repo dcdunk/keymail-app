@@ -18,20 +18,20 @@ struct ICloudSheet: View {
     @State private var working = false
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Add iCloud Mail").font(.title2.weight(.semibold))
+            Text("Add iCloud Mail").font(.scaled(.title2).weight(.semibold))
             Text("iCloud needs an **app-specific password**, not your Apple Account password. It's saved only in your Mac's Keychain.")
                 .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 6) {
                 Text("1. Go to account.apple.com → Sign-In and Security → App-Specific Passwords.")
                 Text("2. Create one named \"Keymail\" and paste it below.")
-            }.font(.callout)
+            }.font(.scaled(.callout))
             Button("Open account.apple.com") { NSWorkspace.shared.open(URL(string: "https://account.apple.com/account/manage")!) }
             TextField("Primary iCloud email (you@icloud.com)", text: $email).textFieldStyle(.roundedBorder)
             SecureField("App-specific password (xxxx-xxxx-xxxx-xxxx)", text: $password).textFieldStyle(.roundedBorder)
             TextField("Aliases to send as (optional, comma-separated)", text: $aliases).textFieldStyle(.roundedBorder)
             Text("Sign in with your **primary** iCloud address; aliases can't sign in. Add aliases here to send from them.")
-                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            if let error { Text(error).foregroundStyle(.red).font(.callout) }
+                .font(.scaled(.callout)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if let error { Text(error).foregroundStyle(.red).font(.scaled(.callout)) }
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)

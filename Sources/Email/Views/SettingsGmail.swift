@@ -61,9 +61,9 @@ struct GmailSettings: View {
     var accessCallout: some View {
         Section {
             VStack(alignment: .leading, spacing: 8) {
-                Label("Allow Keymail to manage these settings", systemImage: "lock.shield").font(.headline)
+                Label("Allow Keymail to manage these settings", systemImage: "lock.shield").font(.scaled(.headline))
                 Text("To change out of office and signatures here, Google needs your OK. Click below and approve in your browser.")
-                    .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    .font(.scaled(.callout)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Button("Grant access") { store.grantSettingsAccess() }.prominentGlassButton().buttonBorderShape(.capsule)
             }
         }
@@ -77,12 +77,12 @@ struct GmailSettings: View {
             Toggle("Ends", isOn: $hasEnd)
             if hasEnd { DatePicker("", selection: Binding(get: { v.end ?? Date().addingTimeInterval(7 * 86400) }, set: { v.end = $0 })).labelsHidden() }
             TextField("Subject", text: $v.subject, prompt: Text("Out of office"))
-            TextEditor(text: $v.message).frame(height: 90).font(.system(size: 13))
+            TextEditor(text: $v.message).frame(height: 90).font(.scaled(size: 13))
                 .overlay(alignment: .topLeading) { if v.message.isEmpty { Text("Message").foregroundStyle(.tertiary).padding(.leading, 5).allowsHitTesting(false) } }
             Toggle("Only reply to people in my contacts", isOn: $v.contactsOnly)
             if !account.hasSuffix("@gmail.com") { Toggle("Only reply to people in my organization", isOn: $v.domainOnly) }
             HStack {
-                if let vacationNote { Text(vacationNote).font(.caption).foregroundStyle(.secondary) }
+                if let vacationNote { Text(vacationNote).font(.scaled(.caption)).foregroundStyle(.secondary) }
                 Spacer()
                 Button("Save") {
                     var out = v
@@ -98,7 +98,7 @@ struct GmailSettings: View {
     var signatures: some View {
         Section("Signature sync") {
             Text("Gmail keeps its own copy of your signature for gmail.com and the Gmail phone app. Copy one way or the other to make them match.")
-                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                .font(.scaled(.callout)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             if sendAs.isEmpty { Text("No addresses found for this account.").foregroundStyle(.secondary) }
             ForEach(sendAs) { sa in SignatureSyncRow(sendAs: sa, account: account) { sendAs = $0 } }
         }
@@ -127,7 +127,7 @@ struct GmailSettings: View {
                 TextField("New label", text: $newLabel).onSubmit(addLabel)
                 Button("Add", action: addLabel).disabled(newLabel.trimmingCharacters(in: .whitespaces).isEmpty)
             }
-            Text("Use labels on any email from the right-click menu, ⌘K, or press L.").font(.caption).foregroundStyle(.secondary)
+            Text("Use labels on any email from the right-click menu, ⌘K, or press L.").font(.scaled(.caption)).foregroundStyle(.secondary)
         }
     }
 
@@ -182,7 +182,7 @@ struct SignatureSyncRow: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(sendAs.email).fontWeight(.medium)
-                if sendAs.isPrimary { Text("Primary").font(.caption).foregroundStyle(.secondary) }
+                if sendAs.isPrimary { Text("Primary").font(.scaled(.caption)).foregroundStyle(.secondary) }
                 Spacer()
                 status(same: same, ours: oursHTML, theirs: theirs)
             }
@@ -203,8 +203,8 @@ struct SignatureSyncRow: View {
                 .buttonBorderShape(.capsule).controlSize(.small).fixedSize()
                 preview("In Gmail", theirs, empty: "No signature in Gmail")
             }
-            if let blocked, !same { Label(blocked, systemImage: "info.circle").font(.caption).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
-            if let note { Text(note).font(.caption).foregroundStyle(.secondary) }
+            if let blocked, !same { Label(blocked, systemImage: "info.circle").font(.scaled(.caption)).foregroundStyle(.orange).fixedSize(horizontal: false, vertical: true) }
+            if let note { Text(note).font(.scaled(.caption)).foregroundStyle(.secondary) }
         }
         .padding(.vertical, 4)
     }
@@ -221,17 +221,17 @@ struct SignatureSyncRow: View {
     func normalize(_ s: String) -> String { s.lowercased().split(whereSeparator: \.isWhitespace).joined(separator: " ") }
 
     @ViewBuilder func status(same: Bool, ours: String, theirs: String) -> some View {
-        if ours.isEmpty && theirs.isEmpty { Text("No signatures yet").font(.caption).foregroundStyle(.secondary) }
-        else if same { Label("In sync", systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(.green) }
-        else { Label("Different", systemImage: "arrow.left.arrow.right.circle").font(.caption).foregroundStyle(.orange) }
+        if ours.isEmpty && theirs.isEmpty { Text("No signatures yet").font(.scaled(.caption)).foregroundStyle(.secondary) }
+        else if same { Label("In sync", systemImage: "checkmark.circle.fill").font(.scaled(.caption)).foregroundStyle(.green) }
+        else { Label("Different", systemImage: "arrow.left.arrow.right.circle").font(.scaled(.caption)).foregroundStyle(.orange) }
     }
 
     func preview(_ title: String, _ html: String, empty: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            Text(title).font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary)
             Group {
                 if html.isEmpty {
-                    Text(empty).font(.callout).foregroundStyle(.tertiary).frame(maxWidth: .infinity, minHeight: 70)
+                    Text(empty).font(.scaled(.callout)).foregroundStyle(.tertiary).frame(maxWidth: .infinity, minHeight: 70)
                         .background(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.primary.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [4])))
                 } else {
                     EmailWebView(html: html, padding: "8px 10px").frame(maxHeight: 140).clipShape(RoundedRectangle(cornerRadius: 10))

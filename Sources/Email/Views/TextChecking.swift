@@ -47,7 +47,7 @@ struct ChipRemoveButton: View {
     @State private var hover = false
     var body: some View {
         Button(action: action) {
-            Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
+            Image(systemName: "xmark").font(.scaled(size: 9, weight: .bold))
                 .frame(width: 20, height: 20)
                 .background(Circle().fill(Color.primary.opacity(hover ? 0.15 : 0)))
                 .contentShape(Circle())

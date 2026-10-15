@@ -77,8 +77,8 @@ struct Header: View {
                 TokenSearchBar()
             } else if let f = store.folder {
                 HStack(spacing: 10) {
-                    Text(f).font(.system(size: 15, weight: .semibold)).lineLimit(1)
-                    Text("Esc").font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+                    Text(f).font(.scaled(size: 15, weight: .semibold)).lineLimit(1)
+                    Text("Esc").font(.scaled(size: 12, weight: .medium)).foregroundStyle(.secondary)
                 }
                 .padding(.horizontal, 16).padding(.vertical, 8)
                 .glass(Capsule())
@@ -91,10 +91,10 @@ struct Header: View {
                     let on = name == store.tabName
                     Button { store.goTab(name) } label: {
                         HStack(spacing: 7) {
-                            Text(name).font(.system(size: 15, weight: on ? .semibold : .regular))
+                            Text(name).font(.scaled(size: 15, weight: on ? .semibold : .regular))
                                 .foregroundStyle(on ? Color.primary : Color.secondary)
                             let n = store.count(name, in: members)
-                            if !n.isEmpty { Text(n).font(.system(size: 13)).foregroundStyle(.secondary) }
+                            if !n.isEmpty { Text(n).font(.scaled(size: 13)).foregroundStyle(.secondary) }
                         }
                         .padding(.horizontal, 16).padding(.vertical, 8)
                         .modifier(SelectedGlass(on: on))
@@ -114,12 +114,12 @@ struct Header: View {
             let away = store.vacations.filter { (store.state.activeAccount == nil || $0.key == store.state.activeAccount) && $0.value.isActive() }
             if !away.isEmpty {
                 Button { store.openSettings() } label: {
-                    Label("Out of office", systemImage: "airplane").font(.callout).foregroundStyle(.orange)
+                    Label("Out of office", systemImage: "airplane").font(.scaled(.callout)).foregroundStyle(.orange)
                         .padding(.horizontal, 10).padding(.vertical, 6).background(Capsule().fill(Color.orange.opacity(0.12)))
                 }.buttonStyle(.plain).handCursor().help("Auto-reply is on for " + away.keys.map(store.label).joined(separator: ", ") + ". Change it in Settings → Gmail.")
             }
             Button { store.compose() } label: {
-                Image(systemName: "square.and.pencil").font(.system(size: 15, weight: .medium))
+                Image(systemName: "square.and.pencil").font(.scaled(size: 15, weight: .medium))
                     .frame(width: 34, height: 34).contentShape(Circle())
             }
             .buttonStyle(.plain).foregroundStyle(.primary).glass(Circle(), interactive: true)
@@ -141,9 +141,9 @@ struct Header: View {
                         Circle().fill(Theme.chip(store.state.activeAccount ?? "all")).frame(width: 7, height: 7)
                     }
                     Text(store.state.activeAccount.map(store.label) ?? (store.state.accounts.count > 1 ? "All accounts" : store.state.accounts.first.map(store.label) ?? ""))
-                    Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold))
+                    Image(systemName: "chevron.down").font(.scaled(size: 10, weight: .semibold))
                 }
-                .font(.system(size: 14)).foregroundStyle(.secondary)
+                .font(.scaled(size: 14)).foregroundStyle(.secondary)
                 .padding(.horizontal, 16).padding(.vertical, 8)
                 .glass(Capsule(), interactive: true)
                 .contentShape(Capsule())
@@ -160,7 +160,7 @@ struct BannerView: View {
     let text: String; let close: () -> Void
     var body: some View {
         HStack {
-            Text(text).font(.callout)
+            Text(text).font(.scaled(.callout))
             Spacer()
             Button(action: close) { Image(systemName: "xmark") }.buttonStyle(.plain)
         }
@@ -178,8 +178,8 @@ struct ListView: View {
         let selectedID = store.selected?.id
         if items.isEmpty {
             VStack(spacing: 8) {
-                Image(systemName: store.searchResults == nil ? "checkmark.circle" : "magnifyingglass").font(.system(size: 34, weight: .light))
-                Text(store.searchResults == nil ? "Inbox zero" : "No results").font(.title3.weight(.medium))
+                Image(systemName: store.searchResults == nil ? "checkmark.circle" : "magnifyingglass").font(.scaled(size: 34, weight: .light))
+                Text(store.searchResults == nil ? "Inbox zero" : "No results").font(.scaled(.title3).weight(.medium))
                 Text(store.searchResults == nil ? "Nothing left in \(store.tabName)." : "Try a different search.").foregroundStyle(.secondary)
             }
             .foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -229,22 +229,22 @@ struct Row: View {
                 Text(participantsLabel(c, me: store.me)).lineLimit(1)
                 let warnings = senderWarnings(c.latest, known: store.knownContacts)
                 if !warnings.isEmpty {
-                    Image(systemName: "exclamationmark.shield.fill").font(.system(size: 11)).foregroundStyle(.orange)
+                    Image(systemName: "exclamationmark.shield.fill").font(.scaled(size: 11)).foregroundStyle(.orange)
                         .help("Possible phishing: " + warnings.joined(separator: " "))
                 }
                 if c.messages.count > 1 { Text("\(c.messages.count)").foregroundStyle(.secondary) }
             }
-            .font(.system(size: 15, weight: unread ? .semibold : .regular))
+            .font(.scaled(size: 15, weight: unread ? .semibold : .regular))
             .frame(width: layout.compact ? 170 : 260, alignment: .leading)
             HStack(spacing: 8) {
                 ForEach(chips, id: \.self) { name in
-                    Text(name.lowercased()).font(.system(size: 12.5, weight: .medium))
+                    Text(name.lowercased()).font(.scaled(size: 12.5, weight: .medium))
                         .foregroundStyle(Theme.chip(name))
                         .padding(.horizontal, 7).padding(.vertical, 2)
                         .background(RoundedRectangle(cornerRadius: 5).fill(Theme.chip(name).opacity(0.12)))
                 }
-                Text(c.latest.subject).font(.system(size: 15, weight: unread ? .semibold : .regular)).lineLimit(1).layoutPriority(1)
-                Text(c.latest.snippet).font(.system(size: 15)).foregroundStyle(Theme.muted).lineLimit(1)
+                Text(c.latest.subject).font(.scaled(size: 15, weight: unread ? .semibold : .regular)).lineLimit(1).layoutPriority(1)
+                Text(c.latest.snippet).font(.scaled(size: 15)).foregroundStyle(Theme.muted).lineLimit(1)
             }
             Spacer(minLength: 16)
             if hovering {
@@ -259,7 +259,7 @@ struct Row: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 130, alignment: .trailing)
             } else {
-                Text(shortDate(c.latest.date)).font(.system(size: 14).monospacedDigit()).foregroundStyle(.secondary)
+                Text(shortDate(c.latest.date)).font(.scaled(size: 14).monospacedDigit()).foregroundStyle(.secondary)
                     .frame(width: 130, alignment: .trailing)
             }
         }
@@ -277,7 +277,7 @@ struct StatusBar: View {
     @EnvironmentObject var store: AppStore
     var body: some View {
         if let b = store.busy {
-            HStack(spacing: 8) { ProgressView().controlSize(.small); Text(b).font(.callout) }
+            HStack(spacing: 8) { ProgressView().controlSize(.small); Text(b).font(.scaled(.callout)) }
                 .padding(.horizontal, 14).padding(.vertical, 8)
                 .glass(Capsule()).padding(.bottom, 16)
         }

@@ -24,7 +24,7 @@ struct SignatureSettings: View {
                 ForEach(store.fromAddresses, id: \.self) { a in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(store.state.accounts.contains(a) ? store.label(a) : a).lineLimit(1)
-                        Text(store.state.accounts.contains(a) ? a : "Alias").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        Text(store.state.accounts.contains(a) ? a : "Alias").font(.scaled(.caption)).foregroundStyle(.secondary).lineLimit(1)
                     }.tag(a)
                 }
             }.frame(width: 230)
@@ -39,7 +39,7 @@ struct SignatureSettings: View {
                     }.fixedSize()
                     Divider()
                     HStack {
-                        Text("Signature for \(a)").font(.headline).lineLimit(1)
+                        Text("Signature for \(a)").font(.scaled(.headline)).lineLimit(1)
                         Spacer()
                         Picker("", selection: $htmlMode) { Text("Visual").tag(false); Text("HTML").tag(true) }
                             .pickerStyle(.segmented).labelsHidden().fixedSize()
@@ -53,24 +53,24 @@ struct SignatureSettings: View {
                         if !binding.wrappedValue.isEmpty { Button("Clear", role: .destructive) { binding.wrappedValue = "" } }
                     }.controlSize(.small)
                     if htmlMode {
-                        TextEditor(text: binding).font(.system(size: 12, design: .monospaced))
+                        TextEditor(text: binding).font(.scaled(size: 12, design: .monospaced))
                             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.primary.opacity(0.1)))
-                        Text("Preview").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        Text("Preview").font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary)
                         EmailWebView(html: binding.wrappedValue).frame(minHeight: 80).clipShape(RoundedRectangle(cornerRadius: 10))
                     } else if isComplexHTML(binding.wrappedValue) {
                         // Tables, logos and rounded corners can't go through the rich-text editor unchanged,
                         // so show it exactly as recipients will see it instead.
                         EmailWebView(html: binding.wrappedValue).frame(minHeight: 100).clipShape(RoundedRectangle(cornerRadius: 10))
                         Text("This signature has a designed layout (table, logo or rounded corners). It's kept exactly as is. Edit it in HTML, or paste/import a new one.")
-                            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                            .font(.scaled(.caption)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         Spacer()
                     } else {
                         RichTextEditor(html: binding)
                             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.primary.opacity(0.1)))
                     }
-                    if let note { Text(note).font(.callout).foregroundStyle(.orange) }
+                    if let note { Text(note).font(.scaled(.callout)).foregroundStyle(.orange) }
                     Text("Type with formatting (⌘B, ⌘I, ⌘K for links), paste a signature from Mail or Gmail (⌘V or Paste signature), or import an .html file. Logos embedded in the signature are sent as inline images so Gmail and Outlook show them.")
-                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        .font(.scaled(.callout)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }.padding(16)
             } else {
                 Text("Select an address").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -98,7 +98,7 @@ struct RichTextEditor: NSViewRepresentable {
         tv.importsGraphics = false   // pasted images can't travel inside a signature; use an <img> link in HTML mode
         tv.usesFontPanel = true
         tv.isAutomaticLinkDetectionEnabled = true
-        tv.font = .systemFont(ofSize: 14)
+        tv.font = .systemFont(ofSize: 14 * Font.scale)
         tv.textContainerInset = NSSize(width: 6, height: 8)
         tv.delegate = context.coordinator
         context.coordinator.load(html, into: tv)
@@ -189,7 +189,7 @@ struct ComposeSignature: View {
                 if let html = model.draft.signatureHTML {
                     EmailWebView(html: html, padding: "10px 14px").frame(maxWidth: 520).clipShape(RoundedRectangle(cornerRadius: 10))
                 } else {
-                    Text(plain).font(.system(size: 14)).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+                    Text(plain).font(.scaled(size: 14)).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Button { store.applySignature(&model.draft, from: nil) } label: { Image(systemName: "xmark.circle.fill") }
                     .buttonStyle(.plain).foregroundStyle(.tertiary).help("Remove signature (put it back from the Signature menu)")

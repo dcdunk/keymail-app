@@ -15,7 +15,7 @@ struct SetupView: View {
     @State private var clientSecret = ""
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Connect Keymail to Google").font(.system(size: 26, weight: .semibold))
+            Text("Connect Keymail to Google").font(.scaled(size: 26, weight: .semibold))
             Text("One-time setup, about 5 minutes. Keymail talks to Gmail directly from your Mac; nothing goes through a server.")
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 10) {
@@ -44,7 +44,7 @@ struct SetupView: View {
     }
     func step(_ n: Int, _ s: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Text("\(n)").font(.callout.monospacedDigit()).foregroundStyle(.secondary).frame(width: 16)
+            Text("\(n)").font(.scaled(.callout).monospacedDigit()).foregroundStyle(.secondary).frame(width: 16)
             Text(s)
         }
     }
@@ -71,7 +71,7 @@ struct SignInView: View {
     @State private var showICloud = false
     var body: some View {
         VStack(spacing: 16) {
-            Text("Keymail").font(.system(size: 34, weight: .semibold))
+            Text("Keymail").font(.scaled(size: 34, weight: .semibold))
             Text("Fast, keyboard-first Gmail.").foregroundStyle(.secondary)
             Button { store.addAccount() } label: { Text("Sign in with Google").padding(.horizontal, 12).padding(.vertical, 4) }
                 .prominentGlassButton().controlSize(.large)

@@ -18,7 +18,7 @@ struct CalendarSection: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(mentioned == nil ? "Today" : "Mentioned: \(day.formatted(.dateTime.weekday(.abbreviated).month().day()))")
-                    .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    .font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary)
                 Spacer()
                 Button { store.createEventFromEmail() } label: { Image(systemName: "calendar.badge.plus") }
                     .buttonStyle(.plain).foregroundStyle(.secondary).help("Create event (B)")
@@ -27,14 +27,14 @@ struct CalendarSection: View {
                 Button("Show my calendar") { Task { _ = await store.calendar.requestAccess() } }.controlSize(.small)
             } else {
                 let events = cal.events(on: day)
-                if events.isEmpty { Text("Nothing scheduled").font(.callout).foregroundStyle(.tertiary) }
+                if events.isEmpty { Text("Nothing scheduled").font(.scaled(.callout)).foregroundStyle(.tertiary) }
                 ForEach(events.prefix(6), id: \.eventIdentifier) { e in
                     HStack(alignment: .top, spacing: 8) {
                         RoundedRectangle(cornerRadius: 2).fill(Color(cgColor: e.calendar.cgColor)).frame(width: 3, height: 30)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(e.title ?? "Busy").font(.callout).lineLimit(1)
+                            Text(e.title ?? "Busy").font(.scaled(.callout)).lineLimit(1)
                             Text(e.isAllDay ? "All day" : "\(e.startDate.formatted(date: .omitted, time: .shortened)) – \(e.endDate.formatted(date: .omitted, time: .shortened))")
-                                .font(.caption).foregroundStyle(.secondary)
+                                .font(.scaled(.caption)).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -52,7 +52,7 @@ struct EventSheet: View {
     @State private var error: String?
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("New event").font(.title2.weight(.semibold))
+            Text("New event").font(.scaled(.title2).weight(.semibold))
             TextField("Title", text: $draft.title).textFieldStyle(.roundedBorder)
             DatePicker("Starts", selection: $draft.start)
             Picker("Length", selection: $draft.minutes) {
@@ -62,10 +62,10 @@ struct EventSheet: View {
                 ForEach(store.calendar.writableCalendars, id: \.calendarIdentifier) { Text($0.title).tag($0.calendarIdentifier) }
             }
             TextField("Location or video link", text: $draft.location).textFieldStyle(.roundedBorder)
-            TextEditor(text: $draft.notes).frame(height: 80).font(.callout)
+            TextEditor(text: $draft.notes).frame(height: 80).font(.scaled(.callout))
                 .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.primary.opacity(0.1)))
-            Text("Invitations to the people on the email aren't sent; they're listed in the notes.").font(.caption).foregroundStyle(.secondary)
-            if let error { Text(error).foregroundStyle(.red).font(.callout) }
+            Text("Invitations to the people on the email aren't sent; they're listed in the notes.").font(.scaled(.caption)).foregroundStyle(.secondary)
+            if let error { Text(error).foregroundStyle(.red).font(.scaled(.callout)) }
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)

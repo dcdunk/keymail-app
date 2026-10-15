@@ -58,3 +58,26 @@ enum Theme {
     static let chipPalette: [Color] = [.green, .red, .purple, .brown, .blue, .orange, .teal, .pink]
     static func chip(_ name: String) -> Color { chipPalette[paletteIndex(name.unicodeScalars.reduce(0) { $0 &* 31 &+ Int($1.value) }, count: chipPalette.count)] }
 }
+
+/// Settings → Appearance → Text size. Every font in the app goes through these so one setting scales them all.
+extension Font {
+    static let textSizes: [(label: String, scale: Double)] = [("Small", 0.9), ("Default", 1), ("Large", 1.15), ("Larger", 1.3), ("Largest", 1.5)]
+    static var scale: CGFloat { let s = UserDefaults.standard.double(forKey: "textScale"); return s > 0 ? s : 1 }
+
+    /// ⌘+ / ⌘−: the next size up or down.
+    static func step(_ by: Int) {
+        let i = textSizes.firstIndex { $0.scale >= Double(scale) - 0.001 } ?? 1
+        let next = textSizes[min(max(i + by, 0), textSizes.count - 1)].scale
+        UserDefaults.standard.set(next, forKey: "textScale")
+    }
+
+    static func scaled(size: CGFloat, weight: Font.Weight = .regular, design: Font.Design = .default) -> Font {
+        .system(size: size * scale, weight: weight, design: design)
+    }
+    /// macOS's point sizes for each text style, scaled.
+    static func scaled(_ style: Font.TextStyle, design: Font.Design = .default) -> Font {
+        let sizes: [Font.TextStyle: CGFloat] = [.largeTitle: 26, .title: 22, .title2: 17, .title3: 15, .headline: 13, .body: 13,
+                                                .callout: 12, .subheadline: 11, .footnote: 10, .caption: 10, .caption2: 10]
+        return scaled(size: sizes[style] ?? 13, weight: style == .headline ? .bold : .regular, design: design)
+    }
+}

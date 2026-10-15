@@ -64,7 +64,7 @@ struct RecipientChips: View {
                     Text(a.name.isEmpty ? a.email : a.name).lineLimit(1)
                     ChipRemoveButton { remove(i) }
                 }
-                .font(.callout).padding(.leading, 3).padding(.trailing, 3).padding(.vertical, 2)
+                .font(.scaled(.callout)).padding(.leading, 3).padding(.trailing, 3).padding(.vertical, 2)
                 .background(Capsule().fill(a.email.contains("@") ? Color.primary.opacity(0.07) : Color.red.opacity(0.15)))
                 .help(a.email)
             }

@@ -19,12 +19,14 @@ struct SettingsPanel: View {
 
     struct Section: Identifiable { let id: String, title: String, icon: String, keywords: String }
     static let sections: [Section] = [
-        .init(id: "general", title: "General", icon: "gearshape", keywords: "appearance email content dark light thread order undo send notifications badge opacity remote images privacy spelling grammar writing auto archive"),
+        .init(id: "general", title: "General", icon: "gearshape", keywords: "thread order undo send notifications badge opacity remote images privacy spelling grammar writing auto archive"),
+        .init(id: "appearance", title: "Appearance", icon: "textformat.size", keywords: "appearance text font size bigger larger zoom dark light email content opacity glass window card"),
         .init(id: "accounts", title: "Accounts", icon: "person.crop.circle", keywords: "add remove google icloud alias send as nickname default from"),
         .init(id: "gmail", title: "Gmail", icon: "envelope.badge", keywords: "out of office vacation auto reply labels signature sync"),
         .init(id: "ai", title: "AI providers", icon: "sparkles", keywords: "claude codex gemini write summarize instant reply"),
         .init(id: "splits", title: "Split inbox", icon: "rectangle.split.3x1", keywords: "tabs splits important other rules"),
         .init(id: "signatures", title: "Signatures", icon: "signature", keywords: "signature html logo"),
+        .init(id: "hotkeys", title: "Hotkeys", icon: "keyboard", keywords: "keyboard shortcuts keys commands customize remap"),
         .init(id: "snippets", title: "Snippets", icon: "text.quote", keywords: "templates snippets canned"),
         .init(id: "about", title: "About", icon: "info.circle", keywords: "version updates privacy help"),
     ]
@@ -58,6 +60,7 @@ struct SettingsPanel: View {
             }
             .animation(motion, value: open)
         }
+        .onAppear { showContent = open } // the tree is rebuilt when the text size changes
         .onChange(of: open) { _, isOpen in
             if isOpen { showContent = true }
             else { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { if !store.settingsOpen { showContent = false } } }
@@ -68,8 +71,8 @@ struct SettingsPanel: View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(.tertiary)
-                    TextField("Search settings", text: $query).textFieldStyle(.plain).font(.system(size: 13))
+                    Image(systemName: "magnifyingglass").font(.scaled(size: 12)).foregroundStyle(.tertiary)
+                    TextField("Search settings", text: $query).textFieldStyle(.plain).font(.scaled(size: 13))
                         .onSubmit { if let first = matches.first { tab = first.id } }
                 }
                 .padding(.horizontal, 10).padding(.vertical, 7)
@@ -77,7 +80,7 @@ struct SettingsPanel: View {
                 .padding(.bottom, 10)
                 ForEach(matches) { s in
                     Button { tab = s.id } label: {
-                        Label(s.title, systemImage: s.icon).font(.system(size: 13, weight: tab == s.id ? .medium : .regular))
+                        Label(s.title, systemImage: s.icon).font(.scaled(size: 13, weight: tab == s.id ? .medium : .regular))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 10).padding(.vertical, 7)
                             .background(RoundedRectangle(cornerRadius: 8).fill(tab == s.id ? Theme.selection : .clear))
@@ -86,9 +89,9 @@ struct SettingsPanel: View {
                     }
                     .buttonStyle(.plain).handCursor()
                 }
-                if matches.isEmpty { Text("No matches").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 10) }
+                if matches.isEmpty { Text("No matches").font(.scaled(.caption)).foregroundStyle(.secondary).padding(.horizontal, 10) }
                 Spacer()
-                Text("Esc to close").font(.caption2).foregroundStyle(.tertiary).padding(.horizontal, 10)
+                Text("Esc to close").font(.scaled(.caption2)).foregroundStyle(.tertiary).padding(.horizontal, 10)
             }
             .padding(14).padding(.top, 30)
             .frame(width: 190)
@@ -96,10 +99,10 @@ struct SettingsPanel: View {
             Divider()
             VStack(spacing: 0) {
                 HStack {
-                    Text(Self.sections.first { $0.id == tab }?.title ?? "Settings").font(.system(size: 20, weight: .semibold))
+                    Text(Self.sections.first { $0.id == tab }?.title ?? "Settings").font(.scaled(size: 20, weight: .semibold))
                     Spacer()
                     Button { store.settingsOpen = false } label: {
-                        Image(systemName: "xmark").font(.system(size: 12, weight: .semibold)).frame(width: 28, height: 28).contentShape(Circle())
+                        Image(systemName: "xmark").font(.scaled(size: 12, weight: .semibold)).frame(width: 28, height: 28).contentShape(Circle())
                     }.buttonStyle(.plain).foregroundStyle(.secondary).handCursor().help("Close (Esc)")
                 }
                 .padding(.horizontal, 24).padding(.top, 38).padding(.bottom, 6)
@@ -114,11 +117,13 @@ struct SettingsPanel: View {
 
     @ViewBuilder var content: some View {
         switch tab {
+        case "appearance": AppearanceSettings()
         case "accounts": AccountsSettings()
         case "gmail": GmailSettings()
         case "ai": AIProviderSettings()
         case "splits": SplitSettingsView(embedded: true)
         case "signatures": SignatureSettings()
+        case "hotkeys": HotkeySettings()
         case "snippets": SnippetSettings()
         case "about": AboutSettings()
         default: GeneralSettings()
@@ -126,51 +131,25 @@ struct SettingsPanel: View {
     }
 }
 
-struct GeneralSettings: View {
+struct AppearanceSettings: View {
     @EnvironmentObject var store: AppStore
+    @AppStorage("textScale") private var textScale = 1.0
     @AppStorage("windowOpacity") private var windowOpacity = 0.7
     @AppStorage("cardOpacity") private var cardOpacity = 1.0
-    @AppStorage("loadRemoteImages") private var loadRemoteImages = true
-    @AppStorage("spellcheck") private var spellcheck = true
-    @AppStorage("grammar") private var grammar = true
-    @AppStorage("autocorrect") private var autocorrect = true
-    @AppStorage("smartQuotes") private var smartQuotes = false
-    @AppStorage("writingToolsButton") private var writingToolsButton = false
-    @AppStorage("threadNewestFirst") private var newestFirst = false
     @AppStorage("emailContentTheme") private var contentTheme = "auto"
-    @AppStorage("notifyMode") private var notifyMode = "important"
-    @AppStorage("badgeMode") private var badgeMode = "important"
-    @ObservedObject private var notifier = Notifier.shared
     var body: some View {
         Form {
-            Picker("Email content", selection: $contentTheme) {
-                Text("Match app").tag("auto"); Text("Light").tag("light"); Text("Dark").tag("dark")
+            Picker("Text size", selection: $textScale) {
+                ForEach(Font.textSizes, id: \.scale) { Text($0.label).tag($0.scale) }
             }.pickerStyle(.segmented)
-            Picker("Messages in a thread", selection: $newestFirst) {
-                Text("Oldest first").tag(false); Text("Newest first").tag(true)
-            }.pickerStyle(.segmented)
+            Text("Applies to the whole app and to email bodies. ⌘+ and ⌘− also change it.")
+                .font(.scaled(.caption)).foregroundStyle(.secondary)
             Picker("Appearance", selection: Binding(get: { store.state.appearance }, set: { store.setAppearance($0) })) {
                 Text("Match system").tag("System"); Text("Light").tag("Light"); Text("Dark").tag("Dark")
             }.pickerStyle(.segmented)
-            Picker("Undo send", selection: $store.state.undoSendSeconds) {
-                Text("Off").tag(0); Text("5 seconds").tag(5); Text("10 seconds").tag(10); Text("20 seconds").tag(20); Text("30 seconds").tag(30)
-            }
-            Section("Auto Archive") {
-                ForEach(AutoArchiveCategory.allCases) { cat in
-                    Toggle(cat.rawValue, isOn: Binding(
-                        get: { store.state.autoArchive.contains(cat) },
-                        set: { on in
-                            if on { store.state.autoArchive.append(cat); if store.state.autoArchiveSince == nil { store.state.autoArchiveSince = Date() } }
-                            else { store.state.autoArchive.removeAll { $0 == cat } }
-                        }))
-                }
-                Text("Applies to new mail from when you turn it on. Starred mail and returned reminders are never auto-archived. Find them under ☰ → Auto Archived.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            LabeledContent("Calendar") {
-                if store.calendar.authorized { Text("Connected to the Calendar app").foregroundStyle(.secondary) }
-                else { Button("Allow calendar access") { Task { _ = await store.calendar.requestAccess() } } }
-            }
+            Picker("Email content", selection: $contentTheme) {
+                Text("Match app").tag("auto"); Text("Light").tag("light"); Text("Dark").tag("dark")
+            }.pickerStyle(.segmented)
             LabeledContent("Window opacity") {
                 HStack {
                     Slider(value: $windowOpacity, in: 0.2...1.0, step: 0.05) { EmptyView() }
@@ -188,7 +167,48 @@ struct GeneralSettings: View {
                 }
             }
             Text("Lower values let the glass show through emails. Emails that paint their own white backgrounds stay white in those areas.")
-                .font(.caption).foregroundStyle(.secondary)
+                .font(.scaled(.caption)).foregroundStyle(.secondary)
+        }
+        .formStyle(.grouped)
+    }
+}
+
+struct GeneralSettings: View {
+    @EnvironmentObject var store: AppStore
+    @AppStorage("loadRemoteImages") private var loadRemoteImages = true
+    @AppStorage("spellcheck") private var spellcheck = true
+    @AppStorage("grammar") private var grammar = true
+    @AppStorage("autocorrect") private var autocorrect = true
+    @AppStorage("smartQuotes") private var smartQuotes = false
+    @AppStorage("writingToolsButton") private var writingToolsButton = false
+    @AppStorage("threadNewestFirst") private var newestFirst = false
+    @AppStorage("notifyMode") private var notifyMode = "important"
+    @AppStorage("badgeMode") private var badgeMode = "important"
+    @ObservedObject private var notifier = Notifier.shared
+    var body: some View {
+        Form {
+            Picker("Messages in a thread", selection: $newestFirst) {
+                Text("Oldest first").tag(false); Text("Newest first").tag(true)
+            }.pickerStyle(.segmented)
+            Picker("Undo send", selection: $store.state.undoSendSeconds) {
+                Text("Off").tag(0); Text("5 seconds").tag(5); Text("10 seconds").tag(10); Text("20 seconds").tag(20); Text("30 seconds").tag(30)
+            }
+            Section("Auto Archive") {
+                ForEach(AutoArchiveCategory.allCases) { cat in
+                    Toggle(cat.rawValue, isOn: Binding(
+                        get: { store.state.autoArchive.contains(cat) },
+                        set: { on in
+                            if on { store.state.autoArchive.append(cat); if store.state.autoArchiveSince == nil { store.state.autoArchiveSince = Date() } }
+                            else { store.state.autoArchive.removeAll { $0 == cat } }
+                        }))
+                }
+                Text("Applies to new mail from when you turn it on. Starred mail and returned reminders are never auto-archived. Find them under ☰ → Auto Archived.")
+                    .font(.scaled(.caption)).foregroundStyle(.secondary)
+            }
+            LabeledContent("Calendar") {
+                if store.calendar.authorized { Text("Connected to the Calendar app").foregroundStyle(.secondary) }
+                else { Button("Allow calendar access") { Task { _ = await store.calendar.requestAccess() } } }
+            }
             Section("Notifications") {
                 Picker("Notify me about", selection: $notifyMode) {
                     Text("Important mail").tag("important"); Text("All new mail").tag("all"); Text("Nothing").tag("off")
@@ -202,7 +222,7 @@ struct GeneralSettings: View {
                     HStack {
                         Text(notifier.denied ? "Notifications are turned off for Keymail in System Settings."
                                              : "Turn on \"Badge app icon\" for Keymail in System Settings → Notifications to see the Dock count.")
-                            .font(.caption).foregroundStyle(.orange)
+                            .font(.scaled(.caption)).foregroundStyle(.orange)
                         Button("Open System Settings") {
                             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!)
                         }.controlSize(.small)
@@ -210,13 +230,13 @@ struct GeneralSettings: View {
                 }
                 Button("Send a test notification") { notifier.sendTest() }.controlSize(.small)
                 Text("Banners show only while you're in another app. Muted threads never notify. Click a notification to open the email.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.scaled(.caption)).foregroundStyle(.secondary)
             }
             .onAppear { notifier.refreshStatus() }
             Section("Privacy") {
                 Toggle("Load remote images", isOn: $loadRemoteImages)
                 Text("Senders can use remote images to see when, where and on what device you opened an email. Turning this off blocks all outside content in emails; images attached to the email still show.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.scaled(.caption)).foregroundStyle(.secondary)
             }
             Section("Writing") {
                 Toggle("Check spelling while typing", isOn: $spellcheck)
@@ -225,7 +245,7 @@ struct GeneralSettings: View {
                 Toggle("Smart quotes and dashes", isOn: $smartQuotes)
                 Toggle("Show Apple's Writing Tools button while typing", isOn: $writingToolsButton)
                 Text("Uses macOS's built-in spelling and grammar checker, in your system language. Right-click an underlined word for suggestions.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.scaled(.caption)).foregroundStyle(.secondary)
             }
             LabeledContent("Tips") {
                 Button("Show the getting-started tips again") { UserDefaults.standard.set(0, forKey: "coachStep") }
@@ -250,7 +270,7 @@ struct AccountsSettings: View {
     @State private var removing: String?
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Connected accounts").font(.headline)
+            Text("Connected accounts").font(.scaled(.headline))
             if store.state.accounts.isEmpty {
                 Text("No accounts yet.").foregroundStyle(.secondary)
             }
@@ -258,18 +278,17 @@ struct AccountsSettings: View {
                 ForEach(Array(store.state.accounts.enumerated()), id: \.element) { i, acct in
                     let cloud = store.isICloud(acct)
                     HStack(spacing: 12) {
-                        Image(systemName: cloud ? "icloud.fill" : "envelope.fill")
-                            .foregroundStyle(cloud ? Color.blue : Color.red).frame(width: 22)
+                        BrandLogo(brand: cloud ? "icloud" : "gmail", size: 22)
                         VStack(alignment: .leading, spacing: 4) {
                             TextField("Name (e.g. Work, Personal)", text: Binding(
                                 get: { store.state.accountNames[acct] ?? "" },
                                 set: { store.state.accountNames[acct] = $0 }))
-                                .textFieldStyle(.plain).font(.headline)
-                            Text("\(acct) · \(cloud ? "iCloud Mail" : "Gmail")").font(.caption).foregroundStyle(.secondary)
+                                .textFieldStyle(.plain).font(.scaled(.headline))
+                            Text("\(acct) · \(cloud ? "iCloud Mail" : "Gmail")").font(.scaled(.caption)).foregroundStyle(.secondary)
                             TextField("Send-as aliases, comma-separated", text: Binding(
                                 get: { (store.state.aliases[acct] ?? []).joined(separator: ", ") },
                                 set: { store.setAliases($0, for: acct) }))
-                                .textFieldStyle(.roundedBorder).font(.caption)
+                                .textFieldStyle(.roundedBorder).font(.scaled(.caption))
                                 .help(cloud ? "Aliases from icloud.com → Mail settings → Accounts" : "Must already be set up under Gmail → Settings → Accounts → Send mail as")
                             if !(store.state.aliases[acct] ?? []).isEmpty {
                                 Picker("Send from by default", selection: Binding(
@@ -277,35 +296,35 @@ struct AccountsSettings: View {
                                     set: { store.state.defaultFrom[acct] = $0 })) {
                                     ForEach([acct] + (store.state.aliases[acct] ?? []), id: \.self) { Text($0).tag($0) }
                                 }
-                                .font(.caption).fixedSize()
+                                .font(.scaled(.caption)).fixedSize()
                             }
                         }
                         Spacer()
-                        Text("⌘\(i + 1)").font(.caption).foregroundStyle(.tertiary)
+                        Text("⌘\(i + 1)").font(.scaled(.caption)).foregroundStyle(.tertiary)
                         Button("Remove") { removing = acct }
                     }.padding(.vertical, 4)
                 }
             }
             .frame(minHeight: 200)
             HStack {
-                Button { store.addAccount() } label: { Label("Add Google account", systemImage: "plus") }
+                Button { store.addAccount() } label: { Label { Text("Add Google account") } icon: { BrandLogo(brand: "google", size: 14) } }
                     .disabled(!store.hasClient)
 
-                Button { showICloud = true } label: { Label("Add iCloud account", systemImage: "plus") }
+                Button { showICloud = true } label: { Label { Text("Add iCloud account") } icon: { BrandLogo(brand: "icloud", size: 14) } }
             }
-            if let b = store.busy { Text(b).font(.callout).foregroundStyle(.secondary) }
+            if let b = store.busy { Text(b).font(.scaled(.callout)).foregroundStyle(.secondary) }
             if !GoogleClient.isBuiltIn { // developer builds only; customers never see Google Cloud
             DisclosureGroup("Advanced") {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(GoogleClient.isBuiltIn ? "Google sign-in uses the client built into this app." :
                          store.hasClient ? "Google sign-in uses your own Google Cloud client." : "This build has no Google client.")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(.scaled(.callout)).foregroundStyle(.secondary)
                     Button("Use my own Google Cloud client…") { showGoogleSetup = true }.controlSize(.small)
                 }.padding(.top, 4)
-            }.font(.callout)
+            }.font(.scaled(.callout))
             }
             Text("iCloud uses an app-specific password stored in your Keychain.")
-                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                .font(.scaled(.callout)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
         .padding(24)
         .card(isPresented: $showICloud) { ICloudSheet() }
@@ -337,13 +356,87 @@ struct SnippetSettings: View {
             if let i = store.state.snippets.firstIndex(where: { $0.id == selection }) {
                 VStack(alignment: .leading, spacing: 10) {
                     TextField("Name", text: $store.state.snippets[i].name).textFieldStyle(.roundedBorder)
-                    TextEditor(text: $store.state.snippets[i].body).font(.system(size: 14))
+                    TextEditor(text: $store.state.snippets[i].body).font(.scaled(size: 14))
                         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.primary.opacity(0.1)))
-                    Text("Use {first_name}, {name} or {email} for the first recipient.").font(.callout).foregroundStyle(.secondary)
+                    Text("Use {first_name}, {name} or {email} for the first recipient.").font(.scaled(.callout)).foregroundStyle(.secondary)
                 }.padding(16)
             } else {
                 Text("Select a snippet").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+    }
+}
+
+struct HotkeySettings: View {
+    @State private var overrides = Hotkeys.overrides
+    @State private var recording: String?
+    @State private var note: String?
+    @State private var monitor: Any?
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(Hotkeys.commands, id: \.key) { c in
+                    LabeledContent(c.title) {
+                        HStack(spacing: 8) {
+                            if Hotkeys.key(for: c.key, overrides) != c.key {
+                                Button("Reset") { Hotkeys.set(c.key, to: nil); overrides = Hotkeys.overrides }
+                                    .buttonStyle(.link).font(.scaled(.caption))
+                            }
+                            Button { recording == c.key ? stop() : record(c.key) } label: {
+                                Text(recording == c.key ? "Press a key…" : Hotkeys.key(for: c.key, overrides).uppercased())
+                                    .font(.scaled(size: 14, weight: .semibold, design: .monospaced))
+                                    .frame(minWidth: recording == c.key ? 100 : 32, minHeight: 22)
+                            }
+                        }
+                    }
+                }
+            } header: {
+                HStack {
+                    Text("Single-key commands")
+                    Spacer()
+                    Button("Reset all") { Hotkeys.resetAll(); overrides = [:] }.disabled(overrides.isEmpty)
+                }
+            } footer: {
+                Text(note ?? "Click a key to change it. Esc cancels.").font(.scaled(.caption))
+                    .foregroundStyle(note == nil ? AnyShapeStyle(.secondary) : AnyShapeStyle(.red))
+            }
+            Section("Fixed") {
+                ForEach(Hotkeys.fixed, id: \.title) { c in
+                    LabeledContent(c.title) {
+                        // Same size as the editable keys above, drawn as a flat keycap since these can't be clicked.
+                        Text(c.key).font(.scaled(size: 14, weight: .semibold, design: .monospaced))
+                            .frame(minWidth: 32, minHeight: 22).padding(.horizontal, 7)
+                            .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.07)))
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .onDisappear(perform: stop)
+    }
+
+    func record(_ command: String) {
+        stop()
+        recording = command; note = nil; Hotkeys.recording = true
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { e in
+            if e.keyCode == 53 { stop(); return nil } // Esc cancels
+            let key = (e.charactersIgnoringModifiers ?? "").lowercased()
+            guard key.count == 1, let ch = key.first, ch.isLetter || ch.isNumber || ch.isPunctuation || ch.isSymbol,
+                  e.modifierFlags.intersection([.command, .control, .option]).isEmpty else {
+                note = "Pick a single letter, number or symbol, without ⌘, ⌃ or ⌥."; return nil
+            }
+            if let other = Hotkeys.owner(of: key, overrides), other != command {
+                note = "\(key.uppercased()) is already used by \(Hotkeys.commands.first { $0.key == other }!.title)."; return nil
+            }
+            Hotkeys.set(command, to: key); overrides = Hotkeys.overrides
+            stop()
+            return nil
+        }
+    }
+
+    func stop() {
+        if let m = monitor { NSEvent.removeMonitor(m) }
+        monitor = nil; recording = nil; Hotkeys.recording = false
     }
 }

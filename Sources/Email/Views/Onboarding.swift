@@ -32,8 +32,8 @@ struct OnboardingView: View {
             .frame(maxWidth: 560)
             .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .opacity))
             Spacer(minLength: 20)
-            if let b = store.busy { Label(b, systemImage: "hourglass").font(.callout).foregroundStyle(.secondary).padding(.bottom, 8) }
-            if let b = store.banner { Text(b).font(.callout).foregroundStyle(.red).multilineTextAlignment(.center).frame(maxWidth: 520).padding(.bottom, 12) }
+            if let b = store.busy { Label(b, systemImage: "hourglass").font(.scaled(.callout)).foregroundStyle(.secondary).padding(.bottom, 8) }
+            if let b = store.banner { Text(b).font(.scaled(.callout)).foregroundStyle(.red).multilineTextAlignment(.center).frame(maxWidth: 520).padding(.bottom, 12) }
         }
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -56,8 +56,8 @@ struct OnboardingView: View {
 
     func title(_ t: String, _ sub: String) -> some View {
         VStack(spacing: 10) {
-            Text(t).font(.system(size: 30, weight: .semibold)).multilineTextAlignment(.center)
-            Text(sub).font(.title3).foregroundStyle(.secondary).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            Text(t).font(.scaled(size: 30, weight: .semibold)).multilineTextAlignment(.center)
+            Text(sub).font(.scaled(.title3)).foregroundStyle(.secondary).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -81,8 +81,8 @@ struct OnboardingView: View {
 
     func feature(_ icon: String, _ t: String, _ d: String) -> some View {
         HStack(alignment: .top, spacing: 14) {
-            Image(systemName: icon).font(.title3).foregroundStyle(Theme.accent).frame(width: 28)
-            VStack(alignment: .leading, spacing: 2) { Text(t).font(.headline); Text(d).foregroundStyle(.secondary) }
+            Image(systemName: icon).font(.scaled(.title3)).foregroundStyle(Theme.accent).frame(width: 28)
+            VStack(alignment: .leading, spacing: 2) { Text(t).font(.scaled(.headline)); Text(d).foregroundStyle(.secondary) }
         }
     }
 
@@ -102,9 +102,9 @@ struct OnboardingView: View {
     func providerCard(_ icon: String, _ color: Color, _ name: String, _ detail: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 12) {
-                Image(systemName: icon).font(.system(size: 34)).foregroundStyle(color)
-                Text(name).font(.title3.weight(.semibold))
-                Text(detail).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                Image(systemName: icon).font(.scaled(size: 34)).foregroundStyle(color)
+                Text(name).font(.scaled(.title3).weight(.semibold))
+                Text(detail).font(.scaled(.callout)).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }
             .frame(width: 220, height: 170)
             .floatingPanel(RoundedRectangle(cornerRadius: 20))
@@ -151,11 +151,11 @@ struct OnboardingView: View {
                 ForEach(AIProvider.all) { p in
                     HStack(spacing: 12) {
                         Image(systemName: "sparkles").foregroundStyle(Theme.accent)
-                        VStack(alignment: .leading) { Text(p.name).font(.headline); Text(p.maker).font(.caption).foregroundStyle(.secondary) }
+                        VStack(alignment: .leading) { Text(p.name).font(.scaled(.headline)); Text(p.maker).font(.scaled(.caption)).foregroundStyle(.secondary) }
                         Spacer()
                         if installedAI.contains(p.id) {
-                            Label("Installed", systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.callout)
-                            if store.state.aiProvider == p.id { Text("Selected").font(.caption).foregroundStyle(Theme.accent) }
+                            Label("Installed", systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.scaled(.callout))
+                            if store.state.aiProvider == p.id { Text("Selected").font(.scaled(.caption)).foregroundStyle(Theme.accent) }
                             else { Button("Use") { store.state.aiProvider = p.id }.buttonBorderShape(.capsule) }
                         } else {
                             Button("Get it") { NSWorkspace.shared.open(URL(string: p.installURL)!) }.buttonBorderShape(.capsule)
@@ -166,7 +166,7 @@ struct OnboardingView: View {
                 }
             }
             Text("AI runs read-only: email content can only produce text. You can change this anytime in Settings → AI Providers.")
-                .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                .font(.scaled(.callout)).foregroundStyle(.secondary).multilineTextAlignment(.center)
             .task {
                 for p in AIProvider.all where await Task.detached(operation: { AI.binary(p.binary) }).value != nil { installedAI.insert(p.id) }
             }
@@ -179,7 +179,7 @@ struct OnboardingView: View {
 
     var done: some View {
         VStack(spacing: 24) {
-            Image(systemName: "checkmark.circle.fill").font(.system(size: 56)).foregroundStyle(.green)
+            Image(systemName: "checkmark.circle.fill").font(.scaled(size: 56)).foregroundStyle(.green)
             title("You're all set", "A few keys worth knowing. You'll get short tips inside the app too.")
             Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 10) {
                 keyRow("⌘K", "Do anything: search every action")
@@ -199,7 +199,7 @@ struct OnboardingView: View {
 
     func keyRow(_ k: String, _ d: String) -> some View {
         GridRow {
-            Text(k).font(.system(size: 13, weight: .semibold, design: .rounded)).padding(.horizontal, 8).padding(.vertical, 3)
+            Text(k).font(.scaled(size: 13, weight: .semibold, design: .rounded)).padding(.horizontal, 8).padding(.vertical, 3)
                 .background(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.primary.opacity(0.2)))
             Text(d)
         }
