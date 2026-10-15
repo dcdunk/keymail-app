@@ -476,7 +476,7 @@ struct AccountsSettings: View {
                     .disabled(!store.hasClient)
 
                 Button { showICloud = true } label: { Label { Text("Add iCloud account") } icon: { BrandLogo(brand: "icloud", size: 14) } }
-                Button { store.connectMicrosoft() } label: { Label { Text("Add Microsoft account") } icon: { BrandLogo(brand: "microsoft", size: 14) } }
+                Button { store.connectMicrosoft() } label: { Label { Text("Add Outlook account") } icon: { BrandLogo(brand: "outlook", size: 14) } }
                 Button { showYahoo = true } label: { Label { Text("Add Yahoo account") } icon: { BrandLogo(brand: "yahoo", size: 14) } }
             }
             if let b = store.busy { Text(b).font(.scaled(.callout)).foregroundStyle(.secondary) }

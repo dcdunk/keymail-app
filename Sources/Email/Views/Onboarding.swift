@@ -92,21 +92,21 @@ struct OnboardingView: View {
         VStack(spacing: 24) {
             title("Connect your email", "Your mail goes straight from the provider to this Mac. No servers in between.")
             HStack(spacing: 16) {
-                providerCard("envelope.fill", .red, "Gmail", "Google sign-in in your browser") {
+                providerCard("gmail", "Gmail", "Google sign-in in your browser") {
                     if store.hasClient || AppFlavor.isDemo { store.addAccount() } else { step = .google }
                 }
-                providerCard("icloud.fill", .blue, "iCloud Mail", "With an app-specific password") { showICloud = true }
-                providerCard("tray.full.fill", Color(red: 0.0, green: 0.47, blue: 0.84), "Outlook", "Outlook.com, Hotmail or Microsoft 365") { store.connectMicrosoft() }
-                providerCard("envelope.open.fill", Color(red: 0.38, green: 0.0, blue: 0.82), "Yahoo Mail", "With an app password") { showYahoo = true }
+                providerCard("icloud", "iCloud Mail", "With an app-specific password") { showICloud = true }
+                providerCard("outlook", "Outlook", "Outlook.com, Hotmail or Microsoft 365") { store.connectMicrosoft() }
+                providerCard("yahoo", "Yahoo Mail", "With an app password") { showYahoo = true }
             }
             if !store.state.accounts.isEmpty { Button("Back") { step = .accounts }.quiet() }
         }
     }
 
-    func providerCard(_ icon: String, _ color: Color, _ name: String, _ detail: String, _ action: @escaping () -> Void) -> some View {
+    func providerCard(_ brand: String, _ name: String, _ detail: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 12) {
-                Image(systemName: icon).font(.scaled(size: 34)).foregroundStyle(color)
+                BrandLogo(brand: brand, size: 36).frame(height: 40)
                 Text(name).font(.scaled(.title3).weight(.semibold))
                 Text(detail).font(.scaled(.callout)).foregroundStyle(.secondary).multilineTextAlignment(.center)
             }

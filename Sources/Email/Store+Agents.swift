@@ -131,7 +131,7 @@ extension AppStore {
         switch name {
         case "list_accounts":
             return json(state.accounts.map { acct in
-                ["email": acct, "name": label(acct), "provider": ["yahoo": "Yahoo", "icloud": "iCloud", "microsoft": "Outlook"][brand(acct)] ?? "Gmail",
+                ["email": acct, "name": label(acct), "provider": ["yahoo": "Yahoo", "icloud": "iCloud", "outlook": "Outlook"][brand(acct)] ?? "Gmail",
                  "unread_in_inbox": allConversations.filter { $0.account == acct && $0.inInbox && $0.isUnread }.count] as [String: Any]
             })
 

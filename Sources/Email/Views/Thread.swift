@@ -117,11 +117,12 @@ struct Avatar: View {
     let address: Address?
     var size: CGFloat = 34
     @ObservedObject private var logos = SenderLogos.shared
+    @AppStorage("loadSenderLogos") private var showLogos = true
     var body: some View {
         let key = address?.email ?? "?"
         let domain = logoDomain(for: key)
         Group {
-            if let logo = logos.images[SenderLogos.personKey(key)] ?? domain.flatMap({ logos.images[SenderLogos.key($0, senderName: address?.name)] }) {
+            if let logo = logos.images[SenderLogos.personKey(key)] ?? domain.flatMap({ showLogos ? logos.images[SenderLogos.key($0, senderName: address?.name)] : nil }) {
                 Group {
                     // The circle takes the icon's own background color (white for bare marks), with the mark centered on it.
                     if logo.photo {   // a profile photo fills the circle
@@ -140,7 +141,7 @@ struct Avatar: View {
                         .font(.scaled(size: size * 0.42, weight: .semibold)).foregroundStyle(Theme.chip(key)))
             }
         }
-        .task(id: key) { logos.loadPhoto(key); if let domain { await logos.load(domain, senderName: address?.name) } }
+        .task(id: "\(key)\(showLogos)") { logos.loadPhoto(key); if let domain { await logos.load(domain, senderName: address?.name) } }
     }
 }
 
