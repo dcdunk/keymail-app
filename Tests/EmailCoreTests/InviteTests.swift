@@ -104,3 +104,14 @@ final class AutomatedAddressTests: XCTestCase {
         for a in ["pat@example.com", "powerofusdesk@salesforce.com", "nora@x.com"] { XCTAssertFalse(isAutomatedAddress(a), a) }
     }
 }
+
+final class OwnDarkModeTests: XCTestCase {
+    func testDetectsSendersDarkDesign() {
+        XCTAssertTrue(emailHasOwnDarkMode("<style>@media (prefers-color-scheme: dark) { body { background:#000 } }</style>"))
+        XCTAssertTrue(emailHasOwnDarkMode(#"<meta name="color-scheme" content="light dark">"#))
+        XCTAssertTrue(emailHasOwnDarkMode(#"<meta name="supported-color-schemes" content="light dark">"#))
+        XCTAssertTrue(emailHasOwnDarkMode(":root { color-scheme: light dark; }"))
+        XCTAssertFalse(emailHasOwnDarkMode(#"<meta name="color-scheme" content="light only">"#))
+        XCTAssertFalse(emailHasOwnDarkMode("<p>We support dark mode in our app!</p>"))
+    }
+}

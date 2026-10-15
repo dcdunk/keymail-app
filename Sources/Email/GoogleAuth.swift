@@ -119,6 +119,7 @@ final class GoogleAuth {
         }
         Keychain.set(refresh, for: email)
         cache[email] = (access, Date().addingTimeInterval(j["expires_in"] as? Double ?? 3000))
+        AuthLog.log.notice("sign-in \(email, privacy: .public) granted: \((j["scope"] as? String ?? "").components(separatedBy: " ").map { $0.components(separatedBy: "/").last ?? $0 }.sorted().joined(separator: ","), privacy: .public)")
         return (email, Set((j["scope"] as? String ?? "").split(separator: " ").map(String.init)))
     }
 

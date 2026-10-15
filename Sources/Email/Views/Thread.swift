@@ -284,6 +284,8 @@ struct EmailWebView: NSViewRepresentable {
     func updateNSView(_ v: PassThroughWebView, context: Context) {
         context.coordinator.suspicious = suspicious
         let page = themed ? Self.wrapThemed(html) : Self.wrap(html, padding: padding, opacity: cardOpacity, dark: dark)
+        // Emails that ship their own dark design only show it when the page is in dark appearance.
+        if !themed { v.appearance = NSAppearance(named: dark && emailHasOwnDarkMode(html) ? .darkAqua : .aqua) }
         guard context.coordinator.last != page else { return }
         context.coordinator.last = page
         v.loadHTMLString(page, baseURL: nil)
@@ -294,11 +296,16 @@ struct EmailWebView: NSViewRepresentable {
 
     /// Minimal reset only; never override the sender's layout (forcing image heights broke sprites and banners).
     static func wrap(_ html: String, padding: String = "16px 20px", opacity: Double = 1, dark: Bool = false) -> String {
-        // Dark: the page starts dark and darkScript recolors the email element by element (images untouched).
-        let darkCSS = dark ? "img.lm-plate { background-color: #fff; border-radius: 3px; }" : ""
+        // Dark: an email with its own dark design gets it (the web view runs in dark appearance); then darkScript
+        // recolors whatever is still light, element by element (images untouched).
+        // Many senders' dark designs only cover part of the email (Apple's darkens the header and footer, not the body),
+        // so darkScript still runs and darkens whatever stayed light. It skips anything already dark.
+        let native = dark && emailHasOwnDarkMode(html)
+        let recolor = dark
+        let darkCSS = (recolor ? "img.lm-plate { background-color: #fff; border-radius: 3px; }" : "") + (native ? " :root { color-scheme: light dark; }" : "")
         let bg = dark ? "30,30,32" : "255,255,255"
         return """
-        <!doctype html><html\(dark ? " class=\"lm-dark\"" : "")><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+        <!doctype html><html\(recolor ? " class=\"lm-dark\"" : "")><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
         <style>
         html, body { margin: 0; padding: 0; background: rgba(\(bg),\(String(format: "%.2f", opacity))); color: \(dark ? "#e8e8ea" : "#1d1d1f"); }
         \(darkCSS)
@@ -336,20 +343,30 @@ struct EmailWebView: NSViewRepresentable {
         /// Safe to run more than once: already-dark backgrounds and light text are skipped.
         static let darkScript = """
         (function(){if(!document.documentElement.classList.contains('lm-dark'))return;
-        function rgb(c){var m=/rgba?\\(([\\d.]+),\\s*([\\d.]+),\\s*([\\d.]+)(?:,\\s*([\\d.]+))?/.exec(c);return m?[+m[1]/255,+m[2]/255,+m[3]/255,m[4]===undefined?1:+m[4]]:null}
+        function rgb(c){var m=/rgba?\\(([\\d.]+),\\s*([\\d.]+),\\s*([\\d.]+)(?:,\\s*([\\d.]+))?/.exec(c||'');return m?[+m[1]/255,+m[2]/255,+m[3]/255,m[4]===undefined?1:+m[4]]:null}
         function lum(c){return .299*c[0]+.587*c[1]+.114*c[2]}
         function setL(c,L){var r=c[0],g=c[1],b=c[2],mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn,l=(mx+mn)/2,h=0,s=0;
         if(d){s=l>.5?d/(2-mx-mn):d/(mx+mn);h=mx==r?(g-b)/d+(g<b?6:0):mx==g?(b-r)/d+2:(r-g)/d+4;h/=6}
         function f(t){t=(t%1+1)%1;var q=L<.5?L*(1+s):L+s-L*s,p=2*L-q;return t<1/6?p+(q-p)*6*t:t<.5?q:t<2/3?p+(q-p)*(2/3-t)*6:p}
         return 'rgba('+Math.round(f(h+1/3)*255)+','+Math.round(f(h)*255)+','+Math.round(f(h-1/3)*255)+','+c[3]+')'}
-        var art='[style*="background-image"],[style*="background:url"],[style*="background: url"],[background]';
-        document.querySelectorAll('body *').forEach(function(el){
-        if(/^(IMG|PICTURE|VIDEO|SVG|svg)$/.test(el.tagName)||el.closest(art))return;
-        var cs=getComputedStyle(el),bg=rgb(cs.backgroundColor),fg=rgb(cs.color);
-        if(bg&&bg[3]>0&&lum(bg)>.6)el.style.setProperty('background-color',setL(bg,.12+(1-lum(bg))*.5),'important');
-        if(fg&&lum(fg)<.5)el.style.setProperty('color',setL(fg,.86-lum(fg)*.4),'important');
+        function dark(c){return setL(c,.12+(1-lum(c))*.5)}
+        var media=/^(IMG|PICTURE|VIDEO|SVG|svg|CANVAS)$/;
+        function onPicture(el){for(var p=el;p&&p.nodeType===1;p=p.parentElement){if(/url\\(/.test(getComputedStyle(p).backgroundImage))return true}return false}
+        /* The colour actually behind an element: its own or the nearest ancestor's (null = a picture). */
+        function behind(el){for(var p=el;p&&p.nodeType===1;p=p.parentElement){var cs=getComputedStyle(p),bi=cs.backgroundImage;
+        if(bi&&bi!=='none')return /url\\(/.test(bi)?null:rgb(bi);var c=rgb(cs.backgroundColor);if(c&&c[3]>.5)return c}return [30/255,30/255,32/255,1]}
+        var all=[].slice.call(document.querySelectorAll('html, body, body *')).filter(function(el){return !media.test(el.tagName)&&!onPicture(el)});
+        /* 1. Light backgrounds become dark, keeping their hue, including gradients used as a solid fill (a common way
+              senders block dark mode). Borders that would vanish get lighter. Images are never touched. */
+        all.forEach(function(el){var cs=getComputedStyle(el),bg=rgb(cs.backgroundColor),bi=cs.backgroundImage;
+        if(bg&&bg[3]>0&&lum(bg)>.6)el.style.setProperty('background-color',dark(bg),'important');
+        if(bi&&bi!=='none'&&!/url\\(/.test(bi)){var g=rgb(bi);if(g&&lum(g)>.6){el.style.setProperty('background-image','none','important');el.style.setProperty('background-color',dark(g),'important')}}
         ['top','right','bottom','left'].forEach(function(side){var w=parseFloat(cs['border-'+side+'-width']),bc=rgb(cs['border-'+side+'-color']);
-        if(w>0&&bc&&lum(bc)<.35)el.style.setProperty('border-'+side+'-color',setL(bc,.45),'important')})});})();0
+        if(w>0&&bc&&lum(bc)<.35)el.style.setProperty('border-'+side+'-color',setL(bc,.45),'important')})});
+        /* 2. Dark text becomes light only where the colour behind it really is dark now, so text can never end up
+              light-on-light (or be changed on top of a picture). */
+        all.forEach(function(el){var fg=rgb(getComputedStyle(el).color),bg=behind(el);
+        if(fg&&bg&&lum(fg)<.6&&lum(bg)<.5)el.style.setProperty('color',setL(fg,.86-lum(fg)*.4),'important')});})();0
         """
 
         static let plateScript = """

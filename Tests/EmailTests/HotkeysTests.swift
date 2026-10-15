@@ -57,3 +57,12 @@ final class SettingsGrantTests: XCTestCase {
         XCTAssertTrue(settingsGrantOutcome(requested: "a@gmail.com", signedIn: "a@gmail.com", scopes: ok)!.contains("granted"))
     }
 }
+
+final class RecoveryTests: XCTestCase {
+    func testPicksNewestSetAsideCopyPerFile() {
+        let r = setAsideToRestore(["state.json", "state.json.unreadable-100", "state.json.unreadable-200", "cache2.json.unreadable-150",
+                                   "state.json.restored-50", "google_client.json", "x.unencrypted-9"])
+        XCTAssertEqual(r.map(\.0), ["cache2.json.unreadable-150", "state.json.unreadable-200"])
+        XCTAssertEqual(r.map(\.1), ["cache2.json", "state.json"])
+    }
+}

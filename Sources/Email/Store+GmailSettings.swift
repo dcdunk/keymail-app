@@ -13,13 +13,17 @@ extension AppStore {
     /// so only the granted-scopes check (checkSettingsAccess) decides when the permission is really there.
     func settingsCall<T>(_ a: String, _ f: () async throws -> T) async -> T? {
         do { return try await f() }
-        catch let e as HTTPError where e.needsMorePermission { needsSettingsAccess.insert(a); return nil }
+        catch let e as HTTPError where e.needsMorePermission {
+            AuthLog.log.notice("settings call 403 for \(a, privacy: .public): \(e.body.prefix(200), privacy: .public)")
+            needsSettingsAccess.insert(a); return nil
+        }
         catch { report(error); return nil }
     }
 
     /// Flags accounts whose sign-in predates the settings permission, so the Grant access button shows up front.
     func checkSettingsAccess(_ a: String) async {
         let scopes = await auth.grantedScopes(a)
+        AuthLog.log.notice("tokeninfo \(a, privacy: .public): \(scopes.map { $0.components(separatedBy: "/").last ?? $0 }.sorted().joined(separator: ","), privacy: .public)")
         if !scopes.isEmpty, !scopes.contains(GoogleAuth.settingsScope) { needsSettingsAccess.insert(a) }
         else if scopes.contains(GoogleAuth.settingsScope) { needsSettingsAccess.remove(a) }
     }

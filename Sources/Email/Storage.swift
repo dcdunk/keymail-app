@@ -1,3 +1,4 @@
+import os
 import AppKit
 import Foundation
 import Network
@@ -23,6 +24,7 @@ enum Disk {
         return d
     }()
     static func load<T: Decodable>(_ name: String, as: T.Type) -> T? {
+        _ = recovered
         let url = dir.appendingPathComponent(name)
         guard let raw = try? Data(contentsOf: url) else { return nil }
         let data: Data
@@ -65,47 +67,112 @@ enum Disk {
 }
 
 /// The 256-bit key for Email's files: created once, kept in the Keychain, read once per launch.
-/// Nil only if the Keychain refuses access; a new key is made only when none exists at all.
+/// Nil only if the Keychain refuses access; a new key is made only when none exists under either Keychain name.
 enum CacheKey {
+    static let account = "cache-encryption-key"
     /// True only on the first launch after installing (or upgrading from a build without encryption).
     private(set) static var createdThisLaunch = false
     static let key: SymmetricKey? = {
-        let account = "cache-encryption-key"
-        var out: AnyObject?
-        let q = [kSecClass: kSecClassGenericPassword, kSecAttrService: Keychain.service, kSecAttrAccount: account,
-                 kSecReturnData: true] as CFDictionary
-        switch SecItemCopyMatching(q, &out) {
-        case errSecSuccess:
-            guard let d = out as? Data, let b = Data(base64Encoded: d), b.count == 32 else { return nil }
-            return SymmetricKey(data: b)
-        case errSecItemNotFound:
+        switch lookup(Keychain.service) {
+        case .found(let k): return k
+        case .refused: return nil
+        case .missing: break
+        }
+        // Written before the Keychain entries were renamed: carry it over instead of making a new one.
+        switch lookup(Keychain.legacyService) {
+        case .found(let k):
+            Keychain.set(k.withUnsafeBytes { Data($0) }.base64EncodedString(), for: account)
+            return k
+        case .refused: return nil
+        case .missing:
             createdThisLaunch = true
             let k = SymmetricKey(size: .bits256)
             Keychain.set(k.withUnsafeBytes { Data($0) }.base64EncodedString(), for: account)
             return k
-        default:
-            return nil
         }
     }()
+    /// The key under the old Keychain name, if one is there (used to recover files it encrypted).
+    static var legacyKey: SymmetricKey? { if case .found(let k) = lookup(Keychain.legacyService) { return k }; return nil }
+
+    enum Lookup { case found(SymmetricKey), missing, refused }
+    static func lookup(_ service: String) -> Lookup {
+        var out: AnyObject?
+        let q = [kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: account, kSecReturnData: true] as CFDictionary
+        switch SecItemCopyMatching(q, &out) {
+        case errSecSuccess:
+            guard let d = out as? Data, let b = Data(base64Encoded: d), b.count == 32 else { return .refused }
+            return .found(SymmetricKey(data: b))
+        case errSecItemNotFound: return .missing
+        default: return .refused
+        }
+    }
+}
+
+extension Disk {
+    /// One-time repair for files set aside as unreadable because a new key was made while the old one still existed
+    /// (Oct 2026, Keychain rename). Any set-aside file the old key opens is re-encrypted with the current key and put
+    /// back; the set-aside copy is renamed ".restored" so this never runs twice for it.
+    static let recovered: Void = {
+        guard let current = CacheKey.key, let old = CacheKey.legacyKey,
+              let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else { return }
+        for (aside, original) in setAsideToRestore(names) {
+            let asideURL = dir.appendingPathComponent(aside), url = dir.appendingPathComponent(original)
+            guard let raw = try? Data(contentsOf: asideURL), let plain = try? decryptFile(raw, key: old),
+                  let sealed = try? encryptFile(plain, key: current) else { continue }
+            do {
+                try sealed.write(to: url, options: .atomic)
+                try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+                try FileManager.default.moveItem(at: asideURL, to: dir.appendingPathComponent(aside.replacingOccurrences(of: ".unreadable-", with: ".restored-")))
+                AuthLog.log.notice("restored \(original, privacy: .public) from \(aside, privacy: .public)")
+            } catch { AuthLog.log.error("restore of \(original, privacy: .public) failed: \(error.localizedDescription, privacy: .public)") }
+        }
+    }()
+}
+
+/// For each file name, the newest "name.unreadable-<time>" copy set aside, as (set-aside name, original name).
+func setAsideToRestore(_ names: [String]) -> [(String, String)] {
+    var newest: [String: (time: Int, name: String)] = [:]
+    for n in names {
+        guard let r = n.range(of: ".unreadable-"), let t = Int(n[r.upperBound...]) else { continue }
+        let original = String(n[..<r.lowerBound])
+        if (newest[original]?.time ?? Int.min) < t { newest[original] = (t, n) }
+    }
+    return newest.map { ($0.value.name, $0.key) }.sorted { $0.1 < $1.1 }
 }
 
 // MARK: Keychain (refresh tokens only)
 
 enum Keychain {
-    static let service = AppFlavor.isDemo ? "Email-Demo.google-refresh-token" : "Email.google-refresh-token"
+    /// Entries written by this and later builds. The older name stays readable: entries some earlier builds
+    /// created can't be replaced by a differently signed build, which silently kept stale sign-ins.
+    static let service = AppFlavor.isDemo ? "Email-Demo.google-refresh-token.v2" : "Email.google-refresh-token.v2"
+    static let legacyService = AppFlavor.isDemo ? "Email-Demo.google-refresh-token" : "Email.google-refresh-token"
+
     static func set(_ value: String, for account: String) {
-        delete(account)
-        SecItemAdd([kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: account,
-                    kSecValueData: Data(value.utf8)] as CFDictionary, nil)
+        let q = [kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: account] as CFDictionary
+        var status = SecItemUpdate(q, [kSecValueData: Data(value.utf8)] as CFDictionary)
+        if status == errSecItemNotFound {
+            status = SecItemAdd([kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: account,
+                                 kSecValueData: Data(value.utf8)] as CFDictionary, nil)
+        }
+        if status == errSecSuccess { SecItemDelete(query(legacyService, account)) } // best effort; reads prefer the new entry anyway
+        AuthLog.log.notice("keychain save \(account, privacy: .public): status=\(status) readback=\(get(account) == value)")
     }
-    static func get(_ account: String) -> String? {
+    static func get(_ account: String) -> String? { read(service, account) ?? read(legacyService, account) }
+    static func delete(_ account: String) {
+        SecItemDelete(query(service, account)); SecItemDelete(query(legacyService, account))
+    }
+
+    private static func query(_ svc: String, _ account: String) -> CFDictionary {
+        [kSecClass: kSecClassGenericPassword, kSecAttrService: svc, kSecAttrAccount: account] as CFDictionary
+    }
+    private static func read(_ svc: String, _ account: String) -> String? {
         var out: AnyObject?
-        let q = [kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: account,
-                 kSecReturnData: true] as CFDictionary
+        let q = [kSecClass: kSecClassGenericPassword, kSecAttrService: svc, kSecAttrAccount: account, kSecReturnData: true] as CFDictionary
         guard SecItemCopyMatching(q, &out) == errSecSuccess, let d = out as? Data else { return nil }
         return String(data: d, encoding: .utf8)
     }
-    static func delete(_ account: String) {
-        SecItemDelete([kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: account] as CFDictionary)
-    }
 }
+
+/// Sign-in diagnostics: account names, permission names and status codes only, never tokens.
+enum AuthLog { static let log = Logger(subsystem: "app.keymail", category: "auth") }

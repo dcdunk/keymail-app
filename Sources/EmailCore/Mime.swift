@@ -233,3 +233,11 @@ public func queryItems(fromRequest req: String) -> [String: String] {
     for q in URLComponents(string: "http://x" + path)?.queryItems ?? [] { out[q.name] = q.value ?? "" }
     return out
 }
+
+/// The sender designed a dark version (a prefers-color-scheme: dark style, or a color-scheme that includes dark).
+public func emailHasOwnDarkMode(_ html: String) -> Bool {
+    let h = html.lowercased()
+    if h.range(of: #"prefers-color-scheme\s*:\s*dark"#, options: .regularExpression) != nil { return true }
+    if h.range(of: #"<meta[^>]+name=["']?(supported-)?color-scheme["']?[^>]+content=["'][^"']*dark"#, options: .regularExpression) != nil { return true }
+    return h.range(of: #"color-scheme\s*:\s*[^;"'}]*dark"#, options: .regularExpression) != nil
+}
