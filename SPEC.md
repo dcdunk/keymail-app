@@ -1,4 +1,6 @@
-# Spotless: personal macOS mail client (Superhuman-style), Gmail only
+# Keymail: macOS mail client for Gmail and iCloud (Superhuman-style)
+
+> Original v1 planning note. The app has grown well past it (iCloud, notifications, settings panel, updates); the code is the source of truth.
 
 ## What Superhuman does (source: superhuman.com/mail, help.superhuman.com)
 | Feature | How it works | v1? |
@@ -21,7 +23,7 @@
 - **App:** native SwiftUI, macOS 14+. One window: split tabs, message list, thread view, compose sheet, Cmd+K overlay.
 - **Data:** Gmail REST API, not IMAP. Labels map 1:1 to Superhuman concepts:
   - Done = remove `INBOX` label
-  - Snooze = remove `INBOX`, add `Spotless/Snoozed`, store wake time locally; re-add `INBOX` at wake time
+  - Snooze = remove `INBOX`, add the hidden `Keymail/Snoozed` label (renamed in place from the older `Email/Snoozed`), store wake time locally; re-add `INBOX` at wake time
   - Splits = local rules evaluated over cached inbox messages
 - **Sync:** first load `messages.list` (inbox, last 30 days), then incremental via `users.history.list` with the saved `historyId` every ~30s. Push (Pub/Sub watch) skipped: requires a Google Cloud topic and a public endpoint.
 - **Cache:** SQLite (GRDB) for instant UI. Speed is the product; every keypress must hit local data, then sync in background (optimistic updates).

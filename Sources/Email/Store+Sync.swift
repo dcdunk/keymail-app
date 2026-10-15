@@ -153,7 +153,8 @@ extension AppStore {
             }
             do {
                 let g = gmail(s.account)
-                let snoozedId = try await g.labelId(named: "Email/Snoozed", existing: labelNames)
+                let snoozedId = try await g.snoozeLabelId(existing: labelNames)
+                labelNames[snoozedId] = Gmail.snoozeLabel
                 let msgs = try await g.thread(s.threadId)
                 if s.ifNoReply && gotReply(msgs, me: s.account, after: s.setAt) {
                     // Someone replied, so the reminder is cancelled; the reply already brought it back.

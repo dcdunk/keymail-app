@@ -222,7 +222,7 @@ struct Row: View {
     }
     var body: some View {
         let unread = c.isUnread
-        let chips = c.labels.compactMap { store.labelNames[$0] }.filter { !$0.hasPrefix("Email/") }.sorted()
+        let chips = c.labels.compactMap { store.labelNames[$0] }.filter { !isAppLabel($0) }.sorted()
         HStack(spacing: 0) {
             Circle().fill(dot).frame(width: 7, height: 7).frame(width: 26)
             HStack(spacing: 6) {

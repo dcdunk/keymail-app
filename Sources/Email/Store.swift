@@ -161,7 +161,7 @@ final class AppStore: ObservableObject {
                                "Reminders", "Snippets", "Muted", "Spam", "Trash"]
     /// User labels shown under the folders, in the same order the panel draws them.
     var panelLabels: [String] {
-        labelNames.values.filter { !$0.hasPrefix("Email/") }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        labelNames.values.filter { !isAppLabel($0) }.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
     var panelCount: Int { Self.panelFolders.count + panelLabels.count }
     var currentPanelIndex: Int {

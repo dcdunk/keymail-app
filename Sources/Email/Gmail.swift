@@ -7,6 +7,9 @@ import CryptoKit
 
 // MARK: Gmail REST API
 
+/// Labels Keymail creates for itself (snooze); never shown as label chips inside the app.
+func isAppLabel(_ name: String) -> Bool { name.hasPrefix("Keymail/") || name.hasPrefix("Email/") }
+
 struct Gmail {
     let account: String
     let auth: GoogleAuth
@@ -204,6 +207,19 @@ struct Gmail {
             if let id = l["id"] as? String, let name = l["name"] as? String { out[id] = name }
         }
         return out
+    }
+
+    /// The hidden Gmail label snoozed threads wear while out of the inbox. Users can see it on those emails in
+    /// Gmail itself, so it carries the app's name. Older builds used "Email/Snoozed": that label is renamed in
+    /// place, so threads already snoozed keep it.
+    static let snoozeLabel = "Keymail/Snoozed", legacySnoozeLabels = ["Email/Snoozed"]
+    func snoozeLabelId(existing: [String: String]) async throws -> String {
+        if let id = existing.first(where: { $0.value == Self.snoozeLabel })?.key { return id }
+        if let old = existing.first(where: { Self.legacySnoozeLabels.contains($0.value) })?.key {
+            try await updateLabel(old, name: Self.snoozeLabel)
+            return old
+        }
+        return try await labelId(named: Self.snoozeLabel, existing: existing)
     }
 
     func labelId(named name: String, existing: [String: String]) async throws -> String {

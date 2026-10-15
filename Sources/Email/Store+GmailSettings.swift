@@ -101,8 +101,8 @@ extension AppStore {
         }
         Task {
             do {
-                let label = try await gmail(c.account).labelId(named: "Email/Snoozed", existing: labelNames)
-                labelNames[label] = "Email/Snoozed"
+                let label = try await gmail(c.account).snoozeLabelId(existing: labelNames)
+                labelNames[label] = Gmail.snoozeLabel
                 state.snoozes.removeAll { $0.conversationId == c.id }
                 state.snoozes.append(Snooze(account: c.account, threadId: c.threadId, until: date, ifNoReply: ifNoReply))
                 state.bumped[c.id] = nil
@@ -116,7 +116,7 @@ extension AppStore {
         guard let c = selected, state.snoozes.contains(where: { $0.conversationId == c.id }) else { return }
         state.snoozes.removeAll { $0.conversationId == c.id }
         if isICloud(c.account) { return }
-        let snoozed = labelNames.first { $0.value == "Email/Snoozed" }?.key
+        let snoozed = labelNames.first { $0.value == Gmail.snoozeLabel || Gmail.legacySnoozeLabels.contains($0.value) }?.key
         modify(c, add: ["INBOX"], remove: snoozed.map { [$0] } ?? [])
     }
 
