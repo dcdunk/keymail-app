@@ -406,7 +406,7 @@ struct GeneralSettings: View {
             Section("Sync") {
                 LabeledContent {
                     Button("Fetch now") { Task { await store.tick() } }.quiet().disabled(store.syncing)
-                } label: { Text("Fetch mail"); Text("Every 30 seconds, or ⌘R") }.settingAnchor("Fetch mail")
+                } label: { Text("Fetch mail"); Text("Gmail every 15 seconds, other accounts every 30, or ⌘R") }.settingAnchor("Fetch mail")
                 LabeledContent {
                     if store.calendar.authorized { Text("Connected to the Calendar app").foregroundStyle(.secondary) }
                     else { Button("Allow calendar access") { Task { _ = await store.calendar.requestAccess() } }.quiet() }

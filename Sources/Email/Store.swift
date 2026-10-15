@@ -329,7 +329,7 @@ final class AppStore: ObservableObject {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] e in
             MainActor.assumeIsolated { self?.handleKey(e) == true ? nil : e }
         }
-        timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in Task { @MainActor in await self?.tick() } }
+        timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in Task { @MainActor in await self?.tick(scheduled: true) } }
         Task { await tick() }
     }
 
@@ -431,6 +431,7 @@ final class AppStore: ObservableObject {
     var ticking = false
     var bannerToken = 0
     var cooldown: [String: Date] = [:]
+    var lastSynced: [String: Date] = [:]
     var quotaHits: [String: Int] = [:]
     var undoStack: [(c: Conversation, kind: UndoKind)] = []
     @Published var pendingSends: [PendingSend] = []

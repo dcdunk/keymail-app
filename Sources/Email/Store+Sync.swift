@@ -8,7 +8,8 @@ extension AppStore {
 
 
     /// One sync at a time. Overlapping syncs multiplied Gmail requests and hit the per-minute quota.
-    func tick() async {
+    /// scheduled: the 15-second timer. ⌘R, Fetch now and after-send ticks check every account right away.
+    func tick(scheduled: Bool = false) async {
         guard !ticking else { return }
         ticking = true; syncing = true
         defer { ticking = false; syncing = false }
@@ -16,6 +17,10 @@ extension AppStore {
         let known = Set(messages.keys)
         for a in state.accounts where !AppFlavor.isDemo {
             if let until = cooldown[a], until > Date() { continue }
+            // Gmail checks every 15s (one cheap "what changed" request). iCloud, Yahoo and Outlook stay at 30s:
+            // each of their checks signs in again or lists the inbox, and providers throttle frequent polling.
+            if scheduled, !isGmail(a), let last = lastSynced[a], Date().timeIntervalSince(last) < 28 { continue }
+            lastSynced[a] = Date()
             do { try await sync(a); quotaHits[a] = 0 }
             catch where (error as? HTTPError)?.isTransient == true || error is URLError {
                 // Rate limits, Google 5xx and network blips: sit this account out a minute, quietly.
