@@ -240,6 +240,8 @@ final class AppStore: ObservableObject {
     @Published var imagesShown: Set<String> = []     // messages whose remote images were loaded once
     @Published var agentLog: [AgentLogEntry] = []
     var agentSocket: Int32?
+    /// Set by the focused To/Cc/Bcc row: removes its last address on Backspace when nothing is typed. Returns true if it did.
+    var chipBackspace: (() -> Bool)?
     let calendar = CalendarService()
     var pendingG: Date?
     @Published var selectedID: String?

@@ -91,6 +91,7 @@ extension AppStore {
         }
         if summary != nil { if code == 53 { summary = nil; return true }; return false }
         if splitSettingsOpen { if code == 53 { splitSettingsOpen = false; return true }; return false }
+        if composing != nil, code == 51, !cmd, let removeChip = chipBackspace, removeChip() { return true }
         if composing != nil || editingSnippet != nil || eventDraft != nil || claudeTask != nil || agentApproval != nil || state.accounts.isEmpty { return false }
         if cmd && ch == "k" { paletteOpen ? (paletteOpen = false) : openPalette(); return true }
         if paletteOpen {

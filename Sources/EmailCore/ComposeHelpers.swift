@@ -92,3 +92,15 @@ public func splitQuotedHTML(_ html: String) -> (body: String, quoted: String?) {
     guard !text.isEmpty else { return (html, nil) }
     return (body, ns.substring(from: cut))
 }
+
+/// Backspace in an empty To/Cc/Bcc box: the field without its last address. nil while something is being typed
+/// (Backspace edits that text) or when there's nothing to remove.
+public func removingLastRecipient(_ field: String) -> String? {
+    guard currentToken(field).isEmpty else { return nil }
+    var parts = field.components(separatedBy: ",")
+    parts.removeLast()
+    var chips = parseAddresses(parts.joined(separator: ",")).map(\.formatted)
+    guard !chips.isEmpty else { return nil }
+    chips.removeLast()
+    return chips.map { $0 + ", " }.joined()
+}

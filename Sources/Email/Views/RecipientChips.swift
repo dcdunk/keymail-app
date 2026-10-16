@@ -32,6 +32,7 @@ struct FlowLayout: Layout {
 
 /// Recipients as chips. The underlying value stays a normal "a@b.com, Name <c@d.com>, " string.
 struct RecipientChips: View {
+    @EnvironmentObject var store: AppStore
     @Binding var text: String
     let placeholder: String
     var focus: FocusState<ComposeView.Field?>.Binding
@@ -77,10 +78,23 @@ struct RecipientChips: View {
                     if !currentToken(text).isEmpty { commit(); return .handled }
                     return .ignored
                 }
-                .onKeyPress(.delete) {
-                    guard currentToken(text).isEmpty, !committed.isEmpty else { return .ignored }
-                    remove(committed.count - 1); return .handled
-                }
+                // The text field swallows Backspace when it's empty, so .onKeyPress never sees it. The app's key
+                // handler asks the focused recipient row instead (same approach as search tokens).
+                .onChange(of: focus.wrappedValue) { _, now in registerBackspace(now == field) }
+                .onAppear { registerBackspace(focus.wrappedValue == field) }
+                .onDisappear { registerBackspace(false) }
+        }
+    }
+
+    func registerBackspace(_ on: Bool) {
+        if on {
+            let text = $text
+            store.chipBackspace = {
+                guard let shorter = removingLastRecipient(text.wrappedValue) else { return false }
+                text.wrappedValue = shorter; return true
+            }
+        } else if focus.wrappedValue == nil || focus.wrappedValue == field {
+            store.chipBackspace = nil
         }
     }
 

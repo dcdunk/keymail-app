@@ -130,4 +130,12 @@ final class MimeTests: XCTestCase {
         d.to = "erico@trugolf.com"; XCTAssertTrue(invalidRecipients(d).isEmpty)
         d.bcc = "someone@nodomain"; XCTAssertEqual(invalidRecipients(d), ["someone@nodomain"])
     }
+
+    func testBackspaceRemovesTheLastRecipient() {
+        XCTAssertEqual(removingLastRecipient("erico@trugolf.com, Sam <sam@x.co>, "), "erico@trugolf.com, ")
+        XCTAssertEqual(removingLastRecipient("erico@trugolf.com, "), "")
+        XCTAssertNil(removingLastRecipient("erico@trugolf.com, sa"), "typing: Backspace edits the text instead")
+        XCTAssertNil(removingLastRecipient(""), "nothing to remove")
+        XCTAssertEqual(removingLastRecipient(#""Orozco, Eric" <e@x.co>, b@y.co, "#), #""Orozco, Eric" <e@x.co>, "#)
+    }
 }
