@@ -23,7 +23,7 @@ struct SettingsPanel: View {
     /// Sidebar order, which ↑/↓ also follow. `items` are single settings search can jump to; each is a row marked `.settingAnchor`.
     static let sections: [Section] = [
         .init(id: "general", title: "General", icon: "gearshape", group: "Mail", keywords: "thread order newest oldest top quoted history earlier messages undo send notifications badge remote images sender logos privacy spelling grammar writing auto archive calendar fetch sync tips",
-              items: ["Messages in a thread", "Earlier messages in each email", "Back to inbox after the last unread email", "Show folders sidebar", "Show context panel", "Undo send", "Notify me about", "Dock badge counts",
+              items: ["Messages in a thread", "Earlier messages in each email", "Back to inbox after the last unread email", "Reply inside the conversation", "Show folders sidebar", "Show context panel", "Undo send", "Notify me about", "Dock badge counts",
                       "Load remote images", "Show sender logos", "Check spelling while typing", "Check grammar", "Correct spelling automatically", "Smart quotes and dashes", "Fetch mail", "Calendar"]),
         .init(id: "splits", title: "Inbox", icon: "tray", group: "Mail", keywords: "tabs splits split inbox important other single one inbox focused rules", items: ["Important and Other"]),
         .init(id: "signatures", title: "Signatures", icon: "signature", group: "Mail", keywords: "signature html logo"),
@@ -31,7 +31,7 @@ struct SettingsPanel: View {
         .init(id: "accounts", title: "Accounts", icon: "person.crop.circle", group: "Accounts", keywords: "add remove google icloud microsoft outlook hotmail alias send as nickname default from"),
         .init(id: "gmail", title: "Gmail", icon: "envelope.badge", group: "Accounts", keywords: "out of office vacation auto reply labels signature sync"),
         .init(id: "appearance", title: "Appearance", icon: "textformat.size", group: "Personalize", keywords: "draft compose buttons icons links appearance text font size bigger larger zoom dark light email content opacity glass window card",
-              items: ["Text size", "Appearance", "Email content", "Draft buttons", "Window opacity", "Email card opacity"]),
+              items: ["Inbox layout", "Text size", "Appearance", "Email content", "Draft buttons", "Window opacity", "Email card opacity"]),
         .init(id: "hotkeys", title: "Hotkeys", icon: "keyboard", group: "Personalize", keywords: "keyboard shortcuts keys commands customize remap"),
         .init(id: "ai", title: "AI providers", icon: "sparkles", group: "Personalize", keywords: "claude codex gemini write summarize instant reply"),
         .init(id: "agents", title: "MCP", icon: "point.3.connected.trianglepath.dotted", group: "Personalize", keywords: "mcp claude desktop chatgpt codex gemini agent connect automation"),
@@ -238,6 +238,12 @@ struct AppearanceSettings: View {
                     } label: { Text("Text size"); Text("The whole app and email bodies. ⌘+ and ⌘− also work.") }
                     .pickerStyle(.segmented).settingAnchor("Text size")
                 }
+                Section("Layout") {
+                    Picker(selection: Binding(get: { store.inboxLayout }, set: { store.setInboxLayout($0) })) {
+                        Text("List").tag("list"); Text("Split").tag("split"); Text("Stream (Preview)").tag("stream"); Text("Filmstrip (Preview)").tag("film")
+                    } label: { Text("Inbox layout"); Text("List opens each email full width. Split keeps the list beside it. Stream shows each email as a card you can expand, one after another. Filmstrip flips through one at a time. Stream and Filmstrip are previews: they're new and may still have rough edges.") }
+                    .pickerStyle(.segmented).settingAnchor("Inbox layout")
+                }
                 Section("Theme") {
                     Picker("Appearance", selection: Binding(get: { store.state.appearance }, set: { store.setAppearance($0) })) {
                         Text("Match system").tag("System"); Text("Light").tag("Light"); Text("Dark").tag("Dark")
@@ -331,6 +337,7 @@ struct GeneralSettings: View {
     @AppStorage("threadNewestFirst") private var newestFirst = false
     @AppStorage("showQuotedHistory") private var showQuoted = false
     @AppStorage("backToInboxWhenDone") private var backToInbox = true
+    @AppStorage("replyInline") private var replyInline = false
     @AppStorage("notifyMode") private var notifyMode = "important"
     @AppStorage("badgeMode") private var badgeMode = "important"
     @ObservedObject private var notifier = Notifier.shared
@@ -349,6 +356,10 @@ struct GeneralSettings: View {
                     Text("Back to inbox after the last unread email")
                     Text("Marking done, deleting or reminding on your last unread email returns to the inbox. Off opens the next email.")
                 }.settingAnchor("Back to inbox after the last unread email")
+                Toggle(isOn: $replyInline) {
+                    Text("Reply inside the conversation")
+                    Text("Replies open under the email you're reading. Off opens them in their own window you can move anywhere.")
+                }.settingAnchor("Reply inside the conversation")
                 Toggle("Show folders sidebar", isOn: $store.sidebarOpen).settingAnchor("Show folders sidebar")
                 Toggle("Show context panel", isOn: $store.contextOpen).settingAnchor("Show context panel")
             }

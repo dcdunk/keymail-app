@@ -8,11 +8,17 @@ extension AppStore {
 
     // MARK: Menus and cards
 
-    var modalOpen: Bool { composing != nil || editingSnippet != nil || splitSettingsOpen || eventDraft != nil || claudeTask != nil || agentApproval != nil || summary != nil || linkPrompt != nil }
+    var modalOpen: Bool { editingSnippet != nil || splitSettingsOpen || eventDraft != nil || claudeTask != nil || agentApproval != nil || summary != nil || linkPrompt != nil }
 
-    func showPopup(_ entries: [MenuEntry], anchor: CGRect, width: CGFloat = 290, trailing: Bool = false, custom: AnyView? = nil) {
+    /// A draft in its own window only blocks inbox keys while that window is in front; an inline reply always does.
+    var composeHasKeyboard: Bool {
+        guard let m = composing else { return false }
+        return m.inline || ComposeWindow.shared.isKey || AppFlavor.isTesting
+    }
+
+    func showPopup(_ entries: [MenuEntry], anchor: CGRect, width: CGFloat = 290, trailing: Bool = false, custom: AnyView? = nil, host: String = "main") {
         if let p = popup, p.anchor == anchor { closePopup(); return } // clicking the same button again closes it
-        popup = Popup(entries: entries, anchor: anchor, width: width, trailing: trailing, custom: custom)
+        popup = Popup(entries: entries, anchor: anchor, width: width, trailing: trailing, custom: custom, host: host)
         popupIndex = nil
     }
     func closePopup() { popup = nil; popupIndex = nil }
@@ -92,7 +98,7 @@ extension AppStore {
         if summary != nil { if code == 53 { summary = nil; return true }; return false }
         if splitSettingsOpen { if code == 53 { splitSettingsOpen = false; return true }; return false }
         if composing != nil, code == 51, !cmd, let removeChip = chipBackspace, removeChip() { return true }
-        if composing != nil || editingSnippet != nil || eventDraft != nil || claudeTask != nil || agentApproval != nil || state.accounts.isEmpty { return false }
+        if composeHasKeyboard || editingSnippet != nil || eventDraft != nil || claudeTask != nil || agentApproval != nil || state.accounts.isEmpty { return false }
         if cmd && ch == "k" { paletteOpen ? (paletteOpen = false) : openPalette(); return true }
         if paletteOpen {
             switch code {
@@ -126,6 +132,7 @@ extension AppStore {
         }
         if e.modifierFlags.contains(.shift), ch.lowercased() == "u" { unsubscribe(); return true }
         if threadOpen, e.modifierFlags.contains(.shift), ch.lowercased() == "o" { toggleAllMessages(); return true }
+        if inboxLayout == "stream", code == 49, let c = selected { streamExpanded.formSymmetricDifference([c.id]); return true } // Space: expand
         if threadOpen, code == 49 { expandNext(); return true }        // Space
         if threadOpen, ch == "." { toggleQuoted(); return true }
         if e.modifierFlags.contains(.shift), ch.lowercased() == "m" { toggleMute(); return true }
@@ -144,6 +151,8 @@ extension AppStore {
         case (36, _), (_, "o"): if let c = selected { open(c) }
         case (125, _), (_, "j"): move(1)
         case (126, _), (_, "k"): move(-1)
+        case (123, _) where inboxLayout == "film": move(-1)   // filmstrip: ← → flip pages
+        case (124, _) where inboxLayout == "film": move(1)
         case (123, _): sidebarOpen.toggle()
         case (124, _): contextOpen.toggle()
         case (_, "g"): pendingG = Date()

@@ -29,7 +29,10 @@ struct MainView: View {
                 Header().zIndex(1) // search dropdown must draw above the list below it
                 if store.searchFiltersOpen { SearchFilters() }
                 if let b = store.banner { BannerView(text: b) { store.banner = nil } }
-                if store.threadOpen, let c = store.selected { ThreadView(conversation: c) } else { ListView() }
+                if store.inboxLayout == "split" { SplitInbox() }
+                else if store.inboxLayout == "stream" { StreamInbox() }
+                else if store.inboxLayout == "film" { FilmstripInbox() }
+                else if store.threadOpen, let c = store.selected { ThreadView(conversation: c) } else { ListView() }
             }
             // The context panel needs room; narrow windows hide it automatically.
             if store.contextOpen, layout.width >= 1100, let c = store.selected { ContextPanel(conversation: c) }

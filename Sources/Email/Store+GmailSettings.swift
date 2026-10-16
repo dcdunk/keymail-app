@@ -208,7 +208,7 @@ extension AppStore {
         let i = v.firstIndex { $0.id == selected?.id } ?? 0
         let next = v[max(0, min(v.count - 1, i + delta))]
         selectedID = next.id
-        if threadOpen { open(next) }
+        if threadOpen || inboxLayout != "list" { open(next) }   // split, stream, filmstrip: reading follows J/K
     }
 
     func switchTab(_ delta: Int) {

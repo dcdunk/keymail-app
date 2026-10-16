@@ -66,6 +66,10 @@ extension AppStore {
             + (splitImportance ? [importantTab, otherTab] : [inboxTab])
     }
 
+    /// Settings → Appearance → Inbox layout: "list" (full width, open to read) or "split" (list beside the conversation).
+    var inboxLayout: String { UserDefaults.standard.string(forKey: "inboxLayout") ?? "list" }
+    func setInboxLayout(_ l: String) { UserDefaults.standard.set(l, forKey: "inboxLayout"); objectWillChange.send() }
+
     /// Settings → Inbox: Important and Other tabs, or one inbox.
     var splitImportance: Bool { UserDefaults.standard.object(forKey: "splitImportance") as? Bool ?? true }
 

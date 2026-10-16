@@ -51,7 +51,14 @@ extension AppStore {
         // Keep your own aliases out of the To/Cc of a reply-all.
         d.cc = parseAddresses(d.cc).filter { !mine.contains($0.email.lowercased()) }.map(\.formatted).joined(separator: ", ")
         d.from = replyFrom(c.latest, account: c.account)
-        openCompose(d, context: c, isReply: true)
+        // Settings → General → Reply inside the conversation: the reply sits under the thread you're reading.
+        let inline = UserDefaults.standard.bool(forKey: "replyInline") && (threadOpen || inboxLayout == "split" || inboxLayout == "film")
+        if inline { threadOpen = true }
+        let m = ComposeModel(draft: d, context: c); m.inline = inline
+        var dd = d
+        let use = state.signatureUse
+        if use == "all" || use == "replies" { applySignature(&dd, from: dd.from); m.draft = dd }
+        composing = m
     }
     func forward() {
         guard let c = selected else { return }

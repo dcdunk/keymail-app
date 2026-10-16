@@ -12,12 +12,25 @@ struct ThreadView: View {
     @EnvironmentObject var store: AppStore
     @Environment(\.layout) private var layout
     let conversation: Conversation
+    var embedded = false   // inside the split layout: the list stays on screen, so no Back button
 
     @AppStorage("threadNewestFirst") private var newestFirst = false
     @AppStorage("emailButtons") private var emailButtons = "text"   // "icons" or "text"
     @AppStorage("emailContentTheme") private var contentTheme = "auto"
     @Environment(\.colorScheme) private var scheme
     var contentDark: Bool { contentTheme == "dark" || (contentTheme == "auto" && scheme == .dark) }
+
+    @ViewBuilder var inlineReply: some View {
+        if let m = store.composing, m.inline, m.context?.id == conversation.id {
+            ComposeView(model: m)
+                .padding(.top, 8).padding(.bottom, 6)   // a little breathing room inside the card, top and bottom
+                .frame(height: 454)
+                .solidPanel(RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.accent.opacity(0.35)))
+                .environment(\.closeCard, CloseCard { store.composing = nil })
+                .id(m.id)
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -35,9 +48,11 @@ struct ThreadView: View {
                 }
                 .buttonBorderShape(.capsule)
                 .help(contentDark ? "Emails are dark. Click for light." : "Emails are light. Click for dark.")
-                Button { store.threadOpen = false } label: {
-                    Label("Back", systemImage: "chevron.left").font(.scaled(.callout)).padding(.horizontal, 6)
-                }.buttonBorderShape(.capsule).help("Back to the list (Esc)")
+                if !embedded {
+                    Button { store.threadOpen = false } label: {
+                        Label("Back", systemImage: "chevron.left").font(.scaled(.callout)).padding(.horizontal, 6)
+                    }.buttonBorderShape(.capsule).help("Back to the list (Esc)")
+                }
             }
             .padding(.horizontal, layout.compact ? 16 : 40).padding(.top, 4).padding(.bottom, 10)
             InstantReplyBar(conversation: conversation)
@@ -45,10 +60,13 @@ struct ThreadView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     let all = conversation.messages, single = all.count == 1
+                    // Inline reply (Settings → General): above the newest email when newest is on top, else below it.
+                    if newestFirst { inlineReply }
                     ForEach(newestFirst ? all.reversed() : all) { m in
                         if store.isOpen(m, in: conversation) || single { MessageCard(message: m, collapsible: !single) { store.threadToggled.formSymmetricDifference([m.key]) } }
                         else { CollapsedMessage(message: m) { store.threadToggled.formSymmetricDifference([m.key]) } }
                     }
+                    if !newestFirst { inlineReply }
                 }
                 .frame(maxWidth: 960)               // emails stay readable on big monitors
                 .frame(maxWidth: .infinity)

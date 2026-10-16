@@ -69,8 +69,12 @@ private struct CloseCardKey: EnvironmentKey { static let defaultValue = CloseCar
 extension EnvironmentValues { var closeCard: CloseCard { get { self[CloseCardKey.self] } set { self[CloseCardKey.self] = newValue } } }
 
 /// A button that opens a Keymail menu below itself. Works anywhere inside the main window.
+private struct PopupHostKey: EnvironmentKey { static let defaultValue = "main" }
+extension EnvironmentValues { var popupHost: String { get { self[PopupHostKey.self] } set { self[PopupHostKey.self] = newValue } } }
+
 struct MenuButton<Label: View>: View {
     @EnvironmentObject var store: AppStore
+    @Environment(\.popupHost) private var host
     var width: CGFloat = 290
     var trailing = false
     let entries: () -> [MenuEntry]
@@ -78,7 +82,7 @@ struct MenuButton<Label: View>: View {
     @ViewBuilder let label: () -> Label
     @State private var frame: CGRect = .zero
     var body: some View {
-        Button { store.showPopup(entries(), anchor: frame, width: width, trailing: trailing, custom: custom?()) } label: { label() }
+        Button { store.showPopup(entries(), anchor: frame, width: width, trailing: trailing, custom: custom?(), host: host) } label: { label() }
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("main")) } action: { frame = $0 }
     }
 }
@@ -86,9 +90,10 @@ struct MenuButton<Label: View>: View {
 /// Draws the open menu above everything in the main window. Click outside or press Esc to close.
 struct PopupLayer: View {
     @EnvironmentObject var store: AppStore
+    var host = "main"
     @State private var height: CGFloat = 0
     var body: some View {
-        if let p = store.popup {
+        if let p = store.popup, p.host == host {
             GeometryReader { geo in
                 let a = p.anchor
                 let x = min(max(12, p.trailing ? a.maxX - p.width : a.minX), geo.size.width - p.width - 12)
@@ -173,10 +178,8 @@ struct ModalLayer: View {
                         .allowsHitTesting(store.modalOpen)
                         .transition(.opacity)
                 }
-                if let m = store.composing {
-                    card { ComposeView(model: m).frame(maxWidth: min(geo.size.width - 48, 880), maxHeight: min(geo.size.height - 48, 700)) }
-                        .environment(\.closeCard, CloseCard { store.composing = nil })
-                } else if let snip = store.editingSnippet {
+                // Compose lives in its own window (ComposeWindow) or inline in the conversation, never here.
+                if let snip = store.editingSnippet {
                     card { SnippetEditor(snippet: snip) }.environment(\.closeCard, CloseCard { store.editingSnippet = nil })
                 } else if store.splitSettingsOpen {
                     card { SplitSettingsView().frame(maxHeight: min(geo.size.height - 48, 620)) }

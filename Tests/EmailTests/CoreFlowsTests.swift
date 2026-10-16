@@ -311,4 +311,61 @@ final class CoreFlowsTests: XCTestCase {
         press("r", code: 15)
         XCTAssertEqual(store.composing?.draft.body.contains("Half-written reply"), true, "R opens the draft you started")
     }
+
+    // MARK: Split layout
+
+    func testSplitLayoutKeysOpenWhatYouMoveTo() {
+        store.setInboxLayout("split")
+        defer { store.setInboxLayout("list") }
+        let v = store.visible
+        store.selectedID = v[0].id
+        press("j", code: 38)
+        XCTAssertEqual(store.selectedID, v[1].id, "J moves down in the split list")
+        XCTAssertFalse(store.allConversations.first { $0.id == v[1].id }!.isUnread, "and opens it in the reading pane (marked read)")
+        press("e", code: 14)
+        XCTAssertFalse(store.allConversations.first { $0.id == v[1].id }!.inInbox, "E still marks done")
+    }
+
+    // MARK: Where replies open
+
+    func testReplyInsideTheConversationWhenTurnedOn() {
+        UserDefaults.standard.set(true, forKey: "replyInline")
+        defer { UserDefaults.standard.removeObject(forKey: "replyInline") }
+        store.open(store.selected!)
+        press("r", code: 15)
+        XCTAssertEqual(store.composing?.inline, true, "R replies under the conversation")
+        XCTAssertEqual(store.composing?.context?.id, store.selectedID)
+        XCTAssertTrue(store.composing?.draft.subject.hasPrefix("Re:") ?? false)
+    }
+
+    func testReplyOpensItsOwnWindowByDefault() {
+        store.open(store.selected!)
+        press("r", code: 15)
+        XCTAssertEqual(store.composing?.inline, false, "default: a separate window")
+        XCTAssertFalse(store.modalOpen, "the inbox isn't dimmed behind a compose card anymore")
+    }
+
+    // MARK: Stream and Filmstrip layouts
+
+    func testStreamAndFilmstripKeysMoveAndRead() {
+        for layout in ["stream", "film"] {
+            resetUI()
+            store.setInboxLayout(layout)
+            let v = store.visible
+            store.selectedID = v[0].id
+            press("j", code: 38)
+            XCTAssertEqual(store.selectedID, v[1].id, "\(layout): J moves to the next email")
+            XCTAssertFalse(store.allConversations.first { $0.id == v[1].id }!.isUnread, "\(layout): and reads it")
+        }
+        store.setInboxLayout("stream")
+        press(" ", code: 49); XCTAssertTrue(store.streamExpanded.contains(store.selectedID!), "stream: Space shows the full email")
+        press(" ", code: 49); XCTAssertFalse(store.streamExpanded.contains(store.selectedID!), "Space again collapses it")
+        store.setInboxLayout("film")
+        let v = store.visible
+        store.selectedID = v[1].id
+        press("", code: 124); XCTAssertEqual(store.selectedID, v[2].id, "filmstrip: → flips forward")
+        press("", code: 123); XCTAssertEqual(store.selectedID, v[1].id, "filmstrip: ← flips back")
+        store.setInboxLayout("list")
+        press("", code: 123); XCTAssertTrue(store.sidebarOpen, "list: ← still opens folders")
+    }
 }

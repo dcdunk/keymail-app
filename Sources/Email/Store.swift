@@ -31,6 +31,7 @@ struct Popup {
     var trailing = false
     var custom: AnyView? = nil
     var back: [[MenuEntry]] = []
+    var host = "main"   // which window draws it: "main" or "compose" (the separate compose window)
 }
 
 struct LinkPrompt: Identifiable { let id = UUID(); let url: URL; let reason: String }
@@ -135,6 +136,7 @@ final class ComposeModel: ObservableObject, Identifiable {
     @Published var savedNote: String?
     var saveTask: Task<Void, Never>?
     var draftMessage: Message?   // the saved draft this compose was reopened from, if any
+    var inline = false           // a reply shown inside the conversation instead of its own window
     let context: Conversation?
     init(draft: Draft, context: Conversation?) { self.draft = draft; self.context = context }
 }
@@ -238,6 +240,7 @@ final class AppStore: ObservableObject {
     @Published var threadToggled: Set<String> = []   // message keys flipped from their default (latest open, older closed)
     @Published var quotedShown: Set<String> = []     // messages showing their earlier quoted history
     @Published var imagesShown: Set<String> = []     // messages whose remote images were loaded once
+    @Published var streamExpanded: Set<String> = []  // Stream layout: conversations showing the full email
     @Published var agentLog: [AgentLogEntry] = []
     var agentSocket: Int32?
     /// Set by the focused To/Cc/Bcc row: removes its last address on Backspace when nothing is typed. Returns true if it did.
@@ -252,7 +255,10 @@ final class AppStore: ObservableObject {
     @Published var searchOpen = false
     @Published var searchText = ""
     @Published var searchResults: Set<String>?   // conversation ids
-    @Published var composing: ComposeModel? { didSet { if composing == nil && oldValue != nil { refreshHover(after: 0.25) } } }
+    @Published var composing: ComposeModel? { didSet {
+        if composing == nil && oldValue != nil { refreshHover(after: 0.25) }
+        ComposeWindow.shared.update(self)
+    } }
     @Published var editingSnippet: Snippet?
     /// Every banner closes itself: 5 seconds, plus reading time for longer messages (up to 12), unless another
     /// banner replaced it first. The ✕ still closes it sooner.

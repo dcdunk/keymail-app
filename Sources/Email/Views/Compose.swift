@@ -33,7 +33,7 @@ struct ComposeView: View {
                 .buttonStyle(.plain).handCursor().fixedSize()
                 .keyboardShortcut("f", modifiers: [.command, .shift]).help("Send from (⇧⌘F)")
                 Spacer()
-                Button { close() } label: { Image(systemName: "xmark").font(.scaled(size: 12, weight: .semibold)).frame(width: 26, height: 26).contentShape(Circle()) }
+                Button { close() } label: { Image(systemName: "xmark").font(.scaled(size: 12, weight: .semibold)).frame(width: 30, height: 26).contentShape(Circle()) }
                     .buttonStyle(.plain).foregroundStyle(.secondary).keyboardShortcut(.cancelAction).help("Close and keep draft (Esc)")
             }
             row("To") {
@@ -167,7 +167,8 @@ struct ComposeView: View {
             tool("trash", "Discard", help: "Discard draft (⇧⌘⌫)", iconOnly: true) { discard() }
                 .keyboardShortcut(.delete, modifiers: [.command, .shift])
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
+        // Same 24pt inset as the From/To rows: Send lines up with "From", the trash can with the close button.
+        .padding(.horizontal, 24).padding(.vertical, 12)
         .background(Color.primary.opacity(0.03))
         .overlay(alignment: .top) { Divider() }
     }
