@@ -73,6 +73,9 @@ extension AppStore {
     }
 
     func send(_ d: Draft, remindDays: Int?) async throws {
+        if let bad = invalidRecipients(d).first {
+            throw AppError("\"\(bad)\" isn't a complete email address. Fix it and send again.")
+        }
         var d = d
         let domain = d.from.split(separator: "@").last.map(String.init) ?? "email.local"
         if d.messageId == nil { d.messageId = "<\(UUID().uuidString)@\(domain)>" }
@@ -101,7 +104,13 @@ extension AppStore {
             }
             return
         }
-        let j = try await gmail(acct).send(d)
+        let j: [String: Any]
+        do { j = try await gmail(acct).send(d) }
+        catch let e as HTTPError where e.body.contains("Invalid To header") || e.body.contains("Invalid Cc header") {
+            // Show exactly what Gmail refused, so a report can name the cause (issue #5).
+            let line = buildRaw(d).components(separatedBy: "\r\n").filter { $0.hasPrefix("To:") || $0.hasPrefix("Cc:") }.joined(separator: " · ")
+            throw AppError("Gmail rejected the recipients. It received: \(line)")
+        }
         if let days = remindDays, let thread = j["threadId"] as? String {
             state.followUps.append(FollowUp(account: acct, threadId: thread, sentAt: Date().addingTimeInterval(-5),
                                             due: Date().addingTimeInterval(Double(days) * 86400)))

@@ -108,4 +108,26 @@ final class MimeTests: XCTestCase {
         var d = Draft(from: "me@x.co"); d.to = #""erico@trugolf.com" <erico@trugolf.com>, "#; d.subject = "Hi"; d.body = "Hi"
         XCTAssertTrue(buildRaw(d).contains("To: erico@trugolf.com\r\n"), "the To line is just the address")
     }
+
+    /// Issue #5 (second report): addresses pasted from Outlook or links reached Gmail as an invalid To line.
+    func testPastedRecipientListsMakeAValidToHeader() {
+        func to(_ s: String) -> String {
+            var d = Draft(from: "me@x.co"); d.to = s; d.subject = "x"; d.body = "x"
+            return buildRaw(d).components(separatedBy: "\r\n").first { $0.hasPrefix("To:") } ?? ""
+        }
+        XCTAssertEqual(to("erico@trugolf.com;"), "To: erico@trugolf.com", "Outlook's semicolon")
+        XCTAssertEqual(to("Eric Orozco <erico@trugolf.com>; sam@x.co"), "To: Eric Orozco <erico@trugolf.com>, sam@x.co")
+        XCTAssertEqual(to("mailto:erico@trugolf.com"), "To: erico@trugolf.com", "a copied link")
+        XCTAssertEqual(to("erico@trugolf.com sam@x.co"), "To: erico@trugolf.com, sam@x.co", "space between two addresses")
+        XCTAssertEqual(to("erico @trugolf.com"), "To: erico@trugolf.com", "a stray space")
+        XCTAssertEqual(to("erico@trugolf.com\u{200B}"), "To: erico@trugolf.com", "an invisible character")
+        XCTAssertEqual(parseAddresses(#""Orozco, Eric" <e@x.co>"#).map(\.email), ["e@x.co"], "quoted commas still don't split")
+    }
+
+    func testInvalidRecipientsAreCaughtBeforeSending() {
+        var d = Draft(from: "me@x.co"); d.to = "erico@trugolf.com, eric"; d.cc = "ok@x.co"
+        XCTAssertEqual(invalidRecipients(d), ["eric"])
+        d.to = "erico@trugolf.com"; XCTAssertTrue(invalidRecipients(d).isEmpty)
+        d.bcc = "someone@nodomain"; XCTAssertEqual(invalidRecipients(d), ["someone@nodomain"])
+    }
 }

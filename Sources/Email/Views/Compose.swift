@@ -215,6 +215,7 @@ struct ComposeView: View {
     /// Send stays clickable: with no recipient it says so instead of looking broken.
     func trySend(at date: Date?) {
         guard !model.draft.to.trimmingCharacters(in: .whitespaces).isEmpty else { store.banner = "Add a recipient first."; return }
+        if let bad = invalidRecipients(model.draft).first { model.error = "\"\(bad)\" isn't a complete email address."; return }
         send(at: date)
     }
 

@@ -156,13 +156,27 @@ public func parseAddresses(_ header: String) -> [Address] {
         if ch == "\"" { inQuote.toggle() }
         if ch == "<" { inAngle = true }
         if ch == ">" { inAngle = false }
-        if ch == ",", !inQuote, !inAngle { parts.append(cur); cur = ""; continue }
+        // Commas, and the semicolons Outlook puts between recipients (pasted lists sent Gmail "Invalid To header", #5).
+        if ch == "," || ch == ";", !inQuote, !inAngle { parts.append(cur); cur = ""; continue }
         cur.append(ch)
     }
     parts.append(cur)
-    return parts.compactMap { raw in
-        let p = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !p.isEmpty else { return nil }
+    return parts.flatMap { raw -> [Address] in
+        let p = raw.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\u{200B}\u{FEFF}")))
+        guard !p.isEmpty else { return [] }
+        // A bare address (no <…>): drop a pasted "mailto:", split "a@x.com b@y.com", and close up "erico @trugolf.com".
+        if !p.contains("<"), !p.contains("\""), p.contains("@") {
+            let bare = p.replacingOccurrences(of: "mailto:", with: "", options: .caseInsensitive)
+            let words = bare.split(whereSeparator: \.isWhitespace).map(String.init)
+            if words.filter({ $0.contains("@") }).count > 1 { return words.filter { $0.contains("@") }.map { Address(name: "", email: $0) } }
+            return [Address(name: "", email: words.joined())]
+        }
+        return [parseOne(p)]
+    }
+}
+
+private func parseOne(_ p: String) -> Address {
+    do {
         // RFC 5322: the address is the <...> outside quotes and (comments). A "<x@y>" inside a quoted name or a
         // comment is display text, the same way Gmail and DMARC read it, so it can't stand in for the real sender.
         var plain = "", angle: String?, inQ = false, depth = 0, cur: String?
@@ -176,9 +190,17 @@ public func parseAddresses(_ header: String) -> [Address] {
             if cur != nil { cur!.append(ch) } else { plain.append(ch) }
         }
         let name = plain.trimmingCharacters(in: CharacterSet(charactersIn: " \""))
-        if let a = angle { return Address(name: name, email: a.trimmingCharacters(in: .whitespaces)) }
+        if let a = angle { return Address(name: name, email: a.replacingOccurrences(of: "mailto:", with: "", options: .caseInsensitive).trimmingCharacters(in: .whitespaces)) }
         return Address(name: "", email: name)
     }
+}
+
+/// Recipients that can't be a real address (no "@", spaces, stray punctuation). Checked before every send, so a
+/// typo gets a clear message in Keymail instead of the provider rejecting the whole email.
+public func invalidRecipients(_ d: Draft) -> [String] {
+    let ok = try! NSRegularExpression(pattern: #"^[^@\s<>(),;:"\[\]]+@[^@\s<>(),;:"\[\]]+\.[^@\s<>(),;:"\[\]]+$"#)
+    return [d.to, d.cc, d.bcc].flatMap(parseAddresses).map(\.email)
+        .filter { ok.firstMatch(in: $0, range: NSRange(location: 0, length: ($0 as NSString).length)) == nil }
 }
 
 /// "Sam Patel, You" style label for a thread's senders.
