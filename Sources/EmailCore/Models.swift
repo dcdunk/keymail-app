@@ -137,10 +137,15 @@ public struct Address: Hashable {
     public init(name: String, email: String) { self.name = name; self.email = email }
     public var display: String { name.isEmpty ? email : name }
     public var firstName: String { name.isEmpty ? "" : String(name.split(separator: " ").first ?? "") }
+    /// For To/Cc/From headers (RFC 5322). A name that is just the address is dropped; names with special characters
+    /// (@ , . ( ) : ; < > [ ] \ ") are quoted; non-ASCII names are encoded. Unquoted "erico@trugolf.com <erico@…>"
+    /// made Gmail reject the whole email with "Invalid To header" (issue #5).
     public var formatted: String {
-        if name.isEmpty { return email }
-        let n = name.contains(",") || name.contains("\"") ? "\"\(name.replacingOccurrences(of: "\"", with: ""))\"" : name
-        return "\(n) <\(email)>"
+        let n = name.replacingOccurrences(of: "\"", with: "").replacingOccurrences(of: "\\", with: "").trimmingCharacters(in: .whitespaces)
+        if n.isEmpty || n.lowercased() == email.lowercased() { return email }
+        if n.unicodeScalars.contains(where: { !$0.isASCII }) { return "\(encodeHeader(n)) <\(email)>" }
+        let specials = CharacterSet(charactersIn: "@,.()<>[]:;")
+        return n.rangeOfCharacter(from: specials) != nil ? "\"\(n)\" <\(email)>" : "\(n) <\(email)>"
     }
 }
 

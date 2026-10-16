@@ -32,7 +32,7 @@ struct ClaudeTaskCard: View {
                 }
                 .font(.scaled(.callout)).padding(.horizontal, 8).frame(height: 28)
             }
-            .buttonStyle(ToolStyle()).help("The project Claude Code works in")
+            .buttonStyle(ToolStyle()).help("The project Claude Code works in (⌘O)").keyboardShortcut("o", modifiers: .command)
             .padding(.horizontal, 12)
 
             TextEditor(text: $task.prompt).font(.scaled(size: 13)).lineSpacing(2)

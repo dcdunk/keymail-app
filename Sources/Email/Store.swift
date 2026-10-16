@@ -234,6 +234,10 @@ final class AppStore: ObservableObject {
     @Published var eventDraft: EventDraft?
     @Published var claudeTask: ClaudeTask?
     @Published var agentApproval: AgentApproval?
+    // Conversation view state, kept here (not in the views) so keys and ⌘K reach it.
+    @Published var threadToggled: Set<String> = []   // message keys flipped from their default (latest open, older closed)
+    @Published var quotedShown: Set<String> = []     // messages showing their earlier quoted history
+    @Published var imagesShown: Set<String> = []     // messages whose remote images were loaded once
     @Published var agentLog: [AgentLogEntry] = []
     var agentSocket: Int32?
     let calendar = CalendarService()

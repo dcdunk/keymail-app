@@ -92,35 +92,36 @@ struct OnboardingView: View {
         VStack(spacing: 24) {
             title("Connect your email", "Your mail goes straight from the provider to this Mac. No servers in between.")
             HStack(spacing: 16) {
-                providerCard("gmail", "Gmail", "Google sign-in in your browser") {
+                providerCard("gmail", "Gmail", "Google sign-in in your browser", key: "1") {
                     if store.hasClient || AppFlavor.isDemo { store.addAccount() } else { step = .google }
                 }
-                providerCard("icloud", "iCloud Mail", "With an app-specific password") { showICloud = true }
-                providerCard("outlook", "Outlook", "Outlook.com, Hotmail or Microsoft 365") { store.connectMicrosoft() }
-                providerCard("yahoo", "Yahoo Mail", "With an app password") { showYahoo = true }
+                providerCard("icloud", "iCloud Mail", "With an app-specific password", key: "2") { showICloud = true }
+                providerCard("outlook", "Outlook", "Outlook.com, Hotmail or Microsoft 365", key: "3") { store.connectMicrosoft() }
+                providerCard("yahoo", "Yahoo Mail", "With an app password", key: "4") { showYahoo = true }
             }
-            if !store.state.accounts.isEmpty { Button("Back") { step = .accounts }.quiet() }
+            if !store.state.accounts.isEmpty { Button("Back") { step = .accounts }.quiet().keyboardShortcut(.cancelAction) }
         }
     }
 
-    func providerCard(_ brand: String, _ name: String, _ detail: String, _ action: @escaping () -> Void) -> some View {
+    func providerCard(_ brand: String, _ name: String, _ detail: String, key: Character, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 12) {
                 BrandLogo(brand: brand, size: 36).frame(height: 40)
                 Text(name).font(.scaled(.title3).weight(.semibold))
                 Text(detail).font(.scaled(.callout)).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                KeyHint(String(key))
             }
             .frame(width: 200, height: 170)
             .floatingPanel(RoundedRectangle(cornerRadius: 20))
             .contentShape(RoundedRectangle(cornerRadius: 20))
-        }.buttonStyle(.plain).handCursor()
+        }.buttonStyle(.plain).handCursor().keyboardShortcut(KeyEquivalent(key), modifiers: [])
     }
 
     var googleSetup: some View {
         VStack(spacing: 16) {
             SetupView().frame(height: 460)
             HStack {
-                Button("Back") { step = .connect }.quiet()
+                Button("Back") { step = .connect }.quiet().keyboardShortcut(.cancelAction)
                 if store.hasClient { primary("Sign in with Google") { store.addAccount() } }
             }
         }
@@ -175,7 +176,7 @@ struct OnboardingView: View {
                 for p in AIProvider.all where await Task.detached(operation: { AI.binary(p.binary) }).value != nil { installedAI.insert(p.id) }
             }
             HStack(spacing: 12) {
-                Button("Skip") { step = .done }.quiet()
+                Button("Skip") { step = .done }.quiet().keyboardShortcut(.cancelAction)
                 primary("Continue") { step = .done }
             }
         }

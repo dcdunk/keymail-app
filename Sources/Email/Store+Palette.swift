@@ -70,6 +70,7 @@ extension AppStore {
                 }
             }
         }
+        list += threadCommands
         if let c = selected, isGmail(c.account) {
             for l in gmailLabels[c.account] ?? labelNames.filter({ !isAppLabel($0.value) }).map({ Gmail.Label(id: $0.key, name: $0.value) }) {
                 let has = c.labels.contains(l.id)
@@ -90,6 +91,23 @@ extension AppStore {
         for (tag, name) in [("auto", "match app"), ("light", "light"), ("dark", "dark")] {
             list.append(Command(title: "Email content: \(name)") { UserDefaults.standard.set(tag, forKey: "emailContentTheme") })
         }
+        for sp in state.splits {
+            list.append(Command(title: sp.enabled ? "Turn off split: \(sp.name)" : "Turn on split: \(sp.name)") {
+                if let i = self.state.splits.firstIndex(where: { $0.id == sp.id }) { self.state.splits[i].enabled.toggle() }
+            })
+            list.append(Command(title: "Delete split: \(sp.name)") { self.state.splits.removeAll { $0.id == sp.id } })
+        }
+        // Settings people change often, so they work without reaching the switches.
+        let d = UserDefaults.standard
+        list.append(Command(title: splitImportance ? "Inbox: one inbox (turn off Important and Other)" : "Inbox: split into Important and Other") { self.setSplitImportance(!self.splitImportance) })
+        for (key, on, off, def) in [("loadRemoteImages", "Load remote images: on", "Load remote images: off", false),
+                                    ("loadSenderLogos", "Sender logos: on", "Sender logos: off", true),
+                                    ("backToInboxWhenDone", "Back to inbox after the last unread email: on", "Back to inbox after the last unread email: off", true),
+                                    ("showQuotedHistory", "Earlier messages in each email: show", "Earlier messages in each email: hide", false)] {
+            let cur = d.object(forKey: key) as? Bool ?? def
+            list.append(Command(title: cur ? off : on) { d.set(!cur, forKey: key); self.objectWillChange.send() })
+        }
+        if !calendar.authorized { list.append(Command(title: "Allow calendar access") { Task { _ = await self.calendar.requestAccess() } }) }
         for lib in splitLibrary where !state.splits.contains(where: { $0.name == lib.name }) {
             list.append(Command(title: "Turn on split: \(lib.name)") { self.addSplit(lib) })
         }

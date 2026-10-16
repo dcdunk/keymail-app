@@ -41,7 +41,7 @@ struct AgentApprovalCard: View {
                     store.agentApproval = nil
                     store.openCompose(d, context: nil, isReply: !d.inReplyTo.isEmpty)
                     approval.resolve("The person chose to edit it first; it's open in Keymail and they'll send it themselves.")
-                }.quiet()
+                }.quiet().keyboardShortcut("e", modifiers: .command).help("Edit first (⌘E)")
                 Spacer()
                 Button {
                     if let at = approval.sendAt { store.schedule(d, at: at, remindDays: approval.remindDays) }

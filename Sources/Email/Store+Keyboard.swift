@@ -85,7 +85,10 @@ extension AppStore {
             }
             return false // typing in settings fields must never trigger inbox shortcuts
         }
-        if linkPrompt != nil { if code == 53 || code == 36 { linkPrompt = nil }; return true } // Esc / Return = don't open
+        if let lp = linkPrompt { // Esc / Return = don't open; ⌘Return = open anyway (deliberate, never the default)
+            if cmd, code == 36 { NSWorkspace.shared.open(lp.url); linkPrompt = nil } else if code == 53 || code == 36 { linkPrompt = nil }
+            return true
+        }
         if summary != nil { if code == 53 { summary = nil; return true }; return false }
         if splitSettingsOpen { if code == 53 { splitSettingsOpen = false; return true }; return false }
         if composing != nil || editingSnippet != nil || eventDraft != nil || claudeTask != nil || agentApproval != nil || state.accounts.isEmpty { return false }
@@ -121,6 +124,9 @@ extension AppStore {
             return false
         }
         if e.modifierFlags.contains(.shift), ch.lowercased() == "u" { unsubscribe(); return true }
+        if threadOpen, e.modifierFlags.contains(.shift), ch.lowercased() == "o" { toggleAllMessages(); return true }
+        if threadOpen, code == 49 { expandNext(); return true }        // Space
+        if threadOpen, ch == "." { toggleQuoted(); return true }
         if e.modifierFlags.contains(.shift), ch.lowercased() == "m" { toggleMute(); return true }
         if e.modifierFlags.contains(.shift), ch.lowercased() == "r" { instantReply(); return true }
         if let n = Int(ch), (1...3).contains(n), let c = selected, instantReplies[c.id] != nil { useInstantReply(n - 1); return true }
@@ -142,7 +148,7 @@ extension AppStore {
         case (_, "g"): pendingG = Date()
         case (_, "e"): markDone()
         case (_, "c"): compose()
-        case (_, "r"): reply(all: false)
+        case (_, "r"): if let c = selected, let d = myDraft(in: c) { openDraft(c, message: d) } else { reply(all: false) }
         case (_, "a"): reply(all: true)
         case (_, "f"): forward()
         case (_, "s"): toggleStar()

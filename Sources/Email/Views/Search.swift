@@ -128,14 +128,18 @@ struct TokenSearchBar: View {
                     .onChange(of: store.searchText) { _, _ in highlight = nil }
                     // Keep typing focus here when chips change, so Backspace keeps working on chips.
                     .onChange(of: store.search) { _, _ in if store.searchOpen { focused = true } }
-                    .onKeyPress(.downArrow) { highlight = min((highlight ?? -1) + 1, list.count - 1); return .handled }
+                    // ↑↓ walk the suggestions, then on into the "Emails" matches below them.
+                    .onKeyPress(.downArrow) { highlight = min((highlight ?? -1) + 1, list.count + quickMatches.count - 1); return .handled }
                     .onKeyPress(.upArrow) { highlight = (highlight ?? 0) > 0 ? highlight! - 1 : nil; return .handled }
                     .onKeyPress(.tab) {
                         guard let s = list.first(where: { if case .words = $0 { return false }; return true }) ?? list.first else { return .ignored }
                         lock(s); return .handled
                     }
                     .onKeyPress(.return) {
-                        if let h = highlight, list.indices.contains(h) { lock(list[h]) } else { store.runSearch() }
+                        let matches = quickMatches
+                        if let h = highlight, list.indices.contains(h) { lock(list[h]) }
+                        else if let h = highlight, matches.indices.contains(h - list.count) { jump(matches[h - list.count]) }
+                        else { store.runSearch() }
                         return .handled
                     }
                     .onKeyPress(.delete) {
@@ -145,7 +149,7 @@ struct TokenSearchBar: View {
                 Button { store.searchFiltersOpen.toggle() } label: {
                     Image(systemName: "line.3.horizontal.decrease").padding(5)
                         .background(Circle().fill(store.searchFiltersOpen ? Theme.selection : .clear))
-                }.buttonStyle(.plain).handCursor().help("More filters")
+                }.buttonStyle(.plain).handCursor().help("More filters (⌘F)").keyboardShortcut("f", modifiers: .command)
                 Button { store.clearSearch() } label: { Image(systemName: "xmark.circle.fill") }.buttonStyle(.plain).foregroundStyle(.secondary)
             }
             .padding(.horizontal, 14).padding(.vertical, 9)
@@ -168,7 +172,7 @@ struct TokenSearchBar: View {
             let matches = quickMatches
             if !matches.isEmpty {
                 Text("Emails").font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary).padding(.horizontal, 12).padding(.top, 8)
-                ForEach(matches) { c in
+                ForEach(Array(matches.enumerated()), id: \.element.id) { i, c in
                     Button { jump(c) } label: {
                         HStack(spacing: 10) {
                             Avatar(address: parseAddresses(c.latest.from).first, size: 22)
@@ -180,6 +184,7 @@ struct TokenSearchBar: View {
                             Text(shortDate(c.latest.date)).font(.scaled(.caption)).foregroundStyle(.secondary)
                         }
                         .padding(.horizontal, 12).padding(.vertical, 6).contentShape(Rectangle())
+                        .background(RoundedRectangle(cornerRadius: 10).fill(highlight == list.count + i ? Theme.selection : .clear))
                     }.buttonStyle(.plain).handCursor()
                 }
             }

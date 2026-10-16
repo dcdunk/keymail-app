@@ -23,7 +23,7 @@ struct SettingsPanel: View {
     /// Sidebar order, which ↑/↓ also follow. `items` are single settings search can jump to; each is a row marked `.settingAnchor`.
     static let sections: [Section] = [
         .init(id: "general", title: "General", icon: "gearshape", group: "Mail", keywords: "thread order newest oldest top quoted history earlier messages undo send notifications badge remote images sender logos privacy spelling grammar writing auto archive calendar fetch sync tips",
-              items: ["Messages in a thread", "Earlier messages in each email", "Show folders sidebar", "Show context panel", "Undo send", "Notify me about", "Dock badge counts",
+              items: ["Messages in a thread", "Earlier messages in each email", "Back to inbox after the last unread email", "Show folders sidebar", "Show context panel", "Undo send", "Notify me about", "Dock badge counts",
                       "Load remote images", "Show sender logos", "Check spelling while typing", "Check grammar", "Correct spelling automatically", "Smart quotes and dashes", "Fetch mail", "Calendar"]),
         .init(id: "splits", title: "Inbox", icon: "tray", group: "Mail", keywords: "tabs splits split inbox important other single one inbox focused rules", items: ["Important and Other"]),
         .init(id: "signatures", title: "Signatures", icon: "signature", group: "Mail", keywords: "signature html logo"),
@@ -330,6 +330,7 @@ struct GeneralSettings: View {
     @AppStorage("writingToolsButton") private var writingToolsButton = false
     @AppStorage("threadNewestFirst") private var newestFirst = false
     @AppStorage("showQuotedHistory") private var showQuoted = false
+    @AppStorage("backToInboxWhenDone") private var backToInbox = true
     @AppStorage("notifyMode") private var notifyMode = "important"
     @AppStorage("badgeMode") private var badgeMode = "important"
     @ObservedObject private var notifier = Notifier.shared
@@ -344,6 +345,10 @@ struct GeneralSettings: View {
                     Text("Hide").tag(false); Text("Show").tag(true)
                 } label: { Text("Earlier messages in each email"); Text("Replies repeat the conversation below them. Hidden shows only what each email added, with ••• to expand.") }
                 .pickerStyle(.segmented).settingAnchor("Earlier messages in each email")
+                Toggle(isOn: $backToInbox) {
+                    Text("Back to inbox after the last unread email")
+                    Text("Marking done, deleting or reminding on your last unread email returns to the inbox. Off opens the next email.")
+                }.settingAnchor("Back to inbox after the last unread email")
                 Toggle("Show folders sidebar", isOn: $store.sidebarOpen).settingAnchor("Show folders sidebar")
                 Toggle("Show context panel", isOn: $store.contextOpen).settingAnchor("Show context panel")
             }

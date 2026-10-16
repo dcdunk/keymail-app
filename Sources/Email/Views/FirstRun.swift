@@ -74,7 +74,7 @@ struct SignInView: View {
             Text("Keymail").font(.scaled(size: 34, weight: .semibold))
             Text("Fast, keyboard-first Gmail.").foregroundStyle(.secondary)
             Button { store.addAccount() } label: { Text("Sign in with Google").padding(.horizontal, 12).padding(.vertical, 4) }
-                .primaryAction()
+                .primaryAction().keyboardShortcut(.defaultAction)
             Button("Add iCloud Mail instead…") { showICloud = true }.quiet()
             if let b = store.busy { Text(b).foregroundStyle(.secondary) }
             if let b = store.banner { Text(b).foregroundStyle(.red).multilineTextAlignment(.center).frame(maxWidth: 480) }

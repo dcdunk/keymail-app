@@ -12,7 +12,7 @@ struct ThreadView: View {
     @EnvironmentObject var store: AppStore
     @Environment(\.layout) private var layout
     let conversation: Conversation
-    @State private var toggled: Set<String> = []   // the latest message starts open, older ones closed; a click flips either
+
     @AppStorage("threadNewestFirst") private var newestFirst = false
     @AppStorage("emailButtons") private var emailButtons = "text"   // "icons" or "text"
     @AppStorage("emailContentTheme") private var contentTheme = "auto"
@@ -46,9 +46,8 @@ struct ThreadView: View {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     let all = conversation.messages, single = all.count == 1
                     ForEach(newestFirst ? all.reversed() : all) { m in
-                        let open = (m.key == conversation.latest.key) != toggled.contains(m.key)
-                        if open || single { MessageCard(message: m, collapsible: !single) { toggled.formSymmetricDifference([m.key]) } }
-                        else { CollapsedMessage(message: m) { toggled.formSymmetricDifference([m.key]) } }
+                        if store.isOpen(m, in: conversation) || single { MessageCard(message: m, collapsible: !single) { store.threadToggled.formSymmetricDifference([m.key]) } }
+                        else { CollapsedMessage(message: m) { store.threadToggled.formSymmetricDifference([m.key]) } }
                     }
                 }
                 .frame(maxWidth: 960)               // emails stay readable on big monitors
@@ -150,9 +149,9 @@ struct MessageCard: View {
     let message: Message
     let collapsible: Bool
     let collapse: () -> Void
-    @State private var showQuoted = false
+    var showQuoted: Bool { store.quotedShown.contains(message.key) }
     @AppStorage("showQuotedHistory") private var showQuotedHistory = false
-    @State private var loadImagesOnce = false   // "Load images" for just this message
+    var loadImagesOnce: Bool { store.imagesShown.contains(message.key) }   // "Load images" for just this message
     @AppStorage("loadRemoteImages") private var loadRemoteImages = false
     @AppStorage("cardOpacity") private var cardOpacity = 1.0
     @AppStorage("emailContentTheme") private var contentTheme = "auto"   // auto (match app), light, dark
@@ -263,7 +262,7 @@ struct MessageCard: View {
                 HStack(spacing: 8) {
                     Image(systemName: "photo.badge.exclamationmark").foregroundStyle(.secondary)
                     Text("Remote images are blocked to protect your privacy.").font(.scaled(.callout)).foregroundStyle(.secondary)
-                    Button("Load images") { loadImagesOnce = true }.quiet()
+                    Button("Load images") { store.imagesShown.insert(message.key) }.quiet().help("Load images (⌘K → Load images)")
                 }
             }
             // HTML emails are designed for a light page, so they sit on a white "paper" card, like Apple Mail does.
@@ -299,10 +298,10 @@ struct MessageCard: View {
     }
 
     var quotedToggle: some View {
-        Button { showQuoted.toggle() } label: {
+        Button { store.quotedShown.formSymmetricDifference([message.key]) } label: {
             Text("•••").font(.scaled(size: 12, weight: .bold)).padding(.horizontal, 8).padding(.vertical, 1)
                 .background(Capsule().fill(Color.primary.opacity(0.08)))
-        }.buttonStyle(.plain).handCursor().help(showQuoted ? "Hide earlier messages" : "Show earlier messages")
+        }.buttonStyle(.plain).handCursor().help(showQuoted ? "Hide earlier messages (.)" : "Show earlier messages (.)")
     }
 
     func icon(_ mime: String) -> String {

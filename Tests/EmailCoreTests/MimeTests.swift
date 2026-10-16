@@ -97,4 +97,15 @@ final class MimeTests: XCTestCase {
         XCTAssertEqual(imapServer(for: "me@icloud.com").imapHost, "imap.mail.me.com")
         XCTAssertEqual(imapServer(for: "me@notyahoo.com").name, "iCloud")
     }
+
+    /// Issue #5: Gmail said "Invalid To header" when a recipient's name was their address.
+    func testRecipientNamesAlwaysMakeAValidToHeader() {
+        XCTAssertEqual(Address(name: "erico@trugolf.com", email: "erico@trugolf.com").formatted, "erico@trugolf.com")
+        XCTAssertEqual(Address(name: "Eric O. (TruGolf)", email: "erico@trugolf.com").formatted, #""Eric O. (TruGolf)" <erico@trugolf.com>"#)
+        XCTAssertEqual(Address(name: "Orozco, Eric", email: "e@x.co").formatted, #""Orozco, Eric" <e@x.co>"#)
+        XCTAssertEqual(Address(name: "Eric Orozco", email: "e@x.co").formatted, "Eric Orozco <e@x.co>")
+        XCTAssertTrue(Address(name: "José Núñez", email: "j@x.co").formatted.hasPrefix("=?UTF-8?"))
+        var d = Draft(from: "me@x.co"); d.to = #""erico@trugolf.com" <erico@trugolf.com>, "#; d.subject = "Hi"; d.body = "Hi"
+        XCTAssertTrue(buildRaw(d).contains("To: erico@trugolf.com\r\n"), "the To line is just the address")
+    }
 }

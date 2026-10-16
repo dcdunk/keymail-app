@@ -49,6 +49,10 @@ extension AppStore {
             selectedID = i + 1 < v.count ? v[i + 1].id : (i > 0 ? v[i - 1].id : nil)
         } else { selectedID = nil } // opened from outside the list (context panel): back to the list
         if selectedID == nil { threadOpen = false }
+        // Settings → General: finishing the last unread email (done, delete, remind…) goes back to the inbox
+        // instead of opening the next, already-read one.
+        if threadOpen, UserDefaults.standard.object(forKey: "backToInboxWhenDone") as? Bool ?? true,
+           !v.contains(where: { $0.id != c.id && $0.isUnread }) { threadOpen = false }
     }
 
     // MARK: Undo (⌘Z) for delete and Done

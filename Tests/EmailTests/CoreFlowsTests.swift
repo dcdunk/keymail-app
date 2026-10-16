@@ -215,4 +215,100 @@ final class CoreFlowsTests: XCTestCase {
         store.setImportance(c.id, important: false)
         XCTAssertTrue(store.tabMembers[otherTab]?.contains { $0.id == c.id } ?? false, "moved to Other")
     }
+
+    // MARK: Finishing the last unread email
+
+    func markAllRead(except keep: Set<String>) {
+        for (k, m) in store.messages where !keep.contains(m.account + "|" + m.threadId) { store.messages[k]?.labelIds.removeAll { $0 == "UNREAD" } }
+    }
+
+    func testDoneOnTheLastUnreadEmailGoesBackToTheInbox() {
+        let v = store.visible
+        markAllRead(except: [v[0].id])
+        store.selectedID = v[0].id; store.open(v[0])
+        press("e", code: 14)
+        XCTAssertFalse(store.threadOpen, "no unread left: back to the inbox")
+    }
+
+    func testDoneWithUnreadLeftOpensTheNextEmail() {
+        let v = store.visible
+        markAllRead(except: [v[0].id, v[2].id])
+        store.selectedID = v[0].id; store.open(v[0])
+        press("e", code: 14)
+        XCTAssertTrue(store.threadOpen, "unread mail left: the next email opens")
+    }
+
+    func testTurningTheSettingOffKeepsOpeningTheNextEmail() {
+        UserDefaults.standard.set(false, forKey: "backToInboxWhenDone")
+        defer { UserDefaults.standard.removeObject(forKey: "backToInboxWhenDone") }
+        let v = store.visible
+        markAllRead(except: [v[0].id])
+        store.selectedID = v[0].id; store.open(v[0])
+        press("#", code: 20, .shift)
+        XCTAssertTrue(store.threadOpen, "setting off: delete opens the next email as before")
+    }
+
+    /// Issue #4: mail you mark done must show in Done right away.
+    func testDoneShowsJustArchivedMailRightAway() {
+        let c = store.selected!
+        press("e", code: 14)
+        store.goFolder("Done")
+        XCTAssertFalse(store.threadOpen, "Done leaves the open email at once")
+        XCTAssertTrue(store.searchResults?.contains(c.id) ?? false, "the email you just marked done is listed")
+        XCTAssertTrue(store.visible.contains { $0.id == c.id })
+    }
+
+    // MARK: Keyboard-only conversation actions
+
+    func threadWithSeveral() -> Conversation {
+        let c = store.allConversations.first { $0.messages.count > 2 }!
+        store.selectedID = c.id; store.open(c); store.threadToggled = []
+        return c
+    }
+
+    func testSpaceOpensTheNextCollapsedEmail() {
+        let c = threadWithSeveral()
+        let collapsed = c.messages.filter { !store.isOpen($0, in: c) }.count
+        press(" ", code: 49)
+        XCTAssertEqual(c.messages.filter { !store.isOpen($0, in: c) }.count, collapsed - 1, "Space opens one more")
+    }
+
+    func testShiftOOpensAndClosesAll() {
+        let c = threadWithSeveral()
+        press("O", code: 31, .shift)
+        XCTAssertTrue(c.messages.allSatisfy { store.isOpen($0, in: c) }, "⇧O opens every email")
+        press("O", code: 31, .shift)
+        XCTAssertEqual(c.messages.filter { store.isOpen($0, in: c) }.map(\.key), [c.latest.key], "again: only the latest stays open")
+    }
+
+    func testDotTogglesEarlierMessages() {
+        let c = threadWithSeveral()
+        press(".", code: 47)
+        XCTAssertTrue(store.quotedShown.contains(c.latest.key), ". shows earlier messages")
+        press(".", code: 47)
+        XCTAssertFalse(store.quotedShown.contains(c.latest.key), ". hides them again")
+    }
+
+    func testPaletteReachesAttachmentsAndPeople() {
+        let c = store.allConversations.first { $0.messages.count > 1 }!
+        var m = c.latest
+        m.attachments = [AttachmentRef(id: "a1", name: "Q3 plan.pdf", mimeType: "application/pdf", size: 1000)]
+        store.messages[m.key] = m
+        store.selectedID = c.id
+        let titles = store.commands.map(\.title)
+        XCTAssertTrue(titles.contains("Open attachment: Q3 plan.pdf"))
+        XCTAssertTrue(titles.contains("Save attachment: Q3 plan.pdf"))
+        XCTAssertTrue(titles.contains { $0.hasPrefix("Copy sender address") })
+        XCTAssertTrue(titles.contains("Show or hide earlier messages"))
+    }
+
+    func testRContinuesYourDraftInsteadOfStartingAnother() {
+        let c = store.allConversations.first { $0.messages.count > 1 }!
+        let draft = Message(id: "d1", threadId: c.threadId, account: me, from: me, to: "sam@northwind.co", subject: "Re: x",
+                            date: Date().addingTimeInterval(120), labelIds: ["DRAFT"], text: "Half-written reply")
+        store.messages[draft.key] = draft
+        store.selectedID = c.id
+        press("r", code: 15)
+        XCTAssertEqual(store.composing?.draft.body.contains("Half-written reply"), true, "R opens the draft you started")
+    }
 }

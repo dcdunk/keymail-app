@@ -31,14 +31,15 @@ struct ComposeView: View {
                     }.contentShape(Rectangle())
                 }
                 .buttonStyle(.plain).handCursor().fixedSize()
+                .keyboardShortcut("f", modifiers: [.command, .shift]).help("Send from (⇧⌘F)")
                 Spacer()
                 Button { close() } label: { Image(systemName: "xmark").font(.scaled(size: 12, weight: .semibold)).frame(width: 26, height: 26).contentShape(Circle()) }
                     .buttonStyle(.plain).foregroundStyle(.secondary).keyboardShortcut(.cancelAction).help("Close and keep draft (Esc)")
             }
             row("To") {
                 RecipientChips(text: $model.draft.to, placeholder: "Recipients", focus: $focus, field: .to, complete: complete)
-                if !showCc { linkButton("Cc") { showCc = true; focus = .cc } }
-                if !showBcc { linkButton("Bcc") { showBcc = true; focus = .bcc } }
+                if !showCc { linkButton("Cc") { showCc = true; focus = .cc }.help("Add Cc (⇧⌘C)") }
+                if !showBcc { linkButton("Bcc") { showBcc = true; focus = .bcc }.help("Add Bcc (⇧⌘B)") }
             }
             suggestions(for: model.draft.to, .to) { model.draft.to = $0 }
             if showCc {
@@ -65,13 +66,21 @@ struct ComposeView: View {
                     DispatchQueue.main.async { if empty { focus = .to } else { bodyFocused = true } }
                 }
 
+            // Keyboard-only shortcuts with no visible button of their own (each mirrors a click target below).
+            Group {
+                Button("") { showCc = true; focus = .cc }.keyboardShortcut("c", modifiers: [.command, .shift])
+                Button("") { showBcc = true; focus = .bcc }.keyboardShortcut("b", modifiers: [.command, .shift])
+                Button("") { showQuote.toggle() }.keyboardShortcut(".", modifiers: [.command, .shift])
+                Button("") { if !model.draft.files.isEmpty { model.draft.files.removeLast() } }.keyboardShortcut(.delete, modifiers: [.command, .option])
+            }
+            .frame(width: 0, height: 0).opacity(0).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 10) {
                 ComposeSignature(model: model)
                 if let q = model.draft.quoted, !q.isEmpty {
                     Button { showQuote.toggle() } label: {
                         Text("•••").font(.scaled(size: 12, weight: .bold)).padding(.horizontal, 8).padding(.vertical, 1)
                             .background(Capsule().fill(Color.primary.opacity(0.08)))
-                    }.buttonStyle(.plain).handCursor().help(showQuote ? "Hide quoted text" : "Show quoted text")
+                    }.buttonStyle(.plain).handCursor().help(showQuote ? "Hide quoted text (⇧⌘.)" : "Show quoted text (⇧⌘.)")
                     if showQuote {
                         ScrollView { Text(q.trimmingCharacters(in: .newlines)).font(.scaled(.callout)).foregroundStyle(.secondary)
                             .frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled) }.frame(maxHeight: 140)
@@ -86,7 +95,7 @@ struct ComposeView: View {
                                     Text(f.name).lineLimit(1)
                                     Text(ByteCountFormatter.string(fromByteCount: Int64(f.data.count), countStyle: .file)).foregroundStyle(.tertiary)
                                     Button { model.draft.files.removeAll { $0.id == f.id } } label: { Image(systemName: "xmark.circle.fill") }
-                                        .buttonStyle(.plain).foregroundStyle(.tertiary)
+                                        .buttonStyle(.plain).foregroundStyle(.tertiary).help("Remove (⌥⌘⌫ removes the last one)")
                                 }
                                 .font(.scaled(.callout)).padding(.horizontal, 10).padding(.vertical, 6)
                                 .background(Capsule().fill(Color.primary.opacity(0.06)))
@@ -129,7 +138,7 @@ struct ComposeView: View {
             Spacer().frame(width: 10)
             tool("paperclip", model.draft.files.isEmpty ? "Attach" : "Attach (\(model.draft.files.count))", help: "Attach files (⇧⌘A), or drag them in") { pickFiles() }
                 .keyboardShortcut("a", modifiers: [.command, .shift])
-            toolMenu("signature", "Signature", help: "Signature") {
+            toolMenu("signature", "Signature", help: "Signature (⇧⌘S)", key: KeyboardShortcut("s", modifiers: [.command, .shift])) {
                 [.header("Signature"),
                  MenuEntry(title: "No signature", icon: "minus.circle", checked: model.draft.signaturePlain == nil) { store.applySignature(&model.draft, from: nil) }]
                 + store.addressesWithSignatures.map { a in
@@ -140,7 +149,7 @@ struct ComposeView: View {
                 }
                 + [.divider, MenuEntry(title: "Edit signatures", icon: "pencil") { editSignature() }]
             }
-            toolMenu("text.badge.plus", "Snippet", help: "Insert snippet") {
+            toolMenu("text.badge.plus", "Snippet", help: "Insert snippet (⇧⌘I)", key: KeyboardShortcut("i", modifiers: [.command, .shift])) {
                 [.header("Insert snippet")] + (store.state.snippets.isEmpty
                     ? [MenuEntry(title: "No snippets yet", subtitle: "Add them in Settings → Snippets", icon: "text.badge.plus", disabled: true)]
                     : store.state.snippets.map { s in
@@ -155,7 +164,8 @@ struct ComposeView: View {
 
             Spacer(minLength: 12)
             if let n = model.savedNote { Text(n).font(.scaled(.caption)).foregroundStyle(.tertiary).lineLimit(1) }
-            tool("trash", "Discard", help: "Discard draft", iconOnly: true) { discard() }
+            tool("trash", "Discard", help: "Discard draft (⇧⌘⌫)", iconOnly: true) { discard() }
+                .keyboardShortcut(.delete, modifiers: [.command, .shift])
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
         .background(Color.primary.opacity(0.03))
@@ -173,8 +183,9 @@ struct ComposeView: View {
             MenuButton(width: 280, entries: { sendMenu }) {
                 Image(systemName: "chevron.down").font(.scaled(size: 11, weight: .bold)).frame(height: 16)
             }
+            .keyboardShortcut(.return, modifiers: [.command, .shift])
             .clipShape(UnevenRoundedRectangle(bottomTrailingRadius: 20, topTrailingRadius: 20))
-            .help("Send later, or remind me if there's no reply")
+            .help("Send later, or remind me if there's no reply (⇧⌘↵)")
         }
         .prominentGlassButton().buttonBorderShape(.roundedRectangle(radius: 0)).controlSize(.large)
         .disabled(model.busy)
@@ -211,8 +222,9 @@ struct ComposeView: View {
     func tool(_ symbol: String, _ title: String, help: String, iconOnly: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) { toolLabel(symbol, title, iconOnly: iconOnly) }.buttonStyle(ToolStyle()).help(help)
     }
-    func toolMenu(_ symbol: String, _ title: String, help: String, _ entries: @escaping () -> [MenuEntry]) -> some View {
+    func toolMenu(_ symbol: String, _ title: String, help: String, key: KeyboardShortcut? = nil, _ entries: @escaping () -> [MenuEntry]) -> some View {
         MenuButton(width: 280, entries: entries) { toolLabel(symbol, title, iconOnly: false) }.buttonStyle(ToolStyle()).fixedSize().help(help)
+            .keyboardShortcut(key)
     }
     @ViewBuilder func toolLabel(_ symbol: String, _ title: String, iconOnly: Bool) -> some View {
         if iconOnly || draftButtons == "icons" {

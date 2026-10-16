@@ -58,6 +58,12 @@ extension AppStore {
 
     func runQuery(_ q: String, title: String, local: SearchQuery? = nil) {
         folder = title
+        // Issue #4: Done used to sit on the previous email for ~10s while Gmail searched, looking empty.
+        // Leave the email now and show archived mail already on this Mac at once; Gmail's results add to it.
+        threadOpen = false; selectedID = nil
+        let isDone = q.hasPrefix("-in:inbox")
+        let localDone = isDone ? doneHere() : []
+        if isDone { searchResults = localDone }
         Task {
             busy = "Searching…"
             var ids: Set<String> = []
@@ -70,7 +76,8 @@ extension AppStore {
                         let hit: Bool
                         if let local { hit = matchesSearch(m, local) }
                         else if q == "is:starred" { hit = m.labelIds.contains("STARRED") }
-                        else if q.hasPrefix("-in:inbox") || q == "in:sent" { hit = false } // folders iCloud's cache doesn't have
+                        else if isDone { hit = false }        // doneHere() already covers it
+                        else if q == "in:sent" { hit = false } // a folder iCloud's cache doesn't have
                         else { hit = words.allSatisfy { hay.contains($0) } }
                         if hit { ids.insert(a + "|" + m.threadId) }
                     }
@@ -85,8 +92,19 @@ extension AppStore {
                 } catch { report(error) }
             }
             busy = nil
-            searchResults = ids; selectedID = nil; threadOpen = false
+            guard folder == title else { return }   // the person moved on while this searched
+            searchResults = ids.union(localDone)
         }
+    }
+
+    /// Archived conversations already on this Mac (in scope of the account picker): not in the inbox, not trash,
+    /// spam or drafts, and not only mail you sent.
+    func doneHere() -> Set<String> {
+        Set(allConversations.filter { c in
+            (state.activeAccount == nil || state.activeAccount == c.account) && !c.inInbox
+                && !c.labels.contains("TRASH") && !c.labels.contains("SPAM")
+                && !c.messages.allSatisfy { $0.labelIds.contains("DRAFT") || $0.labelIds == ["SENT"] }
+        }.map(\.id))
     }
 
     func clearSearch() {

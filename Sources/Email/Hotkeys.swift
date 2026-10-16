@@ -15,6 +15,12 @@ enum Hotkeys {
         ("⇧R", "Instant reply"), ("⇧U", "Unsubscribe"), ("⇧M", "Mute thread"), ("1–3", "Use instant reply"),
         ("Tab / ⇧Tab", "Next / previous split"), ("↑ ↓", "Previous / next email"), ("← →", "Folders / context panel"),
         ("Return", "Open email"), ("Esc", "Back"), ("⌫", "Trash"),
+        ("Space", "Open the next collapsed email in a conversation"), ("⇧O", "Open or close all emails in a conversation"),
+        ("." , "Show or hide earlier messages"), ("R on your draft", "Continue editing it"),
+        ("⇧⌘F", "Compose: send from"), ("⇧⌘C / ⇧⌘B", "Compose: add Cc / Bcc"), ("⇧⌘S", "Compose: signature"),
+        ("⇧⌘I", "Compose: insert snippet"), ("⇧⌘A", "Compose: attach"), ("⌥⌘⌫", "Compose: remove last attachment"),
+        ("⇧⌘.", "Compose: show quoted text"), ("⇧⌘↵", "Compose: send later / remind me"), ("⇧⌘⌫", "Compose: discard"),
+        ("⌘F", "Search: more filters"), ("⌘↵", "Link warning: open anyway"),
     ]
 
     /// True while Settings is waiting for a new key, so the inbox and Esc-to-close leave it alone.

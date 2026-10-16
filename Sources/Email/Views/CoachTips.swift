@@ -89,11 +89,11 @@ struct CoachTips: View {
             }
             Text(t.body).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {
-                Button("Skip tips") { step = -1 }.quiet().font(.scaled(.callout))
+                Button("Skip tips") { step = -1 }.quiet().font(.scaled(.callout)).keyboardShortcut(.cancelAction)
                 Spacer()
                 if step > 0 { Button("Back") { step -= 1 }.quiet() }
                 Button(step == Self.tips.count - 1 ? "Done" : "Next") { step = step == Self.tips.count - 1 ? -1 : step + 1 }
-                    .prominentGlassButton().buttonBorderShape(.capsule)
+                    .prominentGlassButton().buttonBorderShape(.capsule).keyboardShortcut(.defaultAction)
             }
         }
         .padding(18)
