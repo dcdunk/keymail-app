@@ -13,11 +13,10 @@ struct CalendarSection: View {
     @EnvironmentObject var cal: CalendarService   // redraws when access is granted
     let conversation: Conversation
     var body: some View {
-        let mentioned = parseWhen(String(conversation.latest.plainText.prefix(4000)))
-        let day = mentioned ?? Date()
+        let day = Date()   // always today; a date mentioned in the email no longer switches the day shown
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(mentioned == nil ? "Today's Events" : "Mentioned: \(day.formatted(.dateTime.weekday(.abbreviated).month().day()))")
+                Text("Today's Events")
                     .font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary)
                 Spacer()
                 Button { store.createEventFromEmail() } label: { Image(systemName: "calendar.badge.plus").frame(width: 26, height: 26) }
