@@ -188,7 +188,9 @@ final class AppStore: ObservableObject {
     @Published var tabName = (UserDefaults.standard.object(forKey: "splitImportance") as? Bool ?? true) ? importantTab : inboxTab
     @Published var folder: String?          // "Starred", "Search: …" etc. replaces the split tabs
     @Published var unreadOnly = false
+    /// Folders panel opened by hand (← or the menu button). Settings → General → Show folders sidebar pins it instead.
     @Published var sidebarOpen = false { didSet {
+        if !sidebarOpen && !foldersPinned { sidebarFocused = false }
         if sidebarOpen && !oldValue { panelIndex = currentPanelIndex }
         if !sidebarOpen && oldValue { refreshHover(after: 0.4) } // after the slide-out animation
     } }
@@ -210,15 +212,27 @@ final class AppStore: ObservableObject {
     }
 
     /// Opens whatever row `i` of the folder panel is, then closes the panel.
+    /// The keyboard is driving the folders panel (← put it there); J/K and arrows move through folders until Esc or Return.
+    @Published var sidebarFocused = false
+
     func activatePanel(_ i: Int) {
         if i < Self.panelFolders.count { goFolder(Self.panelFolders[i]) }
         else if panelLabels.indices.contains(i - Self.panelFolders.count) {
             let l = panelLabels[i - Self.panelFolders.count]
             runQuery("label:\"\(l)\"", title: l)
         }
-        sidebarOpen = false
+        sidebarFocused = false              // the keyboard goes back to the mail
+        if !foldersPinned { sidebarOpen = false }   // opened by hand: it closes once you've picked
     }
-    @Published var contextOpen = true
+    @Published var contextOpen = false   // opened by hand (→); Settings → General → Show context panel pins it
+
+    // Settings switches are the master control: on = always visible (arrows never close it), off = open and close by hand.
+    var foldersPinned: Bool { UserDefaults.standard.object(forKey: "foldersPinned") as? Bool ?? UserDefaults.standard.bool(forKey: "foldersOpen") }
+    var contextPinned: Bool { UserDefaults.standard.object(forKey: "contextPinned") as? Bool ?? true }
+    var foldersVisible: Bool { foldersPinned || sidebarOpen }
+    var contextVisible: Bool { contextPinned || contextOpen }
+    func setFoldersPinned(_ on: Bool) { UserDefaults.standard.set(on, forKey: "foldersPinned"); sidebarOpen = false; sidebarFocused = false; objectWillChange.send() }
+    func setContextPinned(_ on: Bool) { UserDefaults.standard.set(on, forKey: "contextPinned"); contextOpen = false; objectWillChange.send() }
     @Published var splitSettingsOpen = false
     @Published var recentlyOpened: [String] = []
     @Published var inlineData: [String: [String: String]] = [:]   // message key → content id → data URL
@@ -307,7 +321,7 @@ final class AppStore: ObservableObject {
     }
 
     func openSettings() {
-        paletteOpen = false; sidebarOpen = false; closePopup()
+        paletteOpen = false; sidebarFocused = false; closePopup()
         settingsOpen = true
         NSApp.activate(ignoringOtherApps: true)
     }

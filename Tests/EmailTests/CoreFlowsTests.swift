@@ -36,6 +36,7 @@ final class CoreFlowsTests: XCTestCase {
     }
     func resetUI() {
         store.composing = nil; store.paletteOpen = false; store.searchOpen = false; store.closePopup()
+        store.sidebarOpen = false
         store.threadOpen = false; store.folder = nil; store.searchResults = nil; store.summary = nil
         store.goTab(store.shownTabs.first ?? ""); store.selectedID = store.visible.first?.id
     }
@@ -367,5 +368,53 @@ final class CoreFlowsTests: XCTestCase {
         press("", code: 123); XCTAssertEqual(store.selectedID, v[1].id, "filmstrip: ← flips back")
         store.setInboxLayout("list")
         press("", code: 123); XCTAssertTrue(store.sidebarOpen, "list: ← still opens folders")
+    }
+
+    // MARK: Folders beside the inbox
+
+    func testPinnedFoldersNeverCloseAndArrowsOnlyMoveTheKeyboard() {
+        store.setInboxLayout("list"); store.setFoldersPinned(true)
+        defer { store.setFoldersPinned(false) }
+        let v = store.visible
+        store.selectedID = v[0].id
+        let folderBefore = store.folder
+        press("", code: 123)
+        XCTAssertTrue(store.foldersVisible && store.sidebarFocused, "← moves the keyboard to the folders")
+        press("", code: 125); press("", code: 125)
+        XCTAssertEqual(store.folder, folderBefore, "↑/↓ only move the highlight")
+        XCTAssertEqual(store.selectedID, v[0].id, "and leave the email selection alone")
+        press("", code: 124)
+        XCTAssertFalse(store.sidebarFocused, "→ goes back to the inbox")
+        XCTAssertTrue(store.foldersVisible, "pinned: the folders stay")
+        XCTAssertEqual(store.folder, folderBefore, "nothing was opened")
+        press("", code: 123); press("", code: 123)
+        XCTAssertTrue(store.foldersVisible, "pinned: ← never closes them")
+        press("", code: 125); press("\r", code: 36)
+        XCTAssertNotEqual(store.folder, folderBefore, "Return opens the highlighted folder")
+        XCTAssertTrue(store.foldersVisible, "pinned: still visible after picking")
+        XCTAssertFalse(store.sidebarFocused)
+    }
+
+    func testManualFoldersOpenWithLeftAndCloseAfterPicking() {
+        store.setInboxLayout("list"); store.setFoldersPinned(false)
+        XCTAssertFalse(store.foldersVisible, "off: hidden until you open them")
+        press("", code: 123)
+        XCTAssertTrue(store.foldersVisible && store.sidebarFocused, "← opens them")
+        press("", code: 124)
+        XCTAssertFalse(store.foldersVisible, "→ closes them")
+        press("", code: 123); press("", code: 125); press("\r", code: 36)
+        XCTAssertFalse(store.foldersVisible, "picking a folder with Return closes them")
+        press("", code: 123); press("", code: 123)
+        XCTAssertFalse(store.foldersVisible, "← again closes them")
+    }
+
+    func testPinnedContextPanelIgnoresRightArrow() {
+        store.setContextPinned(true)
+        press("", code: 124); XCTAssertTrue(store.contextVisible, "pinned: → never hides the context panel")
+        store.setContextPinned(false)
+        XCTAssertFalse(store.contextVisible)
+        press("", code: 124); XCTAssertTrue(store.contextVisible, "off: → opens it")
+        press("", code: 124); XCTAssertFalse(store.contextVisible, "and closes it")
+        store.setContextPinned(true)
     }
 }

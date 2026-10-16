@@ -117,12 +117,16 @@ extension AppStore {
         if cmd, ch == "z", !e.modifierFlags.contains(.shift), !(NSApp.keyWindow?.firstResponder is NSTextView) { undo(); return true }
         if cmd { return false }
         if code == 51, searchOpen, searchText.isEmpty, !search.isEmpty { removeLastSearchToken(); return true }
-        if sidebarOpen, !(NSApp.keyWindow?.firstResponder is NSTextView) {
+        if sidebarFocused, !(NSApp.keyWindow?.firstResponder is NSTextView) {
             switch (code, ch) {
             case (125, _), (_, "j"): panelIndex = min(panelIndex + 1, panelCount - 1); return true
             case (126, _), (_, "k"): panelIndex = max(panelIndex - 1, 0); return true
-            case (36, _), (124, _): activatePanel(panelIndex); return true   // Return, or →
-            case (53, _), (123, _): sidebarOpen = false; return true         // Esc, or ← again
+            // ↑/↓ only move the highlight; Return is the one key that opens a folder or label.
+            case (36, _), (76, _): activatePanel(panelIndex); return true      // Return (or Enter)
+            case (124, _), (53, _):                                            // → or Esc: back to the mail, nothing opened
+                sidebarFocused = false; if !foldersPinned { sidebarOpen = false }; return true
+            case (123, _):                                                     // ← again: closes it, unless pinned in Settings
+                if !foldersPinned { sidebarOpen = false; sidebarFocused = false }; return true
             default: break
             }
         }
@@ -145,7 +149,6 @@ extension AppStore {
             if let dest { goFolder(dest); return true }
         }
         switch (code, Hotkeys.resolve(ch)) {
-        case (53, _) where sidebarOpen: sidebarOpen = false
         case (53, _):
             if threadOpen { threadOpen = false } else if searchResults != nil { clearSearch() } else { banner = nil }
         case (36, _), (_, "o"): if let c = selected { open(c) }
@@ -153,8 +156,10 @@ extension AppStore {
         case (126, _), (_, "k"): move(-1)
         case (123, _) where inboxLayout == "film": move(-1)   // filmstrip: ← → flip pages
         case (124, _) where inboxLayout == "film": move(1)
-        case (123, _): sidebarOpen.toggle()
-        case (124, _): contextOpen.toggle()
+        case (123, _):   // ←: show folders and move the keyboard there, starting on the folder you're in
+            if !foldersVisible { sidebarOpen = true } else { panelIndex = currentPanelIndex }
+            sidebarFocused = true
+        case (124, _): if !contextPinned { contextOpen.toggle() }   // pinned in Settings: never closes
         case (_, "g"): pendingG = Date()
         case (_, "e"): markDone()
         case (_, "c"): compose()

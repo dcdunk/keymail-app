@@ -38,7 +38,7 @@ struct FolderPanel: View {
                         row(name, subtitle: name == "Inbox" ? "Important · Other" : nil,
                             count: name == "Inbox" ? inboxCount : name == "Reminders" ? store.state.snoozes.count : name == "Scheduled" ? store.state.scheduled.count : 0,
                             key: keys[name] ?? "", on: name == "Inbox" ? store.folder == nil : store.folder == name,
-                            highlighted: store.panelIndex == i) { store.activatePanel(i) }
+                            highlighted: store.sidebarFocused && store.panelIndex == i) { store.activatePanel(i) }
                     }
                     if !labels.isEmpty {
                         Divider().padding(.vertical, 12).padding(.horizontal, 18)
@@ -46,7 +46,7 @@ struct FolderPanel: View {
                             .padding(.horizontal, 18).padding(.bottom, 6)
                         ForEach(Array(labels.enumerated()), id: \.element) { i, l in
                             let idx = AppStore.panelFolders.count + i
-                            row(l, indent: true, on: store.folder == l, highlighted: store.panelIndex == idx) { store.activatePanel(idx) }
+                            row(l, indent: true, on: store.folder == l, highlighted: store.sidebarFocused && store.panelIndex == idx) { store.activatePanel(idx) }
                         }
                     }
                 }.padding(.bottom, 16)
@@ -58,11 +58,11 @@ struct FolderPanel: View {
             }
             }
         }
-        .frame(width: 290)
+        .frame(width: 270)
         .frame(maxHeight: .infinity, alignment: .top)
-        .floatingPanel(RoundedRectangle(cornerRadius: 20))
-        .shadow(color: .black.opacity(0.18), radius: 24, x: 6)
-        .padding(10)
+        // Same glass and spacing as the context panel on the right: it sits beside the inbox, not over it.
+        .glass(RoundedRectangle(cornerRadius: 20))
+        .padding(.leading, 10).padding(.vertical, 10).padding(.top, 24)
     }
 
     func row(_ title: String, subtitle: String? = nil, count: Int = 0, key: String = "", indent: Bool = false, on: Bool,
@@ -77,15 +77,20 @@ struct FolderPanel: View {
             }
             .padding(.leading, indent ? 30 : 18).padding(.trailing, 18).padding(.vertical, 8)
             .background(alignment: .leading) {
-                // Keyboard highlight (↑/↓): a soft fill, separate from the current-folder bar.
-                if (highlighted || hovered == title) && !on {
-                    RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(highlighted ? 0.08 : 0.05)).padding(.horizontal, 8)
-                }
+                // The open folder: filled, with the accent bar. Mouse hover: a soft fill.
                 if on {
                     ZStack(alignment: .leading) {
                         Rectangle().fill(Theme.selection)
                         Rectangle().fill(Theme.accent).frame(width: 3)
                     }
+                } else if hovered == title {
+                    RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.05)).padding(.horizontal, 8)
+                }
+            }
+            .overlay {
+                // Keyboard cursor (↑/↓): an outline ring, clearly not "selected". Return opens it.
+                if highlighted {
+                    RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.accent, lineWidth: 1.5).padding(.horizontal, 8)
                 }
             }
             .contentShape(Rectangle())

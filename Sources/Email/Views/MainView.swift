@@ -25,6 +25,8 @@ struct MainView: View {
 
     func content(_ layout: LayoutWidth) -> some View {
         HStack(spacing: 0) {
+            // Folders sit beside the inbox (like the context panel on the right), so they can stay open while you work.
+            if store.foldersVisible { FolderPanel().transition(.move(edge: .leading).combined(with: .opacity)) }
             VStack(spacing: 0) {
                 Header().zIndex(1) // search dropdown must draw above the list below it
                 if store.searchFiltersOpen { SearchFilters() }
@@ -35,21 +37,7 @@ struct MainView: View {
                 else if store.threadOpen, let c = store.selected { ThreadView(conversation: c) } else { ListView() }
             }
             // The context panel needs room; narrow windows hide it automatically.
-            if store.contextOpen, layout.width >= 1100, let c = store.selected { ContextPanel(conversation: c) }
-        }
-        .overlay(alignment: .leading) {
-            // Always in place, driven by live state: a closing overlay that was removed could keep catching the
-            // mouse while it animated away, leaving the inbox with no hover until you clicked.
-            let open = store.sidebarOpen
-            ZStack(alignment: .leading) {
-                // Click anywhere outside the panel to close it.
-                Color.black.opacity(open ? 0.12 : 0).ignoresSafeArea()
-                    .onTapGesture { store.sidebarOpen = false }
-                    .allowsHitTesting(open)
-                FolderPanel()
-                    .offset(x: open ? 0 : -320).opacity(open ? 1 : 0)
-                    .allowsHitTesting(open)
-            }
+            if store.contextVisible, layout.width >= 1100, let c = store.selected { ContextPanel(conversation: c) }
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: store.sidebarOpen)
         .overlayPreferenceValue(CoachAnchorKey.self) { anchors in
@@ -73,9 +61,11 @@ struct Header: View {
     @FocusState private var searchFocused: Bool
     var body: some View {
         HStack(spacing: 6) {
-            Button { store.sidebarOpen.toggle() } label: { Image(systemName: "line.3.horizontal").frame(width: 34, height: 34).contentShape(Circle()) }
-                .buttonStyle(.plain).foregroundStyle(.secondary).glass(Circle(), interactive: true)
-                .help("Folders (←)").padding(.trailing, 8)
+            if !store.foldersPinned {   // pinned in Settings: the folders are always there, so no button
+                Button { if !store.foldersPinned { store.sidebarOpen.toggle() } } label: { Image(systemName: "line.3.horizontal").frame(width: 34, height: 34).contentShape(Circle()) }
+                    .buttonStyle(.plain).foregroundStyle(.secondary).glass(Circle(), interactive: true)
+                    .help("Folders (←)").padding(.trailing, 8)
+            }
             if store.searchOpen || (store.folder?.hasPrefix("Search: ") ?? false) {
                 TokenSearchBar()
             } else if let f = store.folder {

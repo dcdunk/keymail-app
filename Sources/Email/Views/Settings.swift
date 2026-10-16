@@ -360,8 +360,12 @@ struct GeneralSettings: View {
                     Text("Reply inside the conversation")
                     Text("Replies open under the email you're reading. Off opens them in their own window you can move anywhere.")
                 }.settingAnchor("Reply inside the conversation")
-                Toggle("Show folders sidebar", isOn: $store.sidebarOpen).settingAnchor("Show folders sidebar")
-                Toggle("Show context panel", isOn: $store.contextOpen).settingAnchor("Show context panel")
+                Toggle(isOn: Binding(get: { store.foldersPinned }, set: { store.setFoldersPinned($0) })) {
+                    Text("Show folders sidebar"); Text("On: always visible. Off: open it with ← or the menu button; it closes after you pick a folder.")
+                }.settingAnchor("Show folders sidebar")
+                Toggle(isOn: Binding(get: { store.contextPinned }, set: { store.setContextPinned($0) })) {
+                    Text("Show context panel"); Text("On: always visible. Off: open and close it with →.")
+                }.settingAnchor("Show context panel")
             }
             Section("Sending") {
                 Picker(selection: $store.state.undoSendSeconds) {
