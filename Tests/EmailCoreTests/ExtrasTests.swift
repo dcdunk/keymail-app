@@ -526,4 +526,13 @@ final class QuotedHTMLTests: XCTestCase {
         XCTAssertNil(splitQuotedHTML(forward).quoted)
         XCTAssertNil(splitQuotedHTML("<p>No quotes here</p>").quoted)
     }
+
+    func testSettingsShowWhichAppsHaveKeymail() {
+        XCTAssertTrue(mcpConfigLists(#"{"mcpServers":{"keymail":{"command":"/x"}}}"#, name: "keymail"))
+        XCTAssertFalse(mcpConfigLists(#"{"mcpServers":{"keymail-demo":{}}}"#, name: "keymail"))
+        XCTAssertFalse(mcpConfigLists(#"{"preferences":{}}"#, name: "keymail"))
+        XCTAssertTrue(mcpConfigLists("model = \"o3\"\n\n[mcp_servers.keymail]\ncommand = \"/x\"\n", name: "keymail"), "Codex TOML")
+        XCTAssertFalse(mcpConfigLists("[mcp_servers.keymail-demo]\n", name: "keymail"))
+        XCTAssertFalse(mcpConfigLists(nil, name: "keymail"), "app not installed")
+    }
 }

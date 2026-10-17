@@ -8,6 +8,16 @@ struct AgentSettings: View {
     @AppStorage("agentsEnabled") private var enabled = false
     @AppStorage("agentsTriage") private var triage = false
     @State private var note: String?
+    @State private var connected: Set<String> = []
+
+    /// Where each app keeps its MCP servers, relative to the home folder.
+    static let configFiles = ["Claude Desktop": "Library/Application Support/Claude/claude_desktop_config.json",
+                              "Claude Code": ".claude.json", "Codex": ".codex/config.toml", "Gemini CLI": ".gemini/settings.json"]
+
+    func checkConnected() {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        connected = Set(Self.configFiles.filter { mcpConfigLists(try? String(contentsOf: home.appendingPathComponent($0.value), encoding: .utf8), name: serverName) }.keys)
+    }
 
     var helper: String { Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/keymail-mcp").path }
     var serverName: String { AppFlavor.isDemo ? "keymail-demo" : "keymail" }
@@ -59,11 +69,16 @@ struct AgentSettings: View {
         }
         .formStyle(.grouped).scrollContentBackground(.hidden)
         .onChange(of: enabled) { store.updateAgentBridge() }
+        .task {   // re-checks while open, so a pasted command shows Connected without leaving Settings
+            while !Task.isCancelled { checkConnected(); try? await Task.sleep(for: .seconds(2)) }
+        }
     }
 
     func setupRow(_ name: String, brand: String?, action: String, _ run: @escaping () -> Void) -> some View {
         LabeledContent {
-            Button(action, action: run).quiet()
+            if connected.contains(name) {
+                Label("Connected", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+            } else { Button(action, action: run).quiet() }
         } label: {
             HStack(spacing: 8) {
                 if let brand { BrandLogo(brand: brand, size: 16) } else { Image(systemName: "puzzlepiece.extension").frame(width: 16) }
@@ -78,7 +93,24 @@ struct AgentSettings: View {
     }
 
     /// Adds Keymail to Claude Desktop's MCP servers, keeping every other server and setting in that file.
+    /// Claude Desktop rewrites its settings file from memory while it's open, which would wipe our entry.
+    /// So when it's running, wait for it to quit and add Keymail the moment it closes.
     func addToClaudeDesktop() {
+        let id = "com.anthropic.claudefordesktop"
+        guard NSRunningApplication.runningApplications(withBundleIdentifier: id).isEmpty else {
+            note = "Quit Claude Desktop (⌘Q). Keymail adds itself the moment it closes, then reopen Claude Desktop."
+            var token: NSObjectProtocol?
+            token = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { n in
+                guard (n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.bundleIdentifier == id else { return }
+                if let t = token { NSWorkspace.shared.notificationCenter.removeObserver(t) }
+                MainActor.assumeIsolated { writeClaudeDesktopConfig() }
+            }
+            return
+        }
+        writeClaudeDesktopConfig()
+    }
+
+    func writeClaudeDesktopConfig() {
         let file = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Claude/claude_desktop_config.json")
         guard let data = claudeDesktopConfig(existing: try? Data(contentsOf: file), name: serverName, command: helper) else {
@@ -86,7 +118,7 @@ struct AgentSettings: View {
             return
         }
         try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if (try? data.write(to: file, options: .atomic)) != nil { note = "Added. Quit and reopen Claude Desktop, then ask it about your email." }
+        if (try? data.write(to: file, options: .atomic)) != nil { note = "Added. Open Claude Desktop and ask it about your email." }
         else { note = "Couldn't save Claude Desktop's settings file." }
     }
 }

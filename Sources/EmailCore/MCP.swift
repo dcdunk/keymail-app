@@ -49,3 +49,13 @@ public func claudeDesktopConfig(existing: Data?, name: String, command: String) 
     json["mcpServers"] = servers
     return try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
 }
+
+/// True when an MCP client's settings file lists `name` as a server: JSON `mcpServers` (Claude Desktop, Claude Code,
+/// Gemini) or a TOML `[mcp_servers.<name>]` table (Codex).
+public func mcpConfigLists(_ text: String?, name: String) -> Bool {
+    guard let text, !text.isEmpty else { return false }
+    if let json = (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any] {
+        return (json["mcpServers"] as? [String: Any])?[name] != nil
+    }
+    return text.split(separator: "\n").contains { $0.trimmingCharacters(in: .whitespaces).hasPrefix("[mcp_servers.\(name)]") }
+}
