@@ -49,7 +49,8 @@ extension AppStore {
     func accountEntries() -> [MenuEntry] {
         var e: [MenuEntry] = [.header("Accounts")]
         for (i, a) in state.accounts.enumerated() {
-            e.append(MenuEntry(title: label(a), subtitle: label(a) == a ? nil : a, letter: a, key: i < 9 ? "⌘\(i + 1)" : nil,
+            let shown = sendAddress(a)   // the address you send as (an alias, if you picked one)
+            e.append(MenuEntry(title: label(a), subtitle: label(a) == a ? (shown == a ? nil : shown) : shown, letter: a, key: i < 9 ? "⌘\(i + 1)" : nil,
                                checked: state.activeAccount == a) { self.switchAccount(a) })
         }
         if state.accounts.count > 1 {

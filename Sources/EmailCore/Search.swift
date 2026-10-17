@@ -47,7 +47,9 @@ public func gmailQuery(_ q: SearchQuery, calendar: Calendar = .current) -> Strin
 }
 
 /// Local search for providers without server search (iCloud's cached mail).
-public func matchesSearch(_ m: Message, _ q: SearchQuery, calendar: Calendar = .current) -> Bool {
+/// `hay` is the message's lowercased subject + sender + text when the caller has it cached (see AppStore.searchHay);
+/// building it means converting HTML to text, which is the slow part when searching hundreds of emails per keystroke.
+public func matchesSearch(_ m: Message, _ q: SearchQuery, calendar: Calendar = .current, hay cached: String? = nil) -> Bool {
     func has(_ hay: String, _ needle: String) -> Bool {
         let n = needle.lowercased().trimmingCharacters(in: .whitespaces)
         return n.isEmpty || hay.lowercased().contains(n)
@@ -57,8 +59,15 @@ public func matchesSearch(_ m: Message, _ q: SearchQuery, calendar: Calendar = .
     if let b = q.before, m.date >= calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: b))! { return false }
     if q.hasAttachment, !m.attachments.contains(where: { !$0.isInline }) { return false }
     if q.unreadOnly, !m.labelIds.contains("UNREAD") { return false }
-    let hay = (m.subject + " " + m.from + " " + m.plainText).lowercased()
-    return q.words.lowercased().split(separator: " ").allSatisfy { hay.contains($0) }
+    let words = q.words.lowercased().split(separator: " ")
+    guard !words.isEmpty else { return true }
+    let hay = cached ?? searchHay(m)
+    return words.allSatisfy { hay.contains($0) }
+}
+
+/// What word search looks through: subject, sender and the email's text, lowercased.
+public func searchHay(_ m: Message) -> String {
+    (m.subject + " " + m.from + " " + m.plainText).lowercased()
 }
 
 // MARK: Search suggestions (type-ahead tokens)

@@ -79,11 +79,19 @@ extension AppStore {
         }
     }
 
+    /// "Dan Chait <danchait@icloud.com>": adds the account's Name (Settings → Accounts) when From is a bare address.
+    func namedFrom(_ from: String) -> String {
+        guard let a = parseAddresses(from).first, a.name.isEmpty else { return from }
+        let n = state.senderNames[account(for: a.email)]?.trimmingCharacters(in: .whitespaces) ?? ""
+        return n.isEmpty ? from : Address(name: n, email: a.email).formatted
+    }
+
     func send(_ d: Draft, remindDays: Int?) async throws {
         if let bad = invalidRecipients(d).first {
             throw AppError("\"\(bad)\" isn't a complete email address. Fix it and send again.")
         }
         var d = d
+        d.from = namedFrom(d.from)
         let domain = d.from.split(separator: "@").last.map(String.init) ?? "email.local"
         if d.messageId == nil { d.messageId = "<\(UUID().uuidString)@\(domain)>" }
         if AppFlavor.isDemo { demoSend(d); return }
@@ -138,6 +146,7 @@ extension AppStore {
 
     func saveDraft(_ model: ComposeModel) async {
         var d = model.draft
+        d.from = namedFrom(d.from)
         let isEmpty = d.to.trimmingCharacters(in: .whitespaces).isEmpty && d.subject.isEmpty
             && d.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         guard !isEmpty, !AppFlavor.isDemo else { return }

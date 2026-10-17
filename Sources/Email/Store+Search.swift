@@ -68,6 +68,12 @@ extension AppStore {
             busy = "Searching…"
             var ids: Set<String> = []
             for a in state.accounts where state.activeAccount == nil || state.activeAccount == a {
+                if !isGmail(a), q == "in:sent" || isDone {
+                    // Sent and Done read those folders on the server (iCloud, Yahoo, Outlook), then list what's here.
+                    await fetchFolder(isDone ? "archive" : "sent", account: a)
+                    if !isDone { for m in messages.values where m.account == a && m.labelIds.contains("SENT") { ids.insert(a + "|" + m.threadId) } }
+                    continue
+                }
                 if !isGmail(a) {
                     // No Gmail search on iCloud or Microsoft (yet): search what's cached locally.
                     let words = q.lowercased().split(separator: " ").map(String.init)
@@ -93,8 +99,17 @@ extension AppStore {
             }
             busy = nil
             guard folder == title else { return }   // the person moved on while this searched
-            searchResults = ids.union(localDone)
+            searchResults = ids.union(isDone ? doneHere() : localDone)   // recount: Archive mail fetched above joins in
         }
+    }
+
+    /// Pulls the newest emails from Sent or Archive on the server into Keymail, skipping ones already here.
+    func fetchFolder(_ which: String, account a: String) async {
+        let have = Set(messages.values.filter { $0.account == a }.map(\.id))
+        do {
+            let found = isMicrosoft(a) ? try await graph(a).recent(which, skip: have) : try await icloud(a).recent(which, skip: have)
+            for m in found { messages[m.key] = m }
+        } catch { log("\(a): \(which) folder: \(error.localizedDescription.prefix(200))") }
     }
 
     /// Archived conversations already on this Mac (in scope of the account picker): not in the inbox, not trash,

@@ -417,4 +417,31 @@ final class CoreFlowsTests: XCTestCase {
         press("", code: 124); XCTAssertFalse(store.contextVisible, "and closes it")
         store.setContextPinned(true)
     }
+
+    // MARK: Sender name and aliases
+
+    func testSentMailCarriesYourNameAndChosenAlias() {
+        store.state.senderNames[me] = "Dan Chait"
+        store.state.aliases[me] = ["danchait@icloud.com"]
+        store.state.defaultFrom[me] = "danchait@icloud.com"
+        XCTAssertEqual(store.sendAddress(me), "danchait@icloud.com", "new email comes from the alias you picked")
+        XCTAssertEqual(store.label(me), "danchait@icloud.com", "and that's the address shown for the account")
+        XCTAssertEqual(store.namedFrom("danchait@icloud.com"), "Dan Chait <danchait@icloud.com>", "recipients see your Name")
+        XCTAssertEqual(store.namedFrom("Other <x@y.co>"), "Other <x@y.co>", "a From that already has a name is left alone")
+        store.state.accountNames[me] = "Personal"
+        XCTAssertEqual(store.label(me), "Personal", "a Description wins for the label")
+    }
+
+    // MARK: Sent and Archive copies from other mail apps
+
+    func testFolderCopiesJoinTheirConversationAndShowInSent() {
+        let c = store.allConversations.first { $0.messages.count > 1 }!
+        var sent = Message(id: "sent:42", threadId: c.threadId, account: me, from: me, to: "sam@northwind.co",
+                           subject: "Re: \(c.latest.subject)", date: Date().addingTimeInterval(300), labelIds: ["SENT"],
+                           messageIdHeader: "<from-mac-mail@x>", text: "Sent from Mac Mail")
+        sent.references = c.latest.messageIdHeader
+        store.messages[sent.key] = sent
+        let joined = store.allConversations.first { $0.id == c.id }!
+        XCTAssertTrue(joined.messages.contains { $0.id == "sent:42" }, "a reply sent from another app joins its conversation")
+    }
 }

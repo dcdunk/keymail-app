@@ -156,13 +156,35 @@ struct ICloud {
         imapSpecialUse(try await c.command("LIST \"\" \"*\"").map(\.line))[use] ?? fallback
     }
 
-    /// Flags for the last 30 days of INBOX (up to 300), plus full messages for UIDs we don't have yet.
+    /// The newest `limit` emails in Sent ("sent") or Archive ("archive"). UIDs are per mailbox, so ids get a prefix
+    /// ("sent:123") that INBOX numbers can never match; actions that act by UID only ever use plain INBOX ids.
+    func recent(_ which: String, limit: Int = 50, skip: Set<String>) async throws -> [Message] {
+        try await session { c in
+            let box = which == "sent" ? try await folder(c, "\\Sent", fallback: "Sent Messages") : try await folder(c, "\\Archive", fallback: "Archive")
+            try await c.command("SELECT \(imapQuote(box))")
+            let uids = imapSearchUIDs(try await c.command("UID SEARCH ALL").map(\.line)).sorted().suffix(limit)
+                .filter { !skip.contains("\(which):\($0)") }
+            guard !uids.isEmpty else { return [] }
+            var out: [Message] = []
+            for r in try await c.command("UID FETCH \(uids.map(String.init).joined(separator: ",")) (UID FLAGS BODY.PEEK[])") {
+                guard let i = imapFetchInfo(r.line), let raw = r.literals.first else { continue }
+                var m = messageFromRaw(raw, uid: i.uid, flags: i.flags, account: account, inInbox: false)
+                m.id = "\(which):\(i.uid)"
+                m.labelIds = m.labelIds.filter { $0 != "IMPORTANT" } + (which == "sent" ? ["SENT"] : [])
+                if which == "sent" { m.labelIds.removeAll { $0 == "UNREAD" } }
+                out.append(m)
+            }
+            return out
+        }
+    }
+
+    /// Flags for the newest 300 emails in INBOX, plus full messages for UIDs we don't have yet.
     func syncInbox(cached: Set<Int>) async throws -> (flags: [Int: [String]], new: [Message]) {
         try await session { c in
             try await c.command("SELECT INBOX")
-            let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "d-MMM-yyyy"
-            let since = f.string(from: Date().addingTimeInterval(-30 * 86400))
-            let uids = Array(imapSearchUIDs(try await c.command("UID SEARCH SINCE \(since)").map(\.line)).sorted().suffix(300))
+            // The newest 300 in the inbox, however old: a 30-day window showed nothing for a quiet inbox whose
+            // remaining emails were older than that.
+            let uids = Array(imapSearchUIDs(try await c.command("UID SEARCH ALL").map(\.line)).sorted().suffix(300))
             guard !uids.isEmpty else { return ([:], []) }
             var flags: [Int: [String]] = [:]
             for r in try await c.command("UID FETCH \(uids.map(String.init).joined(separator: ",")) (UID FLAGS)") {

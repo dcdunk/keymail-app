@@ -52,7 +52,8 @@ struct SavedState: Codable {
     var icloudLogins: [String: String] = [:]   // email → IMAP username that worked
     var aliases: [String: [String]] = [:]      // account → extra addresses you can send as
     var defaultFrom: [String: String] = [:]    // account → address new emails come from
-    var accountNames: [String: String] = [:]   // account → nickname like "Work"
+    var accountNames: [String: String] = [:]   // account → nickname like "Work" (Mac Mail's "Description")
+    var senderNames: [String: String] = [:]    // account → the name people see on your email, e.g. "Dan Chait"
     var undoSendSeconds = 10
     var aiProvider = "claude"
     var signatures: [String: String] = [:]     // sending address → signature text
@@ -82,6 +83,7 @@ struct SavedState: Codable {
         aliases = v(.aliases, base.aliases)
         defaultFrom = v(.defaultFrom, base.defaultFrom)
         accountNames = v(.accountNames, base.accountNames)
+        senderNames = v(.senderNames, base.senderNames)
         undoSendSeconds = v(.undoSendSeconds, base.undoSendSeconds)
         aiProvider = v(.aiProvider, base.aiProvider); aiModels = v(.aiModels, base.aiModels)
         signatures = v(.signatures, base.signatures)
@@ -112,6 +114,7 @@ extension SavedState {
         aliases[a] = nil
         defaultFrom[a] = nil
         accountNames[a] = nil
+        senderNames[a] = nil
         historyIds[a] = nil
         if activeAccount == a { activeAccount = nil }
         snoozes.removeAll { $0.account == a }
@@ -259,6 +262,15 @@ final class AppStore: ObservableObject {
     var agentSocket: Int32?
     /// Set by the focused To/Cc/Bcc row: removes its last address on Backspace when nothing is typed. Returns true if it did.
     var chipBackspace: (() -> Bool)?
+    /// Each email's searchable text (subject + sender + text, lowercased), built once instead of on every keystroke.
+    private var hayCache: [String: String] = [:]
+    func searchHay(_ m: Message) -> String {
+        let k = m.key + "|" + m.id
+        if let h = hayCache[k] { return h }
+        let h = EmailCore.searchHay(m)
+        hayCache[k] = h
+        return h
+    }
     let calendar = CalendarService()
     var pendingG: Date?
     @Published var selectedID: String?
@@ -417,7 +429,7 @@ final class AppStore: ObservableObject {
     /// "Work" if named, otherwise the address.
     func label(_ account: String) -> String {
         let n = state.accountNames[account]?.trimmingCharacters(in: .whitespaces) ?? ""
-        return n.isEmpty ? account : n
+        return n.isEmpty ? sendAddress(account) : n
     }
 
     /// "Work · danny@x.com" for menus where both help.

@@ -28,16 +28,19 @@ extension AppStore {
         if add.contains("UNREAD") { try await g.setRead(c.latest.id, false) }
         if add.contains("STARRED") { try await g.setFlagged(c.latest.id, true) }
         if remove.contains("STARRED") { for id in ids { try await g.setFlagged(id, false) } }
-        if remove.contains("INBOX") { for id in ids { try await g.move(id, to: "archive") } }
+        // Your copies in Sent Items stay put: only the inbox emails move to Archive.
+        if remove.contains("INBOX") { for m in c.messages where !m.labelIds.contains("SENT") { try await g.move(m.id, to: "archive") } }
         if add.contains("INBOX") { try await g.move(c.latest.id, to: "inbox") }
     }
 
     /// Gmail labels → IMAP: INBOX removal = archive, UNREAD = \Seen, STARRED = \Flagged.
     func icloudModify(_ c: Conversation, add: [String], remove: [String]) async throws {
-        let ic = icloud(c.account), uids = c.messages.map(\.id)
+        // Only INBOX UIDs (plain numbers): Sent/Archive copies carry prefixed ids from their own mailbox.
+        let ic = icloud(c.account), uids = c.messages.map(\.id).filter { Int($0) != nil }
+        guard let last = uids.last else { return }
         if remove.contains("UNREAD") { try await ic.setFlag(uids, "\\Seen", on: true) }
-        if add.contains("UNREAD") { try await ic.setFlag([c.latest.id], "\\Seen", on: false) }
-        if add.contains("STARRED") { try await ic.setFlag([c.latest.id], "\\Flagged", on: true) }
+        if add.contains("UNREAD") { try await ic.setFlag([last], "\\Seen", on: false) }
+        if add.contains("STARRED") { try await ic.setFlag([last], "\\Flagged", on: true) }
         if remove.contains("STARRED") { try await ic.setFlag(uids, "\\Flagged", on: false) }
         if remove.contains("INBOX") { try await ic.move(uids, toTrash: false) }
     }
@@ -143,8 +146,8 @@ extension AppStore {
         for m in c.messages { messages[m.key] = nil }
         Task {
             do {
-                if isICloud(c.account) { try await icloud(c.account).move(c.messages.map(\.id), toTrash: true) }
-                else if isMicrosoft(c.account) { for m in c.messages { try await graph(c.account).move(m.id, to: "deleteditems") } }
+                if isICloud(c.account) { try await icloud(c.account).move(c.messages.map(\.id).filter { Int($0) != nil }, toTrash: true) }
+                else if isMicrosoft(c.account) { for m in c.messages where !m.labelIds.contains("SENT") { try await graph(c.account).move(m.id, to: "deleteditems") } }
                 else { try await gmail(c.account).trashThread(c.threadId) }
             } catch { report(error) }
         }

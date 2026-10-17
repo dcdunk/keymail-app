@@ -450,58 +450,29 @@ struct GeneralSettings: View {
 
 struct AccountsSettings: View {
     @EnvironmentObject var store: AppStore
+    @State private var dragging: String?
     @State private var showICloud = false
     @State private var showYahoo = false
     @State private var showGoogleSetup = false
     @State private var removing: String?
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        ScrollView { VStack(alignment: .leading, spacing: 14) {
             Text("Connected accounts").font(.scaled(.headline))
             if store.state.accounts.isEmpty {
                 Text("No accounts yet.").foregroundStyle(.secondary)
             }
-            List {
+            // A plain stack, not a List: List made every click into a text box wait for row selection first.
+            // Reorder by dragging the ≡ handle onto another card.
+            VStack(spacing: 8) {
                 ForEach(Array(store.state.accounts.enumerated()), id: \.element) { i, acct in
                     let cloud = store.isICloud(acct)
-                    HStack(spacing: 12) {
-                        Image(systemName: "line.3.horizontal").foregroundStyle(.tertiary).help("Drag to reorder")
-                        BrandLogo(brand: store.brand(acct), size: 22)
-                        VStack(alignment: .leading, spacing: 4) {
-                            TextField("Name (e.g. Work, Personal)", text: Binding(
-                                get: { store.state.accountNames[acct] ?? "" },
-                                set: { store.state.accountNames[acct] = $0 }))
-                                .textFieldStyle(.plain).font(.scaled(.headline))
-                            Text("\(acct) · \(store.providerName(acct))").font(.scaled(.caption)).foregroundStyle(.secondary)
-                                .lineLimit(1).truncationMode(.middle)
-                            TextField("Send-as aliases, comma-separated", text: Binding(
-                                get: { (store.state.aliases[acct] ?? []).joined(separator: ", ") },
-                                set: { store.setAliases($0, for: acct) }))
-                                .textFieldStyle(.roundedBorder).font(.scaled(.caption))
-                                .help(store.brand(acct) == "yahoo" ? "Must already be set up in Yahoo Mail → Settings → Mailboxes" : cloud ? "Aliases from icloud.com → Mail settings → Accounts" : store.isMicrosoft(acct) ? "Must already be set up in Outlook on the web" : "Must already be set up under Gmail → Settings → Accounts → Send mail as")
-                            if !(store.state.aliases[acct] ?? []).isEmpty {
-                                Picker("Send from by default", selection: Binding(
-                                    get: { store.sendAddress(acct) },
-                                    set: { store.state.defaultFrom[acct] = $0 })) {
-                                    ForEach([acct] + (store.state.aliases[acct] ?? []), id: \.self) { Text($0).tag($0) }
-                                }
-                                .font(.scaled(.caption)).fixedSize()
-                            }
-                        }
-                        Spacer()
-                        KeyHint("⌘\(i + 1)")
-                        // Icons keep the row usable at any width; the names show on hover.
-                        Button { if store.brand(acct) == "yahoo" { showYahoo = true } else if cloud { showICloud = true } else { store.reauthenticate(acct) } } label: {
-                            Image(systemName: "arrow.clockwise.circle").font(.scaled(size: 15)).frame(width: 28, height: 28)
-                        }.buttonStyle(ToolStyle()).accessibilityLabel("Sign in again")
-                            .help(cloud ? "Sign in again: enter a new app-specific password" : "Sign in again: refresh this account's sign-in and permissions. Your mail stays as it is.")
-                        Button { removing = acct } label: { Image(systemName: "trash").font(.scaled(size: 14)).frame(width: 28, height: 28) }
-                            .buttonStyle(ToolStyle()).foregroundStyle(.red).accessibilityLabel("Remove").help("Remove this account")
-                    }.padding(.vertical, 4)
+                    AccountCard(account: acct, index: i,
+                                signInAgain: { if store.brand(acct) == "yahoo" { showYahoo = true } else if cloud { showICloud = true } else { store.reauthenticate(acct) } },
+                                remove: { removing = acct })
+                        .opacity(dragging == acct ? 0.4 : 1)
+                        .onDrop(of: [.text], delegate: AccountDrop(target: acct, store: store, dragging: $dragging))
                 }
-                // Order sets ⌘1, ⌘2… and the account switcher.
-                .onMove { store.state.accounts.move(fromOffsets: $0, toOffset: $1) }
             }
-            .frame(minHeight: 200)
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), alignment: .leading)], alignment: .leading, spacing: 8) {
                 Button { store.addAccount() } label: { Label { Text("Add Google account") } icon: { BrandLogo(brand: "google", size: 14) } }
                     .disabled(!store.hasClient)
@@ -525,7 +496,7 @@ struct AccountsSettings: View {
             Text("iCloud uses an app-specific password stored in your Keychain.")
                 .font(.scaled(.callout)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
-        .padding(24)
+        .padding(24) }
         .card(isPresented: $showICloud) { ICloudSheet() }
         .card(isPresented: $showYahoo) { ICloudSheet(yahoo: true) }
         .card(isPresented: $showGoogleSetup, closeButton: true) { SetupView().frame(width: 520, height: 500) }
@@ -641,3 +612,117 @@ struct HotkeySettings: View {
     }
 }
 
+
+
+/// One account in Settings → Accounts, laid out like Mac Mail: Description, Name, Send from and Aliases, each labeled.
+struct AccountCard: View {
+    @EnvironmentObject var store: AppStore
+    let account: String
+    let index: Int
+    let signInAgain: () -> Void
+    let remove: () -> Void
+
+    var body: some View {
+        let aliases = store.state.aliases[account] ?? []
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: "line.3.horizontal").foregroundStyle(.tertiary).help("Drag to reorder")
+                    .frame(width: 22, height: 28).contentShape(Rectangle())
+                    .onDrag { NSItemProvider(object: account as NSString) }
+                BrandLogo(brand: store.brand(account), size: 22)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(store.label(account)).font(.scaled(.headline)).lineLimit(1)
+                    Text("\(store.providerName(account)) · signed in as \(account)").font(.scaled(.caption)).foregroundStyle(.secondary)
+                        .lineLimit(1).truncationMode(.middle)
+                }
+                Spacer(minLength: 8)
+                if index < 9 { KeyHint("⌘\(index + 1)").help("Switch to this account") }
+                Button(action: signInAgain) { Image(systemName: "arrow.clockwise.circle").font(.scaled(size: 15)).frame(width: 28, height: 28) }
+                    .buttonStyle(ToolStyle()).accessibilityLabel("Sign in again").help("Sign in again (refreshes access; your mail stays)")
+                Button(action: remove) { Image(systemName: "trash").font(.scaled(size: 14)).frame(width: 28, height: 28) }
+                    .buttonStyle(ToolStyle()).foregroundStyle(.red).accessibilityLabel("Remove").help("Remove this account")
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            Divider()
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 10) {
+                field("Description", hint: "Shown in Keymail, e.g. Work or Personal", value: store.state.accountNames[account] ?? "") {
+                    store.state.accountNames[account] = $0.isEmpty ? nil : $0
+                }
+                field("Name", hint: "What people see when you email them, e.g. Dan Chait", value: store.state.senderNames[account] ?? "") {
+                    store.state.senderNames[account] = $0.isEmpty ? nil : $0
+                }
+                GridRow {
+                    Text("Send from").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
+                    if aliases.isEmpty {
+                        Text(account).foregroundStyle(.secondary)
+                    } else {
+                        Picker("", selection: Binding(get: { store.sendAddress(account) }, set: { store.state.defaultFrom[account] = $0 })) {
+                            ForEach([account] + aliases, id: \.self) { Text($0).tag($0) }
+                        }.labelsHidden().fixedSize()
+                    }
+                }
+                field("Aliases", hint: "Other addresses you send as, separated by commas", value: aliases.joined(separator: ", ")) {
+                    store.setAliases($0, for: account)
+                }
+            }
+            .font(.scaled(.callout))
+            .padding(14)
+        }
+        .background(RoundedRectangle(cornerRadius: 14).fill(Color.primary.opacity(0.04)))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.primary.opacity(0.06)))
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder func field(_ label: String, hint: String, value: String, save: @escaping (String) -> Void) -> some View {
+        GridRow {
+            Text(label).foregroundStyle(.secondary).gridColumnAlignment(.trailing)
+            SettingField(hint: hint, value: value, save: save)
+        }
+    }
+}
+
+
+/// A text box that edits a copy and saves once (Return, or leaving the box), instead of rewriting and re-encrypting
+/// all settings on every keystroke, which made typing lag.
+struct SettingField: View {
+    let hint: String
+    let value: String
+    let save: (String) -> Void
+    @State private var text = ""
+    @FocusState private var focused: Bool
+    var body: some View {
+        TextField(hint, text: $text).textFieldStyle(.roundedBorder).focused($focused)
+            .onAppear { text = value }
+            .onChange(of: value) { _, v in if !focused { text = v } }
+            .onSubmit { commit() }
+            .onChange(of: focused) { _, f in if !f { commit() } }
+            .onDisappear { commit() }
+    }
+    func commit() {
+        let t = text.trimmingCharacters(in: .whitespaces)
+        if t != value { save(t) }
+    }
+}
+
+/// Dropping a dragged account on another card moves it to that card's place (sets ⌘1, ⌘2… order).
+struct AccountDrop: DropDelegate {
+    let target: String
+    let store: AppStore
+    @Binding var dragging: String?
+    func dropEntered(info: DropInfo) {
+        guard let p = info.itemProviders(for: [.text]).first else { return }
+        _ = p.loadObject(ofClass: NSString.self) { obj, _ in
+            guard let from = obj as? String else { return }
+            DispatchQueue.main.async {
+                dragging = from
+                var list = store.state.accounts
+                guard from != target, let a = list.firstIndex(of: from), let b = list.firstIndex(of: target) else { return }
+                list.move(fromOffsets: IndexSet(integer: a), toOffset: b > a ? b + 1 : b)
+                withAnimation(.easeOut(duration: 0.15)) { store.state.accounts = list }
+            }
+        }
+    }
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
+    func performDrop(info: DropInfo) -> Bool { dragging = nil; return true }
+    func dropExited(info: DropInfo) {}
+}

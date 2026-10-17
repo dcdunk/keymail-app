@@ -135,7 +135,8 @@ extension AppStore {
         let mine = messages.values.filter { $0.account == a }
         let result = try await icloud(a).syncInbox(cached: Set(mine.compactMap { Int($0.id) }))
         for m in mine {
-            guard let uid = Int(m.id), let flags = result.flags[uid] else { messages[m.key] = nil; continue } // left the inbox
+            guard let uid = Int(m.id) else { continue }   // a Sent/Archive copy ("sent:12"): not part of the inbox sync
+            guard let flags = result.flags[uid] else { messages[m.key] = nil; continue } // left the inbox
             var labels = m.labelIds.filter { !["UNREAD", "STARRED"].contains($0) }
             if !flags.contains("\\Seen") { labels.append("UNREAD") }
             if flags.contains("\\Flagged") { labels.append("STARRED") }
@@ -150,7 +151,7 @@ extension AppStore {
         let g = graph(a)
         let list = try await g.inbox()
         let byId = Dictionary(list.compactMap { j in (j["id"] as? String).map { ($0, j) } }, uniquingKeysWith: { x, _ in x })
-        for m in messages.values where m.account == a {
+        for m in messages.values where m.account == a && m.labelIds.contains("INBOX") {   // Sent/Archive copies stay
             guard let j = byId[m.id], let fresh = messageFromGraph(j, account: a, inInbox: true) else {
                 messages[m.key] = nil // left the inbox (archived, deleted or moved anywhere)
                 continue

@@ -95,21 +95,28 @@ struct TokenSearchBar: View {
     @FocusState private var focused: Bool
     @State private var highlight: Int? = nil
 
-    var suggestions: [SearchSuggestion] {
-        EmailCore.searchSuggestions(store.searchText, current: store.search, messages: Array(store.messages.values), me: store.me)
-    }
+    // Suggestions and quick matches are worked out a moment after you stop typing (not on every keystroke and every
+    // redraw), using each email's cached searchable text.
+    @State private var list: [SearchSuggestion] = []
+    @State private var quickMatches: [Conversation] = []
 
-    /// Up to 3 emails matching what's locked in plus what's being typed, to jump straight to.
-    var quickMatches: [Conversation] {
-        let t = store.searchText.trimmingCharacters(in: .whitespaces)
-        guard t.count >= 2 || !store.search.isEmpty else { return [] }
-        var q = store.search
+    func refresh() async {
+        try? await Task.sleep(nanoseconds: 120_000_000)
+        guard !Task.isCancelled else { return }
+        let text = store.searchText, current = store.search
+        list = EmailCore.searchSuggestions(text, current: current, messages: Array(store.messages.values), me: store.me)
+        let t = text.trimmingCharacters(in: .whitespaces)
+        guard t.count >= 2 || !current.isEmpty else { quickMatches = []; return }
+        var q = current
         if !t.isEmpty, !t.contains(":") { q.words = [q.words, t].filter { !$0.isEmpty }.joined(separator: " ") }
-        return Array(store.allConversations.filter { $0.messages.contains { matchesSearch($0, q) } }.prefix(3))
+        var found: [Conversation] = []
+        for c in store.allConversations where c.messages.contains(where: { matchesSearch($0, q, hay: store.searchHay($0)) }) {
+            found.append(c); if found.count == 3 { break }
+        }
+        quickMatches = found
     }
 
     var body: some View {
-        let list = suggestions
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
@@ -124,7 +131,9 @@ struct TokenSearchBar: View {
                 }
                 TextField(tokens.isEmpty ? "Search people, subjects, dates or words" : "Add more…", text: $store.searchText)
                     .textFieldStyle(.plain).focused($focused)
-                    .onAppear { focused = true }
+                    // Focus once the bar is on screen: setting it during the "/" keypress itself was ignored.
+                    .onAppear { DispatchQueue.main.async { focused = true }; DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { focused = true } }
+                    .onChange(of: store.searchOpen) { _, open in if open { DispatchQueue.main.async { focused = true } } }
                     .onChange(of: store.searchText) { _, _ in highlight = nil }
                     // Keep typing focus here when chips change, so Backspace keeps working on chips.
                     .onChange(of: store.search) { _, _ in if store.searchOpen { focused = true } }
@@ -153,9 +162,13 @@ struct TokenSearchBar: View {
                 Button { store.clearSearch() } label: { Image(systemName: "xmark.circle.fill") }.buttonStyle(.plain).foregroundStyle(.secondary)
             }
             .padding(.horizontal, 14).padding(.vertical, 9)
+            // The whole capsule is clickable: padding and gaps between chips put the cursor in the box too.
+            .contentShape(Capsule())
+            .onTapGesture { focused = true }
             .glass(Capsule())
         }
         .frame(maxWidth: 680)
+        .task(id: "\(store.searchText)|\(store.search)") { await refresh() }
         .overlay(alignment: .topLeading) {
             if focused, !store.searchText.trimmingCharacters(in: .whitespaces).isEmpty, !list.isEmpty {
                 dropdown(list).offset(y: 50)
