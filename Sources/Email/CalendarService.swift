@@ -1,4 +1,6 @@
+import AppKit
 import EventKit
+import EmailCore
 import Foundation
 
 /// Reads and writes the Mac's calendars (whatever is set up in the Calendar app: Google, iCloud, Exchange…).
@@ -18,6 +20,60 @@ final class CalendarService: ObservableObject {
         let end = Calendar.current.date(byAdding: .day, value: 1, to: start)!
         return store.events(matching: store.predicateForEvents(withStart: start, end: end, calendars: nil))
             .sorted { $0.startDate < $1.startDate }
+    }
+
+    func events(from start: Date, to end: Date) -> [EKEvent] {
+        guard authorized else { return [] }
+        return store.events(matching: store.predicateForEvents(withStart: start, end: end, calendars: nil))
+    }
+
+    /// Every Mac calendar, as the calendar screen lists them.
+    var sources: [CalSource] {
+        guard authorized else { return [] }
+        return store.calendars(for: .event).map {
+            CalSource(id: "mac:" + $0.calendarIdentifier, title: $0.title, group: $0.source.title,
+                      colorHex: hex($0.cgColor), writable: $0.allowsContentModifications)
+        }
+    }
+
+    /// One Mac event in the calendar screen's terms. Repeating events share an identifier, so the start time is part of the id.
+    func calEvent(_ e: EKEvent) -> CalEvent {
+        var c = CalEvent(id: "mac:\(e.eventIdentifier ?? "")|\(Int(e.startDate.timeIntervalSince1970))",
+                         calendarId: "mac:" + e.calendar.calendarIdentifier, title: e.title ?? "Busy", start: e.startDate, end: e.endDate)
+        c.allDay = e.isAllDay
+        c.location = e.location ?? ""
+        c.notes = e.notes ?? ""
+        c.link = e.url
+        c.uid = e.calendarItemExternalIdentifier ?? ""
+        c.unanswered = e.attendees?.contains { $0.isCurrentUser && $0.participantStatus == .pending } ?? false
+        c.editable = e.calendar.allowsContentModifications
+        c.hasGuests = e.hasAttendees
+        return c
+    }
+
+    /// The Mac event behind a calendar-screen id. For a repeating event, this occurrence rather than the series' first one.
+    func ekEvent(_ id: String) -> EKEvent? {
+        let ident = String(id.dropFirst(4).split(separator: "|").first ?? "")
+        let start = Double(id.split(separator: "|").last ?? "") ?? 0
+        return events(from: Date(timeIntervalSince1970: start - 1), to: Date(timeIntervalSince1970: start + 1))
+            .first { $0.eventIdentifier == ident } ?? store.event(withIdentifier: ident)
+    }
+
+    func remove(_ id: String) throws {
+        guard let e = ekEvent(id) else { return }
+        try store.remove(e, span: .thisEvent)
+    }
+
+    /// Changes one Mac event (this occurrence only) and saves it.
+    func update(_ id: String, _ change: (EKEvent) -> Void) throws {
+        guard let e = ekEvent(id) else { throw AppError("That event is no longer in your calendar.") }
+        change(e)
+        try store.save(e, span: .thisEvent)
+    }
+
+    private func hex(_ c: CGColor) -> String {
+        let n = NSColor(cgColor: c)?.usingColorSpace(.sRGB) ?? .systemBlue
+        return String(format: "#%02X%02X%02X", Int(n.redComponent * 255), Int(n.greenComponent * 255), Int(n.blueComponent * 255))
     }
 
     var writableCalendars: [EKCalendar] { store.calendars(for: .event).filter(\.allowsContentModifications) }

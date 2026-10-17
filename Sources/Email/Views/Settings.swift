@@ -24,11 +24,13 @@ struct SettingsPanel: View {
     static let sections: [Section] = [
         .init(id: "general", title: "General", icon: "gearshape", group: "Mail", keywords: "thread order newest oldest top quoted history earlier messages undo send notifications badge remote images sender logos privacy spelling grammar writing auto archive calendar fetch sync tips",
               items: ["Messages in a thread", "Earlier messages in each email", "Back to inbox after the last unread email", "Reply inside the conversation", "Show folders sidebar", "Show context panel", "Undo send", "Notify me about", "Dock badge counts",
-                      "Load remote images", "Show sender logos", "Check spelling while typing", "Check grammar", "Correct spelling automatically", "Smart quotes and dashes", "Fetch mail", "Calendar"]),
+                      "Load remote images", "Show sender logos", "Check spelling while typing", "Check grammar", "Correct spelling automatically", "Smart quotes and dashes", "Fetch mail"]),
         .init(id: "splits", title: "Inbox", icon: "tray", group: "Mail", keywords: "tabs splits split inbox important other single one inbox focused rules", items: ["Important and Other"]),
         .init(id: "signatures", title: "Signatures", icon: "signature", group: "Mail", keywords: "signature html logo"),
         .init(id: "snippets", title: "Snippets", icon: "text.quote", group: "Mail", keywords: "templates snippets canned"),
         .init(id: "accounts", title: "Accounts", icon: "person.crop.circle", group: "Accounts", keywords: "add remove google icloud microsoft outlook hotmail alias send as nickname default from"),
+        .init(id: "calendar", title: "Calendar", icon: "calendar", group: "Accounts", keywords: "calendar events invites week start meeting google icloud mac default",
+              items: ["Calendars", "Show the calendar", "Week starts on", "Default view", "New events go to", "Calendar colors", "Show my day beside invites"]),
         .init(id: "gmail", title: "Gmail", icon: "envelope.badge", group: "Accounts", keywords: "out of office vacation auto reply labels signature sync"),
         .init(id: "appearance", title: "Appearance", icon: "textformat.size", group: "Personalize", keywords: "draft compose buttons icons links appearance text font size bigger larger zoom dark light email content opacity glass window card",
               items: ["Inbox layout", "Text size", "Appearance", "Email content", "Draft buttons", "Window opacity", "Email card opacity"]),
@@ -184,6 +186,7 @@ struct SettingsPanel: View {
         case "appearance": AppearanceSettings()
         case "accounts": AccountsSettings()
         case "gmail": GmailSettings()
+        case "calendar": CalendarSettings()
         case "ai": AIProviderSettings()
         case "agents": AgentSettings()
         case "splits": SplitSettingsView(embedded: true)
@@ -433,10 +436,6 @@ struct GeneralSettings: View {
                 LabeledContent {
                     Button("Fetch now") { Task { await store.tick() } }.quiet().disabled(store.syncing)
                 } label: { Text("Fetch mail"); Text("Gmail every 15 seconds, other accounts every 30, or ⌘R") }.settingAnchor("Fetch mail")
-                LabeledContent {
-                    if store.calendar.authorized { Text("Connected to the Calendar app").foregroundStyle(.secondary) }
-                    else { Button("Allow calendar access") { Task { _ = await store.calendar.requestAccess() } }.quiet() }
-                } label: { Text("Calendar"); Text("For invites and adding events") }.settingAnchor("Calendar")
             }
             Section("Help") {
                 LabeledContent("Tips") {

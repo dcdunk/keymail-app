@@ -9,6 +9,7 @@ import EmailCore
 ///  1. Send and receive email.
 ///  2. Every keyboard command and the mouse actions on rows work.
 ///  3. ⌘K puts the cursor straight into the palette's text box.
+///  4. The calendar: G C / G I and the top-bar button switch views, and every calendar key works.
 /// Runs against an isolated store (temp folder, throwaway Keymail key; see AppFlavor.isTesting), never real mail.
 @MainActor
 final class CoreFlowsTests: XCTestCase {
@@ -38,6 +39,7 @@ final class CoreFlowsTests: XCTestCase {
     }
     func resetUI() {
         store.composing = nil; store.paletteOpen = false; store.searchOpen = false; store.closePopup()
+        store.closeCalendar()
         store.sidebarOpen = false
         store.threadOpen = false; store.folder = nil; store.searchResults = nil; store.summary = nil
         store.goTab(store.shownTabs.first ?? ""); store.selectedID = store.visible.first?.id
@@ -457,6 +459,260 @@ final class CoreFlowsTests: XCTestCase {
         store.messages[sent.key] = sent
         let joined = store.allConversations.first { $0.id == c.id }!
         XCTAssertTrue(joined.messages.contains { $0.id == "sent:42" }, "a reply sent from another app joins its conversation")
+    }
+}
+
+
+// MARK: Calendar (G C)
+
+extension CoreFlowsTests {
+    func openCalendarWithEvents() async {
+        press("g", code: 5); press("c", code: 8)
+        await store.loadCalendar()
+    }
+
+    func testGCOpensTheCalendarAndGIGoesBackToTheInbox() async {
+        await openCalendarWithEvents()
+        XCTAssertTrue(store.calendarOpen, "G then C opens the calendar")
+        XCTAssertFalse(store.calEvents.isEmpty, "this week's events load")
+        press("g", code: 5); press("i", code: 34)
+        XCTAssertFalse(store.calendarOpen, "G then I goes back to mail")
+        XCTAssertNil(store.folder, "to the inbox")
+        await openCalendarWithEvents()
+        press("g", code: 5); press("s", code: 1)
+        XCTAssertFalse(store.calendarOpen); XCTAssertEqual(store.folder, "Starred", "other G keys still go to their folder")
+    }
+
+    func testTopBarButtonAndPaletteSwitchViews() async {
+        XCTAssertTrue(store.commands.contains { $0.title == "Go to Calendar" }, "⌘K offers the calendar")
+        store.commands.first { $0.title == "Go to Calendar" }!.run()
+        XCTAssertTrue(store.calendarOpen)
+        XCTAssertTrue(store.commands.contains { $0.title == "Go to Inbox" }, "and the way back")
+        store.openCalendar(); store.closeCalendar()       // what the top-bar Calendar / Mail button runs
+        XCTAssertFalse(store.calendarOpen)
+    }
+
+    func testCalendarKeysMoveBetweenEventsAndViews() async {
+        await openCalendarWithEvents()
+        let order = store.calShown.sorted { $0.start < $1.start }
+        XCTAssertGreaterThan(order.count, 2)
+        press("j", code: 38); XCTAssertEqual(store.calSelected, order[0].id, "J selects the first event and opens its card")
+        press("j", code: 38); XCTAssertEqual(store.calSelected, order[1].id, "J moves to the next")
+        press("", code: 125); XCTAssertEqual(store.calSelected, order[2].id, "↓ too")
+        press("k", code: 40); XCTAssertEqual(store.calSelected, order[1].id, "K moves back")
+        press("\u{1b}", code: 53); XCTAssertNil(store.calSelected, "Esc closes the card")
+        XCTAssertTrue(store.calendarOpen, "but stays in the calendar")
+
+        press("m", code: 46); XCTAssertEqual(store.calView, .month, "M: month")
+        press("d", code: 2); XCTAssertEqual(store.calView, .day, "D: day")
+        press("w", code: 13); XCTAssertEqual(store.calView, .week, "W: week")
+        let start = store.calDate
+        press("l", code: 37); XCTAssertEqual(store.calDate, stepDate(start, .week, by: 1), "L: next week")
+        press("h", code: 4); press("h", code: 4); XCTAssertEqual(store.calDate, stepDate(start, .week, by: -1), "H: previous week")
+        press("t", code: 17); XCTAssertTrue(Calendar.current.isDateInToday(store.calDate), "T: today")
+
+        press("c", code: 8); XCTAssertTrue(store.quickAddOpen, "C: new event")
+        store.quickAddOpen = false
+        press("\u{1b}", code: 53); XCTAssertFalse(store.calendarOpen, "Esc with nothing open goes back to mail")
+    }
+
+    func testJoinEditAndDeleteFromTheKeyboard() async {
+        await openCalendarWithEvents()
+        let call = store.calShown.first { $0.conference != nil }!
+        store.calSelected = call.id
+        press("J", code: 38, .shift); XCTAssertEqual(store.banner, "Opening \(call.conference!.kind.rawValue)…", "Shift J joins the video call")
+        press("e", code: 14); XCTAssertEqual(store.calEditing, call.id, "E edits the event right in its card")
+        press("\u{1b}", code: 53); XCTAssertNil(store.calEditing, "Esc leaves editing first")
+        XCTAssertEqual(store.calSelected, call.id, "and keeps the card open")
+        press("", code: 51)
+        XCTAssertFalse(store.calEvents.contains { $0.id == call.id }, "⌫ deletes the selected event")
+        XCTAssertNil(store.calSelected)
+        demoCalendarEvents.append(call)   // leave the shared sample week as it was
+    }
+
+    func testQuickAddPutsTheEventOnTheCalendar() async {
+        await openCalendarWithEvents()
+        store.quickAdd("Lunch with Priya tomorrow 1pm at Tartine")
+        await store.loadCalendar()
+        let added = store.calEvents.first { $0.title == "Lunch with Priya" }
+        XCTAssertNotNil(added, "the typed event is added")
+        XCTAssertEqual(added?.location, "Tartine")
+        demoCalendarEvents.removeAll { $0.title == "Lunch with Priya" }
+    }
+
+    func testCalendarPanelsFollowTheSameArrows() async {
+        await openCalendarWithEvents()
+        store.setFoldersPinned(false)
+        press("", code: 123); XCTAssertTrue(store.foldersVisible, "← opens the calendar list")
+        press("", code: 123); XCTAssertFalse(store.foldersVisible, "← again closes it")
+        store.setContextPinned(false)
+        press("", code: 124); XCTAssertTrue(store.contextVisible, "→ opens the context panel")
+        press("", code: 124); XCTAssertFalse(store.contextVisible)
+        store.setContextPinned(true)
+        press("", code: 124); XCTAssertTrue(store.contextVisible, "pinned in Settings: → never hides it")
+    }
+
+    func waitForInviteAnswer() async { for _ in 0..<50 where store.inviteSending != nil { await Task.yield() }; await Task.yield() }
+
+    func testYMaybeNAnswerTheInviteYouAreReading() async throws {
+        let c = try XCTUnwrap(store.allConversations.first { $0.latest.calendar != nil }, "the sample inbox has an invite")
+        let m = c.latest, inv = try XCTUnwrap(m.calendar.flatMap(parseInvite))
+        store.selectedID = c.id; store.open(c)
+        await store.loadInviteDay(inv, message: m)
+        XCTAssertEqual(store.inviteDay?.uid, inv.uid, "the invite's day loads for the strip")
+        XCTAssertTrue(store.inviteDay!.events.contains { $0.start < inv.end! && $0.end > inv.start! }, "and shows what it clashes with")
+        press("y", code: 16); await waitForInviteAnswer()
+        XCTAssertEqual(store.inviteAnswers[inv.uid], .accepted, "Y says yes")
+        press("?", code: 44, .shift); await waitForInviteAnswer()
+        XCTAssertEqual(store.inviteAnswers[inv.uid], .tentative, "? says maybe")
+        press("n", code: 45); await waitForInviteAnswer()
+        XCTAssertEqual(store.inviteAnswers[inv.uid], .declined, "N says no")
+    }
+
+    func testAnswerKeysLeaveOtherEmailsAlone() {
+        let c = store.allConversations.first { $0.latest.calendar == nil }!
+        store.selectedID = c.id; store.open(c)
+        store.openInvite = nil
+        press("y", code: 16)
+        XCTAssertTrue(store.inviteAnswers.isEmpty, "Y does nothing on an email without an invite")
+    }
+
+    func testAnsweringAnInviteInTheCalendar() async {
+        await openCalendarWithEvents()
+        let e = store.calShown.first { $0.unanswered }!
+        store.calSelected = e.id
+        press("y", code: 16)
+        XCTAssertFalse(store.calEvents.first { $0.id == e.id }!.unanswered, "Y answers the selected invite in the calendar")
+        for i in demoCalendarEvents.indices where demoCalendarEvents[i].id == e.id { demoCalendarEvents[i].unanswered = true }
+    }
+
+    func testInviteEventsLinkToTheirEmailAndOOpensIt() async {
+        await openCalendarWithEvents()
+        let e = store.calShown.first { $0.uid == "q4-roadmap@demo.keymail" }!
+        let c = store.linkedConversation(e)
+        XCTAssertNotNil(c, "an invite's event links to the invite email")
+        store.calSelected = e.id
+        press("o", code: 31)
+        XCTAssertFalse(store.calendarOpen, "O opens the linked email")
+        XCTAssertTrue(store.threadOpen); XCTAssertEqual(store.selectedID, c?.id)
+    }
+
+    func testBlockingTimeForAnEmailLinksTheNewEvent() async {
+        let c = store.selected!
+        store.startPlacing(c.id)
+        XCTAssertTrue(store.calendarOpen); XCTAssertEqual(store.placingEmail, c.id, "the calendar waits for a time")
+        press("\u{1b}", code: 53)
+        XCTAssertNil(store.placingEmail, "Esc cancels"); XCTAssertTrue(store.calendarOpen)
+        store.startPlacing(c.id)
+        let when = Calendar.current.date(bySettingHour: 15, minute: 0, second: 0, of: Date())!
+        store.placeEmail(at: when)
+        await store.loadCalendar()
+        let e = store.calEvents.first { $0.start == when && $0.title == c.latest.subject }
+        XCTAssertNotNil(e, "clicking a time adds a 30-minute block")
+        XCTAssertEqual(e.flatMap(store.linkedConversation)?.id, c.id, "linked to the email")
+        store.calSelected = e?.id
+        XCTAssertTrue(store.commands.contains { $0.title.hasPrefix("Open email:") }, "⌘K offers the email from the event")
+        demoCalendarEvents.removeAll { $0.start == when && $0.title == c.latest.subject }
+    }
+
+    func testReturnHashAndTheOtherAnswerKeysInTheCalendar() async {
+        await openCalendarWithEvents()
+        press("\r", code: 36)
+        XCTAssertEqual(store.calSelected, store.calShown.sorted { $0.start < $1.start }.first?.id, "Return opens the first event")
+        let invite = store.calShown.first { $0.unanswered }!
+        store.calSelected = invite.id
+        press("?", code: 44, .shift)
+        XCTAssertFalse(store.calEvents.first { $0.id == invite.id }!.unanswered, "? answers maybe")
+        for i in demoCalendarEvents.indices where demoCalendarEvents[i].id == invite.id { demoCalendarEvents[i].unanswered = true }
+        await store.loadCalendar()
+        store.calSelected = invite.id
+        press("n", code: 45)
+        XCTAssertFalse(store.calEvents.first { $0.id == invite.id }!.unanswered, "N answers no")
+        for i in demoCalendarEvents.indices where demoCalendarEvents[i].id == invite.id { demoCalendarEvents[i].unanswered = true }
+        await store.loadCalendar()
+        let victim = store.calShown.first { !$0.unanswered }!
+        store.calSelected = victim.id
+        press("#", code: 20, .shift)
+        XCTAssertFalse(store.calEvents.contains { $0.id == victim.id }, "# deletes the selected event")
+        demoCalendarEvents.append(victim)
+    }
+
+    func testBlockTimePaletteCommandWaitsForATime() {
+        let cmd = store.commands.first { $0.title == "Block time on the calendar for this email" }
+        XCTAssertNotNil(cmd, "⌘K offers blocking time for the selected email")
+        cmd?.run()
+        XCTAssertTrue(store.calendarOpen); XCTAssertEqual(store.placingEmail, store.selectedID)
+    }
+
+    func testOpenQuickAddNeverLetsKeysReachTheHiddenInbox() async {
+        let c = store.selected!
+        await openCalendarWithEvents()
+        press("c", code: 8); XCTAssertTrue(store.quickAddOpen)
+        press("e", code: 14)
+        XCTAssertTrue(store.allConversations.first { $0.id == c.id }!.inInbox, "E while quick add is open doesn't mark the hidden email done")
+        press("\u{1b}", code: 53)
+        XCTAssertFalse(store.quickAddOpen, "Esc still closes quick add"); XCTAssertTrue(store.calendarOpen)
+    }
+
+    func testJPastTheLastEventMovesToTheNextWeek() async {
+        await openCalendarWithEvents()
+        let nextWeek = stepDate(store.calDate, .week, by: 1)
+        let start = Calendar.current.date(bySettingHour: 10, minute: 0, second: 0, of: nextWeek)!
+        let later = CalEvent(id: "demo:next-week", calendarId: "demo:work", title: "Next week thing", start: start, end: start.addingTimeInterval(3600))
+        demoCalendarEvents.append(later)
+        defer { demoCalendarEvents.removeAll { $0.id == later.id } }
+        store.calSelected = store.calShown.sorted { $0.start < $1.start }.last?.id
+        press("j", code: 38)
+        for _ in 0..<20 where store.calSelected != later.id { await Task.yield() }
+        XCTAssertEqual(store.calSelected, later.id, "J on the week's last event goes to next week's first")
+    }
+
+    func testMovingAnEventToAnotherCalendarAndChangingItsPlace() async {
+        await openCalendarWithEvents()
+        let e = store.calShown.first { $0.title == "Errands" }!
+        let original = e.calendarId, place = e.location
+        let dest = store.moveTargets(e).first { $0.id != e.calendarId }!
+        store.calSelected = e.id
+        let cmd = store.commands.first { $0.title == "Move Errands to \(dest.title)" }
+        XCTAssertNotNil(cmd, "⌘K offers every calendar it can move to")
+        cmd?.run()
+        XCTAssertEqual(store.calEvents.first { $0.id == e.id }?.calendarId, dest.id, "the event moves")
+        XCTAssertTrue(store.commands.contains { $0.title.hasPrefix("Directions to ") }, "and Apple Maps directions are offered for its place")
+        store.setLocation(e, "Tartine, 18th St")
+        XCTAssertEqual(store.calEvents.first { $0.id == e.id }?.location, "Tartine, 18th St", "the place changes")
+        for i in demoCalendarEvents.indices where demoCalendarEvents[i].id == e.id {
+            demoCalendarEvents[i].calendarId = original; demoCalendarEvents[i].location = place
+        }
+    }
+
+    func testEditingAnEventInItsCardSavesIt() async {
+        await openCalendarWithEvents()
+        let e = store.calShown.first { $0.title == "Deep Work" }!
+        let newStart = e.start.addingTimeInterval(3600)
+        store.updateEvent(e, title: "Deep Work (moved)", start: newStart, end: newStart.addingTimeInterval(5400), notes: "No meetings")
+        let saved = store.calEvents.first { $0.id == e.id }
+        XCTAssertEqual(saved?.title, "Deep Work (moved)"); XCTAssertEqual(saved?.start, newStart); XCTAssertEqual(saved?.notes, "No meetings")
+        store.updateEvent(e, title: "x", start: newStart, end: newStart, notes: "")
+        XCTAssertEqual(store.calEvents.first { $0.id == e.id }?.title, "Deep Work (moved)", "an end before the start is refused")
+        for i in demoCalendarEvents.indices where demoCalendarEvents[i].id == e.id { demoCalendarEvents[i] = e }
+    }
+
+    func testChangingACalendarsColor() async {
+        await openCalendarWithEvents()
+        let src = store.calSources.first!
+        store.setCalendarColor(src.id, "#EE6AA6")
+        XCTAssertEqual(store.calSource(src.id)?.colorHex, "#EE6AA6", "the chosen color is used")
+        await store.loadCalendar()
+        XCTAssertEqual(store.calSource(src.id)?.colorHex, "#EE6AA6", "and kept after reloading")
+    }
+
+    func testHidingACalendarHidesItsEvents() async {
+        await openCalendarWithEvents()
+        let id = store.calShown.first!.calendarId
+        store.toggleCalendarHidden(id)
+        XCTAssertFalse(store.calShown.contains { $0.calendarId == id })
+        store.toggleCalendarHidden(id)
+        XCTAssertTrue(store.calShown.contains { $0.calendarId == id })
     }
 }
 

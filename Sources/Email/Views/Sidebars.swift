@@ -40,6 +40,9 @@ struct FolderPanel: View {
                             key: keys[name] ?? "", on: name == "Inbox" ? store.folder == nil : store.folder == name,
                             highlighted: store.sidebarFocused && store.panelIndex == i) { store.activatePanel(i) }
                     }
+                    if store.calendarEnabled {
+                        row("Calendar", key: "G C", on: false) { store.openCalendar() }
+                    }
                     if !labels.isEmpty {
                         Divider().padding(.vertical, 12).padding(.horizontal, 18)
                         Text("Labels").font(.scaled(size: 12, weight: .semibold)).foregroundStyle(Theme.accent)

@@ -32,7 +32,12 @@ extension AppStore {
                     html: html, text: html == nil ? body : nil)
         }
         let maya = "Maya Rodriguez <maya@northwind.co>", sam = "Sam Okafor <sam@northwind.co>"
+        // An invite that clashes with the sample week's Tuesday 11:00 Client Meeting, so the "Your Tuesday" strip has something to show.
+        var invite = msg("roadmap", maya, "Invitation: Q4 roadmap review", "Let's walk through the Q4 roadmap before the planning offsite. Please bring your top three bets and anything blocked.\n\nMaya",
+                         minutesAgo: 30, labels: ["INBOX", "UNREAD", "IMPORTANT"])
+        invite.calendar = demoInviteICS(attendee: a)
         return [
+            invite,
             msg("q3", maya, "Q3 plan: budget review before Thursday",
                 "Hi,\n\nThe Q3 plan is attached. Could you look over the budget section before Thursday? The hiring line moved up by two roles.\n\nThanks,\nMaya",
                 minutesAgo: 12, labels: ["INBOX", "UNREAD", "IMPORTANT"]),
@@ -60,5 +65,19 @@ extension AppStore {
             msg("old", maya, "Offsite photos", "Uploaded the offsite photos to the shared folder. A few good ones of the team dinner.",
                 minutesAgo: 9000, labels: []),
         ]
+    }
+
+    /// Tuesday 11:00–12:00 of the current week, as an invitation from Maya.
+    func demoInviteICS(attendee: String) -> String {
+        var c = Calendar.current; c.firstWeekday = 2
+        let tue = c.date(byAdding: .day, value: 1, to: c.dateInterval(of: .weekOfYear, for: Date())!.start)!
+        let start = c.date(bySettingHour: 11, minute: 0, second: 0, of: tue)!
+        let f = DateFormatter(); f.dateFormat = "yyyyMMdd'T'HHmmss'Z'"; f.timeZone = TimeZone(identifier: "UTC")
+        return """
+        BEGIN:VCALENDAR\r\nMETHOD:REQUEST\r\nBEGIN:VEVENT\r\nUID:q4-roadmap@demo.keymail\r\nSUMMARY:Q4 roadmap review\r\n\
+        DTSTART:\(f.string(from: start))\r\nDTEND:\(f.string(from: start.addingTimeInterval(3600)))\r\n\
+        LOCATION:https://northwind.zoom.us/j/90155520417\r\nORGANIZER;CN=Maya Rodriguez:mailto:maya@northwind.co\r\n\
+        ATTENDEE;PARTSTAT=NEEDS-ACTION:mailto:\(attendee)\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n
+        """
     }
 }

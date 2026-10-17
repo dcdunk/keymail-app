@@ -7,7 +7,7 @@ enum Hotkeys {
         ("c", "Compose"), ("r", "Reply"), ("a", "Reply all"), ("f", "Forward"),
         ("e", "Mark done"), ("s", "Star / unstar"), ("u", "Mark read / unread"), ("#", "Trash"),
         ("h", "Remind me"), ("l", "Label"), ("b", "Create calendar event"), ("i", "Summarize thread"),
-        ("o", "Open email"), ("j", "Next email"), ("k", "Previous email"), ("/", "Search"), ("g", "Go to… (then i, s, t, e, h, d)"),
+        ("o", "Open email"), ("j", "Next email"), ("k", "Previous email"), ("/", "Search"), ("g", "Go to… (then i, s, t, e, h, d, or c for Calendar)"),
     ]
     /// Shown in Settings only; these use modifiers or special keys and aren't remappable.
     static let fixed: [(key: String, title: String)] = [
@@ -21,6 +21,9 @@ enum Hotkeys {
         ("⇧⌘I", "Compose: insert snippet"), ("⇧⌘A", "Compose: attach"), ("⌥⌘⌫", "Compose: remove last attachment"),
         ("⇧⌘.", "Compose: show quoted text"), ("⇧⌘↵", "Compose: send later / remind me"), ("⇧⌘⌫", "Compose: discard"),
         ("⌘F", "Search: more filters"), ("⌘↵", "Link warning: open anyway"),
+        ("G C / G I", "Calendar / back to mail"), ("Calendar: J K", "Next / previous event"), ("Calendar: H L", "Previous / next day, week or month"),
+        ("Calendar: T", "Today"), ("Calendar: D W M", "Day, week or month view"), ("Calendar: C", "New event (type it in plain words)"),
+        ("Calendar: E", "Edit event"), ("Calendar: ⌫", "Delete event"), ("Calendar: ⇧J", "Join the event's video call"), ("Y / ? / N", "Answer an invite: yes, maybe, no"),
     ]
 
     /// True while Settings is waiting for a new key, so the inbox and Esc-to-close leave it alone.

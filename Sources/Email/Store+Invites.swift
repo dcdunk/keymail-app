@@ -21,6 +21,50 @@ struct GoogleCalendar {
         return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
 
+    /// This account's events between two dates, repeating events expanded into their occurrences.
+    func events(from start: Date, to end: Date) async throws -> [CalEvent] {
+        let f = ISO8601DateFormatter()
+        var out: [CalEvent] = [], page: String?
+        repeat {
+            var q: [URLQueryItem] = [.init(name: "timeMin", value: f.string(from: start)), .init(name: "timeMax", value: f.string(from: end)),
+                                     .init(name: "singleEvents", value: "true"), .init(name: "maxResults", value: "250")]
+            if let page { q.append(.init(name: "pageToken", value: page)) }
+            let j = try await call("events", query: q)
+            out += (j["items"] as? [[String: Any]] ?? []).compactMap(Self.parse(account: account))
+            page = j["nextPageToken"] as? String
+        } while page != nil && out.count < 2000
+        return out
+    }
+
+    static func parse(account: String) -> ([String: Any]) -> CalEvent? {
+        { e in
+            guard e["status"] as? String != "cancelled", let id = e["id"] as? String,
+                  let s = e["start"] as? [String: Any], let en = e["end"] as? [String: Any] else { return nil }
+            func date(_ d: [String: Any]) -> Date? {
+                if let t = d["dateTime"] as? String { return ISO8601DateFormatter().date(from: t) }
+                guard let day = d["date"] as? String else { return nil }
+                let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = .current
+                return f.date(from: day)
+            }
+            guard let start = date(s), let end = date(en) else { return nil }
+            var c = CalEvent(id: "google:\(account)|\(id)", calendarId: "google:" + account,
+                             title: (e["summary"] as? String) ?? "Busy", start: start, end: end)
+            c.allDay = s["date"] != nil
+            c.location = e["location"] as? String ?? ""
+            c.notes = e["description"] as? String ?? ""
+            let video = ((e["conferenceData"] as? [String: Any])?["entryPoints"] as? [[String: Any]])?
+                .first { $0["entryPointType"] as? String == "video" }?["uri"] as? String
+            c.call = (video ?? e["hangoutLink"] as? String).flatMap(URL.init(string:))
+            c.link = (e["htmlLink"] as? String).flatMap(URL.init(string:))
+            c.uid = e["iCalUID"] as? String ?? ""
+            let me = (e["attendees"] as? [[String: Any]])?.first { $0["self"] as? Bool == true }
+            c.unanswered = me?["responseStatus"] as? String == "needsAction"
+            c.hasGuests = ((e["attendees"] as? [[String: Any]]) ?? []).contains { $0["self"] as? Bool != true }
+            c.editable = me == nil || (e["organizer"] as? [String: Any])?["self"] as? Bool == true || e["guestsCanModify"] as? Bool == true
+            return c
+        }
+    }
+
     /// The account's own copy of the invited event (Google adds invites to the calendar on arrival).
     func event(_ inv: Invite) async throws -> [String: Any]? {
         let items = try await call("events", query: [.init(name: "iCalUID", value: inv.uid), .init(name: "showDeleted", value: "true")])["items"] as? [[String: Any]] ?? []
@@ -117,6 +161,14 @@ extension AppStore {
     func grantCalendarAccess(for account: String) async -> Bool {
         busy = "Approve calendar access in your browser…"
         defer { busy = nil }
+        if isMicrosoft(account) {
+            do {
+                let email = try await microsoft.signIn(hint: account, scopes: MicrosoftAuth.calendarScopes)
+                if email.lowercased() != account.lowercased() { banner = "You approved \(email), not \(account). Try again and pick \(account)."; return false }
+                calNeedsAccess.remove(account)
+                return true
+            } catch { report(error); return false }
+        }
         do {
             let r = try await auth.signIn(hint: account)
             if r.email.lowercased() != account.lowercased() { banner = "You approved \(r.email), not \(account). Try again and pick \(account)."; return false }
@@ -148,5 +200,80 @@ extension AppStore {
                 .init(name: "conferenceDataVersion", value: "1"), .init(name: "sendUpdates", value: invite && !guests.isEmpty ? "all" : "none")], json: ev)
             return (j["htmlLink"] as? String).flatMap(URL.init(string:))
         } catch let e as HTTPError where e.needsMorePermission { throw NeedsCalendarAccess() }
+    }
+}
+
+extension AppStore {
+    // MARK: Answering invites (the invite card, Y / ? / N, and the calendar's event card)
+
+    /// True when you organized it: there's nothing to answer.
+    func isMine(_ inv: Invite) -> Bool { Set(fromAddresses.map { $0.lowercased() }).contains(inv.organizer.lowercased()) }
+
+    /// Remembers the invite in the email you're reading, and loads the rest of your day for the "Your Tuesday" strip.
+    func loadInviteDay(_ inv: Invite, message m: Message) async {
+        openInvite = (m, inv)
+        guard let s = inv.start, !inv.isCancelled, UserDefaults.standard.object(forKey: "inviteDayStrip") as? Bool ?? true else { inviteDay = nil; return }
+        let day = Calendar.current.startOfDay(for: s)
+        let (sources, events) = await fetchEvents(from: day, to: Calendar.current.date(byAdding: .day, value: 1, to: day)!)
+        if calSources.isEmpty { calSources = withColors(sources) }   // colors for the strip
+        inviteDay = InviteDay(uid: inv.uid, day: day, events: events.filter { $0.uid != inv.uid && !$0.allDay }.sorted { $0.start < $1.start })
+    }
+
+    /// Y / ? / N while reading an invite. False when there's nothing here to answer, so the key does its usual job.
+    func answerOpenInvite(_ r: RSVP) -> Bool {
+        guard let (m, inv) = openInvite, let c = selected, c.messages.contains(where: { $0.key == m.key }),
+              !inv.isCancelled, !isMine(inv) else { return false }
+        respondToInvite(inv, r, message: m)
+        return true
+    }
+
+    func respondToInvite(_ inv: Invite, _ r: RSVP, message m: Message) {
+        guard inviteSending == nil else { return }
+        inviteSending = inv.uid
+        Task {
+            defer { inviteSending = nil }
+            if AppFlavor.isTesting || AppFlavor.isDemo { inviteAnswers[inv.uid] = r; banner = "\(r.label): \(inv.summary)."; return }
+            do {
+                banner = try await rsvp(inv, r, message: m)
+                inviteAnswers[inv.uid] = r
+                if calendarOpen { await loadCalendar() }
+            } catch is NeedsCalendarAccess { calNeedsAccess.insert(m.account) }
+            catch { report(error) }
+        }
+    }
+
+    /// Yes / Maybe / No on an unanswered event in the calendar (Google calendars; the Mac's Calendar app doesn't allow it).
+    func answerEvent(_ e: CalEvent, _ r: RSVP) {
+        guard e.unanswered else { return }
+        func done() {
+            for i in calEvents.indices where calEvents[i].id == e.id { calEvents[i].unanswered = false }
+            for i in calUpcoming.indices where calUpcoming[i].id == e.id { calUpcoming[i].unanswered = false }
+        }
+        if AppFlavor.isTesting || AppFlavor.isDemo {
+            for i in demoCalendarEvents.indices where demoCalendarEvents[i].id == e.id { demoCalendarEvents[i].unanswered = false }
+            done(); banner = "\(r.label): \(e.title)."; return
+        }
+        if e.calendarId.hasPrefix("outlook:") {
+            let acct = outlookAccount(e.calendarId)
+            Task {
+                do { try await OutlookCalendar(account: acct, auth: microsoft).answer(e, r); done(); banner = "\(r.label): \(e.title). The organizer is told." }
+                catch is NeedsCalendarAccess { calNeedsAccess.insert(acct) }
+                catch { report(error) }
+            }
+            return
+        }
+        guard e.calendarId.hasPrefix("google:") else { banner = "Answer this one in the Calendar app, or from the invite email."; return }
+        let acct = String(e.calendarId.dropFirst(7)), gid = String(e.id.split(separator: "|").last ?? "")
+        Task {
+            do {
+                let cal = GoogleCalendar(account: acct, auth: auth)
+                var people = try await cal.call("events/\(gid)")["attendees"] as? [[String: Any]] ?? []
+                guard let i = people.firstIndex(where: { $0["self"] as? Bool == true }) else { return }
+                people[i]["responseStatus"] = r.google
+                _ = try await cal.call("events/\(gid)", method: "PATCH", query: [.init(name: "sendUpdates", value: "all")], json: ["attendees": people])
+                done(); banner = "\(r.label): \(e.title). The organizer is told."
+            } catch let err as HTTPError where err.needsMorePermission { calNeedsAccess.insert(acct) }
+            catch { report(error) }
+        }
     }
 }

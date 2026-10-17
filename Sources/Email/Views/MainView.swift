@@ -26,7 +26,11 @@ struct MainView: View {
     func content(_ layout: LayoutWidth) -> some View {
         HStack(spacing: 0) {
             // Folders sit beside the inbox (like the context panel on the right), so they can stay open while you work.
-            if store.foldersVisible { FolderPanel().transition(.move(edge: .leading).combined(with: .opacity)) }
+            if store.foldersVisible {
+                Group { if store.calendarOpen { CalendarListPanel() } else { FolderPanel() } }
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+            if store.calendarOpen { CalendarScreen() } else {
             VStack(spacing: 0) {
                 Header().zIndex(1) // search dropdown must draw above the list below it
                     // Settings covers the top bar; its ✕ sits on the account capsule, which must not steal the click.
@@ -38,10 +42,16 @@ struct MainView: View {
                 else if store.inboxLayout == "film" { FilmstripInbox() }
                 else if store.threadOpen, let c = store.selected { ThreadView(conversation: c) } else { ListView() }
             }
+            }
             // The context panel needs room; narrow windows hide it automatically.
-            if store.contextVisible, layout.width >= 1100, let c = store.selected { ContextPanel(conversation: c) }
+            if store.contextVisible, layout.width >= 1100 {
+                if store.calendarOpen { CalendarContextPanel().transition(.move(edge: .trailing).combined(with: .opacity)) }
+                else if let c = store.selected { ContextPanel(conversation: c).transition(.move(edge: .trailing).combined(with: .opacity)) }
+            }
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: store.sidebarOpen)
+        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: store.contextOpen)
+        .animation(.easeOut(duration: 0.2), value: store.calendarOpen)
         .overlayPreferenceValue(CoachAnchorKey.self) { anchors in
             GeometryReader { proxy in CoachTips(anchors: anchors, proxy: proxy) }
         }
@@ -133,24 +143,61 @@ struct Header: View {
             Button { store.openSettings() } label: { Image(systemName: "gearshape").frame(width: 34, height: 34).contentShape(Circle()) }
                 .buttonStyle(.plain).foregroundStyle(.secondary).glass(Circle(), interactive: true)
                 .help("Settings (⌘,)")
-            MenuButton(width: 320, trailing: true, entries: { store.accountEntries() }) {
-                HStack(spacing: 10) {
-                    if store.state.accounts.count > 1 {
-                        Circle().fill(Theme.chip(store.state.activeAccount ?? "all")).frame(width: 7, height: 7)
-                    }
-                    Text(store.state.activeAccount.map(store.label) ?? (store.state.accounts.count > 1 ? "All accounts" : store.state.accounts.first.map(store.label) ?? ""))
-                    Image(systemName: "chevron.down").font(.scaled(size: 10, weight: .semibold))
-                }
-                .font(.scaled(size: 14)).foregroundStyle(.secondary)
-                .padding(.horizontal, 16).padding(.vertical, 8)
-                .glass(Capsule(), interactive: true)
-                .contentShape(Capsule())
-            }
-            .buttonStyle(.plain).handCursor().fixedSize()
-            .coachAnchor("palette")
+            if store.calendarEnabled { ViewSwitchButton(toCalendar: true) }
+            AccountCapsule().coachAnchor("palette")
         }
         .glassGroup(spacing: 10)
         .padding(.horizontal, layout.margin).padding(.top, 34).padding(.bottom, 12)
+    }
+}
+
+/// The account menu at the right end of the top bar, in mail and in the calendar.
+struct AccountCapsule: View {
+    @EnvironmentObject var store: AppStore
+    var body: some View {
+        MenuButton(width: 320, trailing: true, entries: { store.accountEntries() }) {
+            HStack(spacing: 10) {
+                if store.state.accounts.count > 1 {
+                    Circle().fill(Theme.chip(store.state.activeAccount ?? "all")).frame(width: 7, height: 7)
+                }
+                Text(store.state.activeAccount.map(store.label) ?? (store.state.accounts.count > 1 ? "All accounts" : store.state.accounts.first.map(store.label) ?? ""))
+                Image(systemName: "chevron.down").font(.scaled(size: 10, weight: .semibold))
+            }
+            .font(.scaled(size: 14)).foregroundStyle(.secondary)
+            .padding(.horizontal, 16).padding(.vertical, 8)
+            .glass(Capsule(), interactive: true)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain).handCursor().fixedSize()
+    }
+}
+
+/// Mail ⇄ Calendar. Sits in the same spot in both top bars, so one click flips back and forth.
+/// In the calendar it shows the inbox's unread count.
+struct ViewSwitchButton: View {
+    @EnvironmentObject var store: AppStore
+    let toCalendar: Bool
+    var body: some View {
+        Button { toCalendar ? store.openCalendar() : store.closeCalendar() } label: {
+            Image(systemName: toCalendar ? "calendar" : "envelope").font(.scaled(size: 14, weight: .medium))
+                .frame(width: 34, height: 34).contentShape(Circle())
+        }
+        .buttonStyle(.plain).foregroundStyle(.primary).glass(Circle(), interactive: true, tint: Theme.accent.opacity(0.25))
+        .overlay(alignment: .topTrailing) {
+            let unread = toCalendar ? 0 : store.allConversations.filter { $0.inInbox && $0.isUnread }.count
+            if unread > 0 {
+                Text(unread > 99 ? "99+" : "\(unread)").font(.scaled(size: 9.5, weight: .bold)).foregroundStyle(.white)
+                    .padding(.horizontal, 4).frame(minWidth: 16, minHeight: 16).background(Capsule().fill(Theme.accent))
+                    .offset(x: 5, y: -4).allowsHitTesting(false)
+            }
+        }
+        .help(toCalendar ? "Calendar (G C). Drop an email here to block time for it." : "Inbox (G I)")
+        .accessibilityLabel(toCalendar ? "Calendar" : "Inbox")
+        .dropDestination(for: String.self) { ids, _ in
+            guard toCalendar, let id = ids.first else { return false }
+            store.startPlacing(id)
+            return true
+        }
     }
 }
 
@@ -271,6 +318,8 @@ struct Row: View {
             hovering = h
             if h { store.rightClickTarget = c } else if store.rightClickTarget?.id == c.id { store.rightClickTarget = nil }
         }
+        // Drag onto the top bar's Calendar button to block time for this email.
+        .draggable(c.id) { Label(c.latest.subject, systemImage: "envelope").padding(8).glass(Capsule()) }
     }
 }
 

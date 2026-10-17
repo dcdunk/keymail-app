@@ -13,29 +13,71 @@ struct CalendarSection: View {
     @EnvironmentObject var cal: CalendarService   // redraws when access is granted
     let conversation: Conversation
     var body: some View {
-        let day = Date()   // always today; a date mentioned in the email no longer switches the day shown
+        content.task { if !store.calTriedLoad { store.calTriedLoad = true; await store.loadCalendar() } }
+    }
+    var content: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Today's Events")
+                Text(header)
                     .font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary)
                 Spacer()
+                if store.calendarEnabled {
+                    Button { store.openCalendar() } label: { Text("Open calendar ›").font(.scaled(.caption).weight(.semibold)).foregroundStyle(Theme.accent) }
+                        .buttonStyle(.plain).handCursor().help("Calendar (G C)")
+                }
                 Button { store.createEventFromEmail() } label: { Image(systemName: "calendar.badge.plus").frame(width: 26, height: 26) }
                     .buttonStyle(ToolStyle()).help("Create event (\(Hotkeys.label("b")))")
             }
-            if !cal.authorized {
-                Button("Show my calendar") { Task { _ = await store.calendar.requestAccess() } }.quiet().font(.scaled(.callout))
-            } else {
-                let events = cal.events(on: day)
-                if events.isEmpty { Text("Nothing scheduled").font(.scaled(.callout)).foregroundStyle(.tertiary) }
-                ForEach(events.prefix(6), id: \.eventIdentifier) { e in
+            // Reading an invite: its day instead of today, with the invite in it.
+            if let day = store.inviteDay, let open = store.openInvite, open.invite.uid == day.uid,
+               conversation.messages.contains(where: { $0.key == open.message.key }) {
+                inviteDay(day, invite: open.invite)
+            } else { today }
+
+        }
+    }
+
+    @ViewBuilder var today: some View {
+            // The same events as the calendar screen: Gmail calendars straight from Google, plus the Mac's calendars.
+            let today = store.calUpcoming.filter { Calendar.current.isDateInToday($0.start) || ($0.start < Date() && $0.end > Date()) }
+            if store.calSources.isEmpty && !cal.authorized {
+                Button("Show my calendar") { Task { _ = await store.calendar.requestAccess(); await store.loadCalendar() } }.quiet().font(.scaled(.callout))
+            } else if today.isEmpty {
+                Text("Nothing else today").font(.scaled(.callout)).foregroundStyle(.tertiary)
+            }
+            ForEach(today.prefix(6)) { e in
+                Button { store.openCalendar(); store.calSelected = e.id } label: {
                     HStack(alignment: .top, spacing: 8) {
-                        RoundedRectangle(cornerRadius: 2).fill(Color(cgColor: e.calendar.cgColor)).frame(width: 3, height: 30)
+                        RoundedRectangle(cornerRadius: 2).fill(store.calColor(e)).frame(width: 3, height: 30)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(e.title ?? "Busy").font(.scaled(.callout)).lineLimit(1)
-                            Text(e.isAllDay ? "All day" : "\(e.startDate.formatted(date: .omitted, time: .shortened)) – \(e.endDate.formatted(date: .omitted, time: .shortened))")
+                            Text(e.title).font(.scaled(.callout)).lineLimit(1)
+                            Text(e.allDay ? "All day" : "\(e.start.formatted(date: .omitted, time: .shortened)) – \(e.end.formatted(date: .omitted, time: .shortened))")
                                 .font(.scaled(.caption)).foregroundStyle(.secondary)
                         }
-                    }
+                        Spacer(minLength: 0)
+                    }.contentShape(Rectangle())
+                }.buttonStyle(.plain).handCursor().help("Open in the calendar")
+            }
+    }
+
+    var header: String {
+        if let day = store.inviteDay, let open = store.openInvite, open.invite.uid == day.uid,
+           conversation.messages.contains(where: { $0.key == open.message.key }), !Calendar.current.isDateInToday(day.day) {
+            return day.day.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
+        }
+        return "Today's Events"
+    }
+
+    @ViewBuilder func inviteDay(_ day: InviteDay, invite: Invite) -> some View {
+        let rows = (day.events.map { (Optional($0), $0.title, $0.start, $0.end) } + [(nil, invite.summary, invite.start ?? day.day, invite.end ?? day.day)])
+            .sorted { $0.2 < $1.2 }
+        ForEach(Array(rows.enumerated()), id: \.offset) { _, r in
+            HStack(alignment: .top, spacing: 8) {
+                RoundedRectangle(cornerRadius: 2).fill(r.0.map(store.calColor) ?? Theme.accent).frame(width: 3, height: 30)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(r.1).font(.scaled(.callout).weight(r.0 == nil ? .semibold : .regular)).lineLimit(1)
+                    Text("\(r.2.formatted(date: .omitted, time: .shortened)) – \(r.3.formatted(date: .omitted, time: .shortened))\(r.0 == nil ? " · this invite" : "")")
+                        .font(.scaled(.caption)).foregroundStyle(.secondary)
                 }
             }
         }

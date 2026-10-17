@@ -5,6 +5,7 @@ import EmailCore
 struct GraphMail {
     let account: String
     let auth: MicrosoftAuth
+    var scopes = MicrosoftAuth.scopes      // the calendar uses its own, separately approved, scopes
     static let base = "https://graph.microsoft.com/v1.0/me"
 
     /// One call with the account's token. Asks for immutable IDs so a message keeps its ID when it moves between
@@ -16,7 +17,7 @@ struct GraphMail {
         for attempt in 0..<4 {
             var req = URLRequest(url: url)
             req.httpMethod = method
-            req.setValue("Bearer \(try await auth.accessToken(for: account))", forHTTPHeaderField: "Authorization")
+            req.setValue("Bearer \(try await auth.accessToken(for: account, scopes: scopes))", forHTTPHeaderField: "Authorization")
             req.setValue("IdType=\"ImmutableId\"", forHTTPHeaderField: "Prefer")
             if let json {
                 req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -33,6 +34,7 @@ struct GraphMail {
                 try await Task.sleep(for: .seconds(min(wait, 30)))
                 continue
             }
+            if status == 403, scopes != MicrosoftAuth.scopes { throw NeedsCalendarAccess() }
             guard (200..<300).contains(status) else {
                 throw AppError(status == 403 ? "Microsoft didn't allow that for \(account)." : "Microsoft couldn't complete that (\(status)). Try again in a moment.")
             }

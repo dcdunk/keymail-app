@@ -1,4 +1,5 @@
 import AppKit
+import MapKit
 import SwiftUI
 import EmailCore
 import CryptoKit
@@ -11,6 +12,37 @@ extension AppStore {
             Command(title: "Compose", key: Hotkeys.label("c")) { self.compose() },
             Command(title: "Search", key: Hotkeys.label("/")) { self.searchOpen = true },
         ]
+        if calendarOpen {
+            list = [Command(title: "Go to Inbox", key: "G I") { self.closeCalendar() },
+                    Command(title: "New event", key: "C") { self.quickAddOpen = true },
+                    Command(title: "Today", key: "T") { self.calToday() },
+                    Command(title: "Day view", key: "D") { self.calView = .day },
+                    Command(title: "Week view", key: "W") { self.calView = .week },
+                    Command(title: "Month view", key: "M") { self.calView = .month }]
+            if let e = calSelectedEvent {
+                if let c = linkedConversation(e) { list.append(Command(title: "Open email: \(c.latest.subject)", key: "O") { self.openLinkedEmail(e) }) }
+                if let c = e.conference { list.append(Command(title: "Join \(c.kind.rawValue): \(e.title)", key: "⇧J") { self.joinCall(e) }) }
+                if e.editable { list.append(Command(title: "Edit \(e.title)", key: "E") { self.calEditing = e.id }) }
+                if let link = e.link { list.append(Command(title: "Open \(e.title) in \(e.calendarId.hasPrefix("google:") ? "Google Calendar" : "Outlook")") { NSWorkspace.shared.open(link) }) }
+                for c in moveTargets(e) { list.append(Command(title: "Move \(e.title) to \(c.title)") { self.moveEvent(e, to: c) }) }
+                if !e.location.isEmpty, !e.location.lowercased().hasPrefix("http") {
+                    list.append(Command(title: "Open \(e.location) in Maps") { Task { await PlaceSearch.find(e.location)?.openInMaps() } })
+                    list.append(Command(title: "Directions to \(e.location)") {
+                        Task { await PlaceSearch.find(e.location)?.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDefault]) }
+                    })
+                }
+                list.append(Command(title: "Delete \(e.title)", key: "⌫") { self.deleteEvent(e) })
+            }
+            let hidden = calHidden
+            for s in calSources {
+                list.append(Command(title: "\(hidden.contains(s.id) ? "Show" : "Hide") calendar: \(s.title)") { self.toggleCalendarHidden(s.id) })
+            }
+            return list
+        }
+        if calendarEnabled { list.append(Command(title: "Go to Calendar", key: "G C") { self.openCalendar() }) }
+        if calendarEnabled, let c = selected {
+            list.append(Command(title: "Block time on the calendar for this email") { self.startPlacing(c.id) })
+        }
         if let c = selected {
             list += [
                 Command(title: "Reply", key: Hotkeys.label("r")) { self.reply(all: false) },

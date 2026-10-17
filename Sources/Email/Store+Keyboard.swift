@@ -113,9 +113,16 @@ extension AppStore {
             if n == 0 { switchAccount(nil); return true }
             if n <= state.accounts.count { switchAccount(state.accounts[n - 1]); return true }
         }
-        if cmd, ch == "r" { Task { await tick() }; return true }
+        if cmd, ch == "r" { Task { await tick() }; if calendarOpen { reloadCalendar() }; return true }
         if cmd, ch == "z", !e.modifierFlags.contains(.shift), !(NSApp.keyWindow?.firstResponder is NSTextView) { undo(); return true }
         if cmd { return false }
+        if calendarOpen, quickAddOpen, !(NSApp.keyWindow?.firstResponder is NSTextView) {
+            if code == 53 { quickAddOpen = false }   // its text box lost the keyboard: Esc still closes it, nothing else leaks
+            return true
+        }
+        if calendarOpen, !(NSApp.keyWindow?.firstResponder is NSTextView) {
+            return handleCalendarKey(code: code, ch: ch, shift: e.modifierFlags.contains(.shift))
+        }
         if code == 51, searchOpen, searchText.isEmpty, !search.isEmpty { removeLastSearchToken(); return true }
         if sidebarFocused, !(NSApp.keyWindow?.firstResponder is NSTextView) {
             switch (code, ch) {
@@ -134,6 +141,7 @@ extension AppStore {
             if code == 53, searchOpen { clearSearch(); return true }
             return false
         }
+        if threadOpen, let r = ["y": RSVP.accepted, "?": .tentative, "n": .declined][ch], answerOpenInvite(r) { return true }
         if e.modifierFlags.contains(.shift), ch.lowercased() == "u" { unsubscribe(); return true }
         if threadOpen, e.modifierFlags.contains(.shift), ch.lowercased() == "o" { toggleAllMessages(); return true }
         if inboxLayout == "stream", code == 49, let c = selected { streamExpanded.formSymmetricDifference([c.id]); return true } // Space: expand
@@ -147,6 +155,7 @@ extension AppStore {
             pendingG = nil
             let dest = ["i": "Inbox", "s": "Starred", "t": "Sent", "e": "Done", "h": "Reminders", "d": "Drafts"][ch]
             if let dest { goFolder(dest); return true }
+            if ch == "c", calendarEnabled { openCalendar(); return true }
         }
         switch (code, Hotkeys.resolve(ch)) {
         case (53, _):

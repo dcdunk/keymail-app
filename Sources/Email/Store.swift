@@ -66,6 +66,7 @@ struct SavedState: Codable {
     var autoArchived: [String] = []            // conversation ids, newest last (for the folder)
     var microsoftPreview: [String] = []        // old preview list; moved into `accounts` on load
     var microsoft: [String] = []               // which accounts are Microsoft (Outlook.com, Hotmail, Microsoft 365)
+    var eventLinks: [String: String] = [:]     // calendar event (UID, or "title|minute") → conversation id it came from
 
     init() {}
     /// Tolerates missing keys so adding a setting never wipes your accounts and splits.
@@ -94,6 +95,7 @@ struct SavedState: Codable {
         autoArchiveSince = v(.autoArchiveSince, base.autoArchiveSince); autoArchived = v(.autoArchived, base.autoArchived)
         microsoftPreview = v(.microsoftPreview, base.microsoftPreview)
         microsoft = v(.microsoft, base.microsoft)
+        eventLinks = v(.eventLinks, base.eventLinks)
         // Accounts connected during the sign-in preview join the inbox now that mail reading exists.
         for a in microsoftPreview where !accounts.contains(a) { accounts.append(a); microsoft.append(a) }
         microsoftPreview = []
@@ -125,6 +127,7 @@ extension SavedState {
         for k in importance.keys where ours(k) { importance[k] = nil }
         muted.removeAll(where: ours)
         autoArchived.removeAll(where: ours)
+        for (k, v) in eventLinks where ours(v) { eventLinks[k] = nil }
     }
 }
 
@@ -272,6 +275,24 @@ final class AppStore: ObservableObject {
         return h
     }
     let calendar = CalendarService()
+    // Calendar screen (g c). Its view, week start, default calendar and hidden calendars live in UserDefaults.
+    @Published var calendarOpen = false
+    @Published var calDate = Date()                  // the day the view is built around
+    @Published var calEvents: [CalEvent] = []        // what the current view shows
+    @Published var calUpcoming: [CalEvent] = []      // the next 7 days, for the context panel
+    @Published var calSources: [CalSource] = []
+    @Published var calSelected: String?              // the event whose card is open
+    @Published var quickAddOpen = false
+    @Published var placingEmail: String?
+    @Published var calEditing: String?               // the event whose card is in edit mode (E or the pencil)
+    var calLoadID = 0                                // newest calendar load; older ones finishing late are dropped
+    var calTriedLoad = false                         // the context panel loaded the calendar once already
+    var inviteIndexCache: (stamp: Int, map: [String: String])?             // conversation waiting for you to click a time on the calendar
+    @Published var calNeedsAccess: Set<String> = []  // accounts whose calendar is waiting for your OK
+    @Published var inviteAnswers: [String: RSVP] = [:]   // invite UID → your answer, once known or given
+    @Published var inviteSending: String?                // invite UID while an answer is on its way
+    @Published var inviteDay: InviteDay?                 // the open invite's day, for the strip and the context panel
+    var openInvite: (message: Message, invite: Invite)?  // the invite in the email you're reading (Y / ? / N answer it)
     var pendingG: Date?
     @Published var selectedID: String?
     @Published var threadOpen = false
@@ -480,6 +501,9 @@ final class AppStore: ObservableObject {
     @Published var searchFiltersOpen = false
     @Published var splitSuggestions: [Split] = []
 }
+
+/// Your other events on an invite's day.
+struct InviteDay { let uid: String; let day: Date; let events: [CalEvent] }
 
 struct EventDraft: Identifiable {
     let id = UUID()
