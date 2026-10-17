@@ -1,5 +1,6 @@
 import XCTest
 import AppKit
+import SwiftUI
 import EmailCore
 @testable import Email
 
@@ -7,6 +8,7 @@ import EmailCore
 /// pre-push hook refuses to push if they fail). If you add a keyboard command, add it here.
 ///  1. Send and receive email.
 ///  2. Every keyboard command and the mouse actions on rows work.
+///  3. ⌘K puts the cursor straight into the palette's text box.
 /// Runs against an isolated store (temp folder, throwaway Keymail key; see AppFlavor.isTesting), never real mail.
 @MainActor
 final class CoreFlowsTests: XCTestCase {
@@ -124,6 +126,18 @@ final class CoreFlowsTests: XCTestCase {
         defer { UserDefaults.standard.removeObject(forKey: "hotkey.c") }
         press("c", code: 8); XCTAssertNil(store.composing, "the old key is free")
         press("n", code: 45); XCTAssertNotNil(store.composing, "the new key composes")
+    }
+
+    /// ⌘K must put the cursor in the palette's text box: typing right away has to land there, no click needed.
+    func testCommandKPutsCursorInPaletteBox() {
+        let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+        win.contentView = NSHostingView(rootView: PaletteHost().environmentObject(store)) // palette pops in over a live window, like MainView
+        win.makeKeyAndOrderFront(nil)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        press("k", code: 40, .command); XCTAssertTrue(store.paletteOpen)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+        XCTAssertTrue(win.firstResponder is NSTextView, "⌘K palette text box has the keyboard focus")
+        win.orderOut(nil); resetUI()
     }
 
     func testPaletteRunsWhatYouPick() {
@@ -444,4 +458,10 @@ final class CoreFlowsTests: XCTestCase {
         let joined = store.allConversations.first { $0.id == c.id }!
         XCTAssertTrue(joined.messages.contains { $0.id == "sent:42" }, "a reply sent from another app joins its conversation")
     }
+}
+
+/// Same shape as MainView: the palette is an overlay that appears when paletteOpen flips.
+private struct PaletteHost: View {
+    @EnvironmentObject var store: AppStore
+    var body: some View { Color.clear.overlay(alignment: .top) { if store.paletteOpen { PaletteView() } } }
 }

@@ -3,6 +3,7 @@
 ## Bulletproof flows (must never break)
 1. Sending and receiving email (Gmail, Outlook, iCloud, Yahoo).
 2. Navigating by keyboard or mouse: every keyboard command and every row/menu action works.
+3. ⌘K opens the command palette with the cursor already in its text box (type immediately, no click).
 
 These are guarded by `Tests/EmailTests/CoreFlowsTests.swift`.
 - Run `./build.sh` (it runs every test first) before saying a change is done, and never push with a failing test.

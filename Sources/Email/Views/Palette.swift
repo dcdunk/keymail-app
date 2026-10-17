@@ -18,7 +18,7 @@ struct PaletteView: View {
                 .textFieldStyle(.plain).font(.scaled(size: 18)).focused($focused)
                 .padding(18)
                 .onChange(of: store.paletteText) { _, _ in store.paletteIndex = 0 }
-                .onAppear { focused = true }
+                .onAppear { DispatchQueue.main.async { focused = true }; DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { focused = true } } // overlay isn't in the window yet on appear
             Divider()
             ScrollViewReader { proxy in
                 ScrollView {
