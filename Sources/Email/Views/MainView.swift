@@ -29,6 +29,8 @@ struct MainView: View {
             if store.foldersVisible { FolderPanel().transition(.move(edge: .leading).combined(with: .opacity)) }
             VStack(spacing: 0) {
                 Header().zIndex(1) // search dropdown must draw above the list below it
+                    // Settings covers the top bar; its ✕ sits on the account capsule, which must not steal the click.
+                    .allowsHitTesting(!store.settingsOpen).accessibilityHidden(store.settingsOpen)
                 if store.searchFiltersOpen { SearchFilters() }
                 if let b = store.banner { BannerView(text: b) { store.banner = nil } }
                 if store.inboxLayout == "split" { SplitInbox() }
