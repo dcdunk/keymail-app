@@ -68,7 +68,8 @@ final class CalendarTests: XCTestCase {
     }
 
     func testQuickAddReadsTitleTimePlaceAndLength() throws {
-        let now = date("2026-10-17 10:30")   // Saturday
+        // The date detector reads "fri" and "today" against the real clock, so the test does too.
+        let now = Date()
         let q = try XCTUnwrap(parseQuickEvent("Lunch with Priya fri 1pm at Tartine, 45 min", now: now))
         XCTAssertEqual(q.title, "Lunch with Priya")
         XCTAssertEqual(q.location, "Tartine")
@@ -80,7 +81,8 @@ final class CalendarTests: XCTestCase {
         let r = try XCTUnwrap(parseQuickEvent("Dentist tomorrow at 9am for 2 hours", now: now))
         XCTAssertEqual(r.title, "Dentist"); XCTAssertEqual(r.minutes, 120)
         XCTAssertNil(parseQuickEvent("just some words", now: now), "no time, no event")
-        XCTAssertNil(parseQuickEvent("Standup today 9am", now: now), "a time that already passed today isn't moved to another day")
+        let lateTonight = Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: now)!
+        XCTAssertNil(parseQuickEvent("Standup today 9am", now: lateTonight), "a time that already passed today isn't moved to another day")
     }
 
     func testJAndKWalkEventsInTimeOrder() {

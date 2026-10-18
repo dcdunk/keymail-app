@@ -528,11 +528,14 @@ final class QuotedHTMLTests: XCTestCase {
     }
 
     func testSettingsShowWhichAppsHaveKeymail() {
-        XCTAssertTrue(mcpConfigLists(#"{"mcpServers":{"keymail":{"command":"/x"}}}"#, name: "keymail"))
-        XCTAssertFalse(mcpConfigLists(#"{"mcpServers":{"keymail-demo":{}}}"#, name: "keymail"))
-        XCTAssertFalse(mcpConfigLists(#"{"preferences":{}}"#, name: "keymail"))
-        XCTAssertTrue(mcpConfigLists("model = \"o3\"\n\n[mcp_servers.keymail]\ncommand = \"/x\"\n", name: "keymail"), "Codex TOML")
-        XCTAssertFalse(mcpConfigLists("[mcp_servers.keymail-demo]\n", name: "keymail"))
-        XCTAssertFalse(mcpConfigLists(nil, name: "keymail"), "app not installed")
+        let k = "/Applications/Keymail.app/Contents/MacOS/keymail-mcp"
+        XCTAssertTrue(mcpConfigLists(#"{"mcpServers":{"keymail":{"command":"\#(k)"}}}"#, name: "keymail", command: k))
+        XCTAssertFalse(mcpConfigLists(#"{"mcpServers":{"keymail":{"command":"/old/keymail-mcp"}}}"#, name: "keymail", command: k), "an old copy of Keymail needs re-adding")
+        XCTAssertFalse(mcpConfigLists(#"{"mcpServers":{"keymail-demo":{"command":"\#(k)"}}}"#, name: "keymail", command: k))
+        XCTAssertFalse(mcpConfigLists(#"{"preferences":{}}"#, name: "keymail", command: k))
+        XCTAssertTrue(mcpConfigLists("model = \"o3\"\n\n[mcp_servers.keymail]\ncommand = \"\(k)\"\n", name: "keymail", command: k), "Codex TOML")
+        XCTAssertFalse(mcpConfigLists("[mcp_servers.keymail]\ncommand = \"/old/keymail-mcp\"\n", name: "keymail", command: k))
+        XCTAssertFalse(mcpConfigLists("[mcp_servers.keymail-demo]\ncommand = \"\(k)\"\n", name: "keymail", command: k))
+        XCTAssertFalse(mcpConfigLists(nil, name: "keymail", command: k), "app not installed")
     }
 }

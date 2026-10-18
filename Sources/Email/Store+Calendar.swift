@@ -445,10 +445,16 @@ extension AppStore {
 }
 
 /// Sample week for the demo build and the tests, built around today so it's always current.
+/// The Monday of the week the calendar shows (with a Sunday-first week, the Monday after this Sunday).
+func demoMonday() -> Date {
+    let cal = Calendar.current
+    let mondayFirst = UserDefaults.standard.object(forKey: "calendarMondayFirst") as? Bool ?? (cal.firstWeekday == 2)
+    var c = cal; c.firstWeekday = mondayFirst ? 2 : 1
+    return cal.date(byAdding: .day, value: mondayFirst ? 0 : 1, to: c.dateInterval(of: .weekOfYear, for: Date())!.start)!
+}
+
 @MainActor var demoCalendarEvents: [CalEvent] = {
-    let cal = Calendar.current, today = cal.startOfDay(for: Date())
-    var c = cal; c.firstWeekday = 2
-    let monday = c.dateInterval(of: .weekOfYear, for: today)!.start
+    let cal = Calendar.current, monday = demoMonday()
     func at(_ day: Int, _ h: Double, _ len: Double, _ title: String, _ calId: String, notes: String = "", loc: String = "", unanswered: Bool = false) -> CalEvent {
         let s = cal.date(byAdding: .minute, value: Int(h * 60), to: cal.date(byAdding: .day, value: day, to: monday)!)!
         var e = CalEvent(id: "demo:\(title)", calendarId: calId, title: title, start: s, end: s.addingTimeInterval(len * 3600))

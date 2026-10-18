@@ -51,11 +51,13 @@ public func claudeDesktopConfig(existing: Data?, name: String, command: String) 
 }
 
 /// True when an MCP client's settings file lists `name` as a server: JSON `mcpServers` (Claude Desktop, Claude Code,
-/// Gemini) or a TOML `[mcp_servers.<name>]` table (Codex).
-public func mcpConfigLists(_ text: String?, name: String) -> Bool {
+/// Gemini) or a TOML `[mcp_servers.<name>]` table (Codex), and it runs `command` (an old copy of Keymail doesn't count).
+public func mcpConfigLists(_ text: String?, name: String, command: String) -> Bool {
     guard let text, !text.isEmpty else { return false }
     if let json = (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any] {
-        return (json["mcpServers"] as? [String: Any])?[name] != nil
+        return ((json["mcpServers"] as? [String: Any])?[name] as? [String: Any])?["command"] as? String == command
     }
-    return text.split(separator: "\n").contains { $0.trimmingCharacters(in: .whitespaces).hasPrefix("[mcp_servers.\(name)]") }
+    let lines = text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+    guard let i = lines.firstIndex(where: { $0.hasPrefix("[mcp_servers.\(name)]") }) else { return false }
+    return lines[(i + 1)...].prefix { !$0.hasPrefix("[") }.contains { $0.hasPrefix("command") && $0.contains("\"\(command)\"") }
 }

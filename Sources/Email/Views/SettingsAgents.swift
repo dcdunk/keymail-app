@@ -16,7 +16,7 @@ struct AgentSettings: View {
 
     func checkConnected() {
         let home = FileManager.default.homeDirectoryForCurrentUser
-        connected = Set(Self.configFiles.filter { mcpConfigLists(try? String(contentsOf: home.appendingPathComponent($0.value), encoding: .utf8), name: serverName) }.keys)
+        connected = Set(Self.configFiles.filter { mcpConfigLists(try? String(contentsOf: home.appendingPathComponent($0.value), encoding: .utf8), name: serverName, command: helper) }.keys)
     }
 
     var helper: String { Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/keymail-mcp").path }
@@ -42,9 +42,9 @@ struct AgentSettings: View {
 
             Section("Connect") {
                 setupRow("Claude Desktop", brand: "claude", action: "Add to Claude Desktop") { addToClaudeDesktop() }
-                setupRow("Claude Code", brand: "claude", action: "Copy command") { copy("claude mcp add --scope user \(serverName) -- \"\(helper)\"") }
-                setupRow("Codex", brand: "codex", action: "Copy command") { copy("codex mcp add \(serverName) -- \"\(helper)\"") }
-                setupRow("Gemini CLI", brand: "gemini", action: "Copy command") { copy("gemini mcp add \(serverName) \"\(helper)\"") }
+                setupRow("Claude Code", brand: "claude", action: "Copy command") { copy("claude mcp remove --scope user \(serverName) 2>/dev/null; claude mcp add --scope user \(serverName) -- \"\(helper)\"") }
+                setupRow("Codex", brand: "codex", action: "Copy command") { copy("codex mcp remove \(serverName) 2>/dev/null; codex mcp add \(serverName) -- \"\(helper)\"") }
+                setupRow("Gemini CLI", brand: "gemini", action: "Copy command") { copy("gemini mcp remove \(serverName) 2>/dev/null; gemini mcp add \(serverName) \"\(helper)\"") }
                 setupRow("Other MCP apps", brand: nil, action: "Copy path") { copy(helper) }
                 if let note { Text(note).font(.scaled(.caption)).foregroundStyle(.secondary) }
             }

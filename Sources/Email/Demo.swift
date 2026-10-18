@@ -69,8 +69,7 @@ extension AppStore {
 
     /// Tuesday 11:00–12:00 of the current week, as an invitation from Maya.
     func demoInviteICS(attendee: String) -> String {
-        var c = Calendar.current; c.firstWeekday = 2
-        let tue = c.date(byAdding: .day, value: 1, to: c.dateInterval(of: .weekOfYear, for: Date())!.start)!
+        let c = Calendar.current, tue = c.date(byAdding: .day, value: 1, to: demoMonday())!
         let start = c.date(bySettingHour: 11, minute: 0, second: 0, of: tue)!
         let f = DateFormatter(); f.dateFormat = "yyyyMMdd'T'HHmmss'Z'"; f.timeZone = TimeZone(identifier: "UTC")
         return """
