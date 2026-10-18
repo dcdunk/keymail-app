@@ -35,6 +35,10 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 ditto .build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework "$APP/Contents/Frameworks/Sparkle.framework"
 cp icon/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+# Full-size icon in the current macOS format (Assets.car); a lone .icns gets drawn smaller in the Dock.
+# icon/AppIcon.icon's art comes from icon/make_full_bleed.swift. actool also refreshes AppIcon.icns for older macOS.
+xcrun actool "$PWD/icon/AppIcon.icon" --compile "$PWD/$APP/Contents/Resources" --app-icon AppIcon --platform macosx --target-device mac \
+  --minimum-deployment-target 14.0 --output-partial-info-plist "$(mktemp -d)/icon.plist" >/dev/null
 # Built-in Google sign-in: users never see Google Cloud. Set GOOGLE_CLIENT_JSON to use a different client file.
 CLIENT="${GOOGLE_CLIENT_JSON:-$HOME/Library/Application Support/Email/google_client.json}"
 if [[ -f "$CLIENT" ]]; then cp "$CLIENT" "$APP/Contents/Resources/google_client.json"
@@ -57,6 +61,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>CFBundleIconName</key><string>AppIcon</string>
   <key>NSAppTransportSecurity</key><dict><key>NSAllowsArbitraryLoadsInWebContent</key><true/></dict>
   <key>NSContactsUsageDescription</key><string>Keymail shows the photo on your own contact card for your iCloud account.</string>
   <key>NSCalendarsFullAccessUsageDescription</key><string>Keymail shows your schedule next to your inbox and turns emails into calendar events.</string>
