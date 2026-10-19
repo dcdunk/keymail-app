@@ -13,33 +13,37 @@ struct WindowOpacity: ViewModifier {
     @AppStorage("windowOpacity") private var opacity = 0.7
     @Environment(\.colorScheme) private var scheme
     func body(content: Content) -> some View {
-        // Slider 0.2…1.0 (same scale as email cards) maps to a tint of 0…1 over the blur.
-        let tint = max(0, (opacity - 0.2) / 0.8)
         content
             .background {
                 ZStack {
-                    BehindWindowBlur(dark: scheme == .dark)
-                    Color(nsColor: .textBackgroundColor).opacity(tint * tint)
+                    // The raw WindowServer blur keeps the wallpaper's colour (monocode's look). The AppKit material
+                    // greys and desaturates it, so it is only the fallback when the private blur is missing.
+                    if !windowBlurAvailable { BehindWindowBlur() }
+                    Color(nsColor: .textBackgroundColor).opacity(Self.tint(opacity))
                 }
                 .ignoresSafeArea()
             }
             .background(ClearWindow(translucent: opacity < 0.999))
     }
+
+    /// Slider 0.2…1.0 (same scale as email cards) maps to 15…100% of Keymail's own background over the blur.
+    /// The 15% floor (monocode's minimum) keeps the window reading as Keymail, slightly see-through, never a bare grey HUD.
+    static func tint(_ opacity: Double) -> Double {
+        0.15 + 0.85 * min(1, max(0, (opacity - 0.2) / 0.8))
+    }
 }
 
-/// The macOS "behind window" blur, the same material sidebars use.
+/// The macOS "behind window" blur. Under-window-background is neutral: it blurs the desktop without adding its own grey,
+/// so the tint above it decides the colour.
 struct BehindWindowBlur: NSViewRepresentable {
-    var dark: Bool
     func makeNSView(context: Context) -> NSVisualEffectView {
         let v = NSVisualEffectView()
         v.blendingMode = .behindWindow
+        v.material = .underWindowBackground
         v.state = .active
         return v
     }
-    func updateNSView(_ v: NSVisualEffectView, context: Context) {
-        // HUD is the smoky dark glass; popover is its light counterpart. Both let the desktop show through.
-        v.material = dark ? .hudWindow : .popover
-    }
+    func updateNSView(_ v: NSVisualEffectView, context: Context) {}
 }
 
 /// Lets the window itself be transparent so the blur shows through.
@@ -52,6 +56,26 @@ struct ClearWindow: NSViewRepresentable {
             w.acceptsMouseMovedEvents = true
             w.isOpaque = !translucent
             w.backgroundColor = translucent ? .clear : .windowBackgroundColor
+            setBackgroundBlur(w, radius: translucent ? 60 : 0)
         }
     }
+}
+
+/// Heavier desktop blur than the material alone gives. Uses the private CoreGraphics call macOS itself uses;
+/// if a future macOS drops it, the lookup fails and the window keeps the normal material blur.
+// ponytail: private API, looked up at runtime so a missing symbol is a no-op, not a crash.
+private let blurSymbols: (UnsafeMutableRawPointer, UnsafeMutableRawPointer)? = {
+    guard let h = dlopen(nil, RTLD_NOW),
+          let conn = dlsym(h, "CGSMainConnectionID"),
+          let set = dlsym(h, "CGSSetWindowBackgroundBlurRadius") else { return nil }
+    return (conn, set)
+}()
+let windowBlurAvailable = blurSymbols != nil
+
+private func setBackgroundBlur(_ window: NSWindow, radius: Int32) {
+    typealias MainConnection = @convention(c) () -> UInt32
+    typealias SetRadius = @convention(c) (UInt32, Int, Int32) -> Int32
+    guard let (conn, set) = blurSymbols else { return }
+    let cid = unsafeBitCast(conn, to: MainConnection.self)()
+    _ = unsafeBitCast(set, to: SetRadius.self)(cid, window.windowNumber, radius)
 }
