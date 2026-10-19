@@ -29,6 +29,7 @@ extension AppStore {
         let e = email.trimmingCharacters(in: .whitespaces).lowercased()
         let found = try await ICloud.findLogin(email: e, password: password)
         Keychain.set(found.password, for: ICloud.keychainKey(e))
+        ICloud.setRejected(e, false)   // a fresh password: sign in again
         state.icloudLogins[e] = found.login
         setAliases(aliases, for: e)
         if !state.accounts.contains(e) { state.accounts.append(e) }

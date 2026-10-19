@@ -37,9 +37,9 @@ public struct Message: Codable, Identifiable, Hashable {
 
     /// Best-effort plain text of the body, for quoting and for the AI prompt.
     public var plainText: String {
-        if let text, !text.isEmpty { return text }
-        guard let html else { return snippet }
-        return plainFromHTML(html)
+        let out: String
+        if let text, !text.isEmpty { out = text } else if let html { out = plainFromHTML(html) } else { out = snippet }
+        return out.replacingOccurrences(of: "\u{FFFC}", with: "")   // an object placeholder (an "OBJ" box), never real text
     }
 }
 

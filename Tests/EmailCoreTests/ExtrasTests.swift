@@ -538,4 +538,9 @@ final class QuotedHTMLTests: XCTestCase {
         XCTAssertFalse(mcpConfigLists("[mcp_servers.keymail-demo]\ncommand = \"\(k)\"\n", name: "keymail", command: k))
         XCTAssertFalse(mcpConfigLists(nil, name: "keymail", command: k), "app not installed")
     }
+
+    func testObjectPlaceholderNeverShowsInQuotesOrAI() {
+        let m = Message(id: "1", threadId: "1", account: "a", from: "Apple <appleid@id.apple.com>", text: "\u{FFFC}\nDear Danny,")
+        XCTAssertEqual(m.plainText, "\nDear Danny,", "Apple's logo placeholder is dropped")
+    }
 }

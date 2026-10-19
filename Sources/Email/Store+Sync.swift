@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import EmailCore
 import CryptoKit
+import Network
 
 extension AppStore {
     // MARK: Sync
@@ -17,12 +18,13 @@ extension AppStore {
         let known = Set(messages.keys)
         for a in state.accounts where !AppFlavor.isDemo {
             if let until = cooldown[a], until > Date() { continue }
+            if ICloud.isRejected(a) { continue }   // said once already; waits for a new app password
             // Gmail checks every 15s (one cheap "what changed" request). iCloud, Yahoo and Outlook stay at 30s:
             // each of their checks signs in again or lists the inbox, and providers throttle frequent polling.
             if scheduled, !isGmail(a), let last = lastSynced[a], Date().timeIntervalSince(last) < 28 { continue }
             lastSynced[a] = Date()
             do { try await sync(a); quotaHits[a] = 0 }
-            catch where (error as? HTTPError)?.isTransient == true || error is URLError {
+            catch where (error as? HTTPError)?.isTransient == true || error is URLError || error is NWError {
                 // Rate limits, Google 5xx and network blips: sit this account out a minute, quietly.
                 // Only speak up if it keeps happening.
                 cooldown[a] = Date().addingTimeInterval(65)

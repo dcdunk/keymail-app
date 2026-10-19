@@ -269,7 +269,7 @@ struct MessageCard: View {
     }
 
     var recipients: String {
-        let to = parseAddresses(message.to).map { store.me.contains($0.email.lowercased()) ? "me" : $0.display }.joined(separator: ", ")
+        let to = parseAddresses(message.to).map { store.me.contains($0.email.lowercased()) ? "me (\($0.email))" : $0.display }.joined(separator: ", ")
         let cc = parseAddresses(message.cc).map(\.display).joined(separator: ", ")
         return "to \(to.isEmpty ? "undisclosed recipients" : to)" + (cc.isEmpty ? "" : " · cc \(cc)")
     }
@@ -363,6 +363,8 @@ struct EmailWebView: NSViewRepresentable {
     }
     func updateNSView(_ v: PassThroughWebView, context: Context) {
         context.coordinator.suspicious = suspicious
+        // U+FFFC is a placeholder some senders (Apple, for its logo) leave in the text; the Mac draws it as an "OBJ" box.
+        let html = html.replacingOccurrences(of: "\u{FFFC}", with: "")
         let page = themed ? Self.wrapThemed(html) : Self.wrap(html, padding: padding, opacity: cardOpacity, dark: dark)
         // Emails that ship their own dark design only show it when the page is in dark appearance.
         if !themed { v.appearance = NSAppearance(named: dark && emailHasOwnDarkMode(html) ? .darkAqua : .aqua) }

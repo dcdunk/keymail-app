@@ -142,12 +142,23 @@ struct ICloud {
         return p
     }
 
+    /// Accounts whose password the server turned down. Keymail stops signing in to them until the password is
+    /// re-entered: Apple locks an Apple Account after repeated failed sign-ins, and a sync every 30 seconds adds up fast.
+    nonisolated(unsafe) private static var rejected = Set<String>()
+    private static let rejectedLock = NSLock()
+    static func isRejected(_ a: String) -> Bool { rejectedLock.withLock { rejected.contains(a) } }
+    static func setRejected(_ a: String, _ on: Bool) { rejectedLock.withLock { if on { rejected.insert(a) } else { rejected.remove(a) } } }
+
     func session<T>(_ body: (IMAPConnection) async throws -> T) async throws -> T {
+        guard !Self.isRejected(account) else { throw SignInRejected(account: account, server: server.name) }
         let c = IMAPConnection(host: server.imapHost)
         defer { c.close() }
         try await c.open()
         do { try await c.command("LOGIN \(imapQuote(login)) \(imapQuote(try password()))") }
-        catch { throw AppError("\(server.name) sign-in failed for \(account): \(error.localizedDescription). Re-add it in Settings → Accounts.") }
+        catch let e as AppError where e.errorDescription?.hasPrefix("Mail server:") == true {   // the server said no
+            Self.setRejected(account, true)
+            throw SignInRejected(account: account, server: server.name)
+        }   // anything else (timeouts, dropped connections) is the network: rethrown as is and retried later
         return try await body(c)
     }
 
@@ -317,5 +328,14 @@ struct ICloud {
             let sent = try await folder(c, "\\Sent", fallback: "Sent Messages")
             try await c.command("APPEND \(imapQuote(sent)) (\\Seen)", literal: raw)
         }
+    }
+}
+
+/// The server turned down the saved app password. Keymail won't try again until it's re-entered.
+struct SignInRejected: LocalizedError {
+    let account: String, server: String
+    var errorDescription: String? {
+        "\(server) turned down the app password for \(account), so Keymail stopped signing in to avoid locking your account. "
+        + "Create a new app password\(server == "Yahoo" ? " in Yahoo Account Security" : " at account.apple.com") and re-add it in Settings → Accounts."
     }
 }

@@ -70,4 +70,16 @@ final class CalendarSourcesTests: XCTestCase {
         host.layoutSubtreeIfNeeded()
         XCTAssertEqual(store.calDays.count, 7, "the store is on week view while the month grid draws")
     }
+
+    /// Apple locks an Apple Account after repeated failed sign-ins, so a turned-down password must stop the retries.
+    func testATurnedDownICloudPasswordIsNotTriedAgain() async {
+        let a = "locked@icloud.example"
+        ICloud.setRejected(a, true); defer { ICloud.setRejected(a, false) }
+        do {
+            _ = try await ICloud(account: a, login: "locked").session { _ in 1 }
+            XCTFail("no sign-in attempt once the password was turned down")
+        } catch { XCTAssertTrue(error is SignInRejected, "fails straight away, without contacting iCloud: \(error)") }
+        XCTAssertTrue(error(SignInRejected(account: a, server: "iCloud")).contains("account.apple.com"))
+    }
+    func error(_ e: Error) -> String { e.localizedDescription }
 }
