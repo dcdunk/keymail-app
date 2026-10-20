@@ -156,11 +156,14 @@ extension AppStore {
         let all = allConversations
         // Drop drafts whose email was answered, archived or followed by a newer one.
         let byId = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        for (id, d) in state.readyDrafts where byId[id].map({ $0.latest.id != d.messageId || !$0.inInbox }) ?? true { state.readyDrafts[id] = nil }
-        let recent = Date().addingTimeInterval(-3 * 86400)
+        let known0 = knownContacts
+        for (id, d) in state.readyDrafts where byId[id].map({ $0.latest.id != d.messageId || !$0.inInbox || (!d.discarded && !looksLikeIndividual($0.latest, known: known0)) }) ?? true {
+            state.readyDrafts[id] = nil   // answered, archived, newer mail, or (since this rule got stricter) not from a person
+        }
+        let recent = Date().addingTimeInterval(-3 * 86400), known = knownContacts
         let todo = all.filter { c in
             c.latest.date > recent && state.readyDrafts[c.id] == nil && !draftsWriting.contains(c.id)
-                && !state.muted.contains(c.id) && needsReply(c, me: me)
+                && !state.muted.contains(c.id) && needsReply(c, me: me) && looksLikeIndividual(c.latest, known: known)
         }.prefix(3)
         for c in todo { await writeReadyDraft(c) }
     }

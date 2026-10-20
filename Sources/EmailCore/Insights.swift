@@ -42,6 +42,37 @@ public func isFromPerson(_ m: Message) -> Bool {
     return autoArchiveCategory(m) == nil && m.calendar == nil
 }
 
+/// Mail that reads like an individual wrote it, not a company: used to decide which emails get a draft written ahead of time.
+/// People you've emailed before always count. Otherwise the sender must look personal: no bulk-mail sending domain
+/// (email.usps.com, mail.salesforce.com…), no role mailbox (techcomms@, service@…), and a name that isn't the company's own.
+public func looksLikeIndividual(_ m: Message, known: Set<String>) -> Bool {
+    guard isFromPerson(m), let a = parseAddresses(m.from).first else { return false }
+    let email = a.email.lowercased()
+    if known.contains(email) { return true }
+    let parts = email.split(separator: "@")
+    guard parts.count == 2 else { return false }
+    let local = String(parts[0]), domain = String(parts[1])
+    let labels = domain.split(separator: ".").map(String.init)
+    let bulkLabels: Set<String> = ["email", "e", "em", "mail", "mailer", "mailing", "news", "info", "notify", "notifications",
+                                   "updates", "marketing", "comms", "alerts", "reply", "bounce", "mg", "send", "messages", "engage"]
+    if labels.dropLast(2).contains(where: bulkLabels.contains) { return false }   // a sending subdomain, not someone's mailbox
+    if ["mailchimp", "sendgrid", "mcsv", "hubspot", "marketo", "salesforce", "exacttarget", "mandrill", "informeddelivery", "google"]
+        .contains(where: { domain.contains($0) }) { return false }
+    let roleWords = ["comms", "digest", "admin", "contact", "service", "care", "help", "reply", "mail", "community", "events",
+                     "sales", "press", "jobs", "careers", "feedback", "survey", "promo", "deals", "offers", "rewards", "store"]
+    if roleWords.contains(where: { local.contains($0) }) { return false }
+    // "Salesforce Security" at salesforce.com, "USPS Informed Delivery": the name is the company, not a person.
+    let name = a.name.lowercased()
+    if !name.isEmpty {
+        let brand = labels.count >= 2 ? labels[labels.count - 2] : domain
+        if name.replacingOccurrences(of: " ", with: "").contains(brand) || brand.contains(name.replacingOccurrences(of: " ", with: "")) { return false }
+        let companyWords = ["team", "support", "delivery", "security", "notification", "alert", "update", "news", "billing", "account",
+                            "customer", "informed", "inc", "llc", "ltd", "corp", "group", "club", "store", "shop", "the ", "app", "hq", "daily", "weekly"]
+        if companyWords.contains(where: { name.contains($0) }) { return false }
+    }
+    return true
+}
+
 /// The latest email is from a person, written to you directly (To, not just Cc), and you haven't answered it.
 public func needsReply(_ c: Conversation, me: Set<String>) -> Bool {
     let m = c.latest

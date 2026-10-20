@@ -790,6 +790,11 @@ extension CoreFlowsTests {
         XCTAssertEqual(store.pendingSends.last?.draft.body.hasPrefix("On it."), true, "⌘↵ sends it, with Undo Send")
         press("z", code: 6, .command); store.composing = nil
         store.state.readyDrafts[c.id] = ReadyDraft(messageId: c.latest.id, text: "Maybe.", why: [], written: Date())
+        press("#", code: 20, .shift)
+        XCTAssertNil(store.state.readyDrafts[c.id], "deleting the email deletes its ready draft")
+        press("z", code: 6, .command)
+        store.state.readyDrafts[c.id] = ReadyDraft(messageId: c.latest.id, text: "Maybe.", why: [], written: Date())
+        store.selectedID = c.id
         runCommand("Throw away ready draft")
         XCTAssertNil(store.readyDraft(c), "Throw away removes it")
         XCTAssertTrue(store.state.readyDrafts[c.id]?.discarded == true, "and Keymail won't write another for this email")
@@ -810,5 +815,16 @@ extension CoreFlowsTests {
         press("/", code: 44); XCTAssertTrue(store.searchOpen, "/ goes back to the search box")
         let before = store.searchFocus
         press("/", code: 44); XCTAssertEqual(store.searchFocus, before + 1, "/ with the bar already open puts the cursor back in it")
+    }
+
+    func testEmailsWithADraftStayInTheInbox() throws {
+        let c = try XCTUnwrap(store.allConversations.first { needsReply($0, me: store.me) })
+        let before = store.shownTabs.first { (store.tabMembers[$0] ?? []).contains { $0.id == c.id } }
+        store.state.splits.append(Split(name: "Needs reply", query: "is:drafted"))   // as first shipped, without "also in inbox"
+        store.state = try JSONDecoder().decode(SavedState.self, from: JSONEncoder().encode(store.state))   // reload, like a relaunch
+        store.state.readyDrafts[c.id] = ReadyDraft(messageId: c.latest.id, text: "Yes.", why: [], written: Date())
+        XCTAssertTrue((store.tabMembers["Needs reply"] ?? []).contains { $0.id == c.id }, "it's in Needs reply")
+        let tab = try XCTUnwrap(before)
+        XCTAssertTrue((store.tabMembers[tab] ?? []).contains { $0.id == c.id }, "and still in \(tab)")
     }
 }

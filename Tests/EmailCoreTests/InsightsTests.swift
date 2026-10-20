@@ -63,4 +63,18 @@ final class InsightsTests: XCTestCase {
         XCTAssertTrue(matchesQuery("is:drafted", c, QueryContext(drafted: [c.id])))
         XCTAssertFalse(matchesQuery("is:drafted", c, QueryContext()))
     }
+
+    func testDraftsLeanToIndividualPeople() {
+        func from(_ f: String) -> Message { m("x", f) }
+        XCTAssertTrue(looksLikeIndividual(from("Priya Shah <priya@seedfund.example>"), known: []))
+        XCTAssertTrue(looksLikeIndividual(from("Jordan Lee <jordan.lee@gmail.com>"), known: []))
+        XCTAssertFalse(looksLikeIndividual(from("USPS Informed Delivery <USPSInformeddelivery@email.informeddelivery.usps.com>"), known: []))
+        XCTAssertFalse(looksLikeIndividual(from("Salesforce Security <techcomms@mail.salesforce.com>"), known: []))
+        XCTAssertFalse(looksLikeIndividual(from("Google <no-reply@accounts.google.com>"), known: []))
+        XCTAssertFalse(looksLikeIndividual(from("Google Workspace Team <workspace-noreply@google.com>"), known: []))
+        XCTAssertFalse(looksLikeIndividual(from("Etsy <transaction@etsy.com>"), known: []), "a company writing as itself")
+        XCTAssertFalse(looksLikeIndividual(from("Customer Care <care@bank.example>"), known: []))
+        XCTAssertTrue(looksLikeIndividual(from("Sam <sam@mail.bigco.example>"), known: ["sam@mail.bigco.example"]),
+                      "someone you've emailed before always counts")
+    }
 }

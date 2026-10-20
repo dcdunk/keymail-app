@@ -32,6 +32,10 @@ struct ThreadView: View {
         }
     }
 
+    @ViewBuilder var readyDraft: some View {
+        if store.composing?.context?.id != conversation.id { ReadyDraftCard(conversation: conversation) }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
@@ -61,13 +65,13 @@ struct ThreadView: View {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     let all = conversation.messages, single = all.count == 1
                     // Inline reply (Settings → General): above the newest email when newest is on top, else below it.
-                    if newestFirst { inlineReply }
+                    // The ready draft sits where your reply would go: above the newest email or below it.
+                    if newestFirst { inlineReply; readyDraft }
                     ForEach(newestFirst ? all.reversed() : all) { m in
                         if store.isOpen(m, in: conversation) || single { MessageCard(message: m, collapsible: !single) { store.threadToggled.formSymmetricDifference([m.key]) } }
                         else { CollapsedMessage(message: m) { store.threadToggled.formSymmetricDifference([m.key]) } }
                     }
-                    if !newestFirst { inlineReply }
-                    if store.composing?.context?.id != conversation.id { ReadyDraftCard(conversation: conversation) }
+                    if !newestFirst { inlineReply; readyDraft }
                 }
                 .frame(maxWidth: 960)               // emails stay readable on big monitors
                 .frame(maxWidth: .infinity)

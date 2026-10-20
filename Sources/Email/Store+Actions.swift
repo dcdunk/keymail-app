@@ -144,6 +144,7 @@ extension AppStore {
         undoStack.append((c, .trash))
         banner = "Moved to Trash. ⌘Z to undo."
         for m in c.messages { messages[m.key] = nil }
+        state.readyDrafts[c.id] = nil   // a reply Keymail wrote for it goes too
         Task {
             do {
                 if isICloud(c.account) { try await icloud(c.account).move(c.messages.map(\.id).filter { Int($0) != nil }, toTrash: true) }

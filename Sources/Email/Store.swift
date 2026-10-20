@@ -99,6 +99,8 @@ struct SavedState: Codable {
         microsoft = v(.microsoft, base.microsoft)
         eventLinks = v(.eventLinks, base.eventLinks)
         readyDrafts = v(.readyDrafts, base.readyDrafts); cleanupKept = v(.cleanupKept, base.cleanupKept)
+        // "Needs reply" first shipped without "also in the inbox", which hid drafted emails from Important/Other.
+        for i in splits.indices where splits[i].query == "is:drafted" { splits[i].alsoInMain = true }
         // Accounts connected during the sign-in preview join the inbox now that mail reading exists.
         for a in microsoftPreview where !accounts.contains(a) { accounts.append(a); microsoft.append(a) }
         microsoftPreview = []

@@ -26,7 +26,7 @@ public let splitLibrary: [Split] = [
     Split(name: "News", query: ""),
     Split(name: "Calendar", query: "from:calendar-notification@google.com OR from:notifications@calendly.com OR has:ics"),
     Split(name: "Reminders", query: "is:reminder"),
-    Split(name: "Needs reply", query: "is:drafted"),
+    Split(name: "Needs reply", query: "is:drafted", alsoInMain: true),   // a draft never takes the email out of the inbox
 ]
 
 public struct QueryContext {

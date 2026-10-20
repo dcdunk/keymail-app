@@ -335,9 +335,11 @@ struct ReadyDraftCard: View {
                 }
                 .font(.scaled(.callout))
             }
-            .padding(14)
-            .glass(RoundedRectangle(cornerRadius: 12), tint: Theme.accent.opacity(0.12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.accent.opacity(0.3)))
+            // Same width, padding and corners as an email card, with an accent edge so it reads as yours.
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(18)
+            .background(RoundedRectangle(cornerRadius: 14).fill(Theme.accent.opacity(0.06)))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.accent.opacity(0.3)))
         } else if store.draftsWriting.contains(conversation.id) {
             HStack(spacing: 8) { ProgressView().controlSize(.small); Text("\(store.ai.name) is writing a draft reply…") }
                 .font(.scaled(.callout)).foregroundStyle(.secondary)

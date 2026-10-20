@@ -95,7 +95,9 @@ extension AppStore {
             var toFetch: [String] = []
             for (id, info) in delta.changed {
                 if messages["\(a)|\(id)"] != nil { messages["\(a)|\(id)"]?.labelIds = info.labels }
-                else if info.labels.contains("INBOX") || cachedThreads.contains(info.threadId) { toFetch.append(id) }
+                // New inbox mail, replies in threads already here, and mail you sent from anywhere (Gmail on the web,
+                // your phone) so Sent matches Gmail.
+                else if info.labels.contains("INBOX") || info.labels.contains("SENT") || cachedThreads.contains(info.threadId) { toFetch.append(id) }
             }
             for m in await g.messages(toFetch) { messages[m.key] = m }
             state.historyIds[a] = result.latest
