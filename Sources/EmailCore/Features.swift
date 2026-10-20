@@ -26,6 +26,7 @@ public let splitLibrary: [Split] = [
     Split(name: "News", query: ""),
     Split(name: "Calendar", query: "from:calendar-notification@google.com OR from:notifications@calendly.com OR has:ics"),
     Split(name: "Reminders", query: "is:reminder"),
+    Split(name: "Needs reply", query: "is:drafted"),
 ]
 
 public struct QueryContext {
@@ -33,8 +34,9 @@ public struct QueryContext {
     public var teamDomains: Set<String> = []      // your non-Gmail domains
     public var reminded: Set<String> = []          // conversation ids returned by a reminder
     public var importance: [String: Bool] = [:]   // overrides keyed by conversation id, email or domain
-    public init(labelNames: [String: String] = [:], teamDomains: Set<String> = [], reminded: Set<String> = [], importance: [String: Bool] = [:]) {
-        self.labelNames = labelNames; self.teamDomains = teamDomains; self.reminded = reminded; self.importance = importance
+    public var drafted: Set<String> = []           // conversation ids with a reply draft written ahead of time
+    public init(labelNames: [String: String] = [:], teamDomains: Set<String> = [], reminded: Set<String> = [], importance: [String: Bool] = [:], drafted: Set<String> = []) {
+        self.labelNames = labelNames; self.teamDomains = teamDomains; self.reminded = reminded; self.importance = importance; self.drafted = drafted
     }
 }
 
@@ -82,6 +84,7 @@ func termMatches(_ term: String, _ m: Message, _ c: Conversation, _ ctx: QueryCo
         case "unread": return m.labelIds.contains("UNREAD")
         case "starred": return m.labelIds.contains("STARRED")
         case "reminder": return ctx.reminded.contains(c.id)
+        case "drafted": return ctx.drafted.contains(c.id)
         case "team":
             return parseAddresses(m.from).contains { a in
                 ctx.teamDomains.contains(a.email.lowercased().split(separator: "@").last.map(String.init) ?? "")

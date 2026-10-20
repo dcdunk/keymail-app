@@ -35,7 +35,7 @@ struct SettingsPanel: View {
         .init(id: "appearance", title: "Appearance", icon: "textformat.size", group: "Personalize", keywords: "draft compose buttons icons links appearance text font size bigger larger zoom dark light email content opacity glass window card",
               items: ["Inbox layout", "Text size", "Appearance", "Email content", "Draft buttons", "Window opacity", "Email card opacity"]),
         .init(id: "hotkeys", title: "Hotkeys", icon: "keyboard", group: "Personalize", keywords: "keyboard shortcuts keys commands customize remap"),
-        .init(id: "ai", title: "AI providers", icon: "sparkles", group: "Personalize", keywords: "claude codex gemini write summarize instant reply"),
+        .init(id: "ai", title: "AI providers", icon: "sparkles", group: "Personalize", keywords: "claude codex gemini write summarize instant reply drafts ahead ready draft"),
         .init(id: "agents", title: "MCP", icon: "point.3.connected.trianglepath.dotted", group: "Personalize", keywords: "mcp claude desktop chatgpt codex gemini agent connect automation"),
         .init(id: "about", title: "About", icon: "info.circle", group: "", keywords: "version updates privacy help"),
     ]

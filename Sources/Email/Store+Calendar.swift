@@ -19,6 +19,7 @@ extension AppStore {
     func calSource(_ id: String) -> CalSource? { calSources.first { $0.id == id } }
 
     func openCalendar() {
+        toolScreen = nil
         guard calendarEnabled else { return }
         calendarOpen = true
         calSelected = nil

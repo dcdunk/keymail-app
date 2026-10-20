@@ -114,8 +114,13 @@ extension AppStore {
             if n <= state.accounts.count { switchAccount(state.accounts[n - 1]); return true }
         }
         if cmd, ch == "r" { Task { await tick() }; if calendarOpen { reloadCalendar() }; return true }
-        if cmd, ch == "z", !e.modifierFlags.contains(.shift), !(NSApp.keyWindow?.firstResponder is NSTextView) { undo(); return true }
+        if cmd, ch == "z", !e.modifierFlags.contains(.shift), !(NSApp.keyWindow?.firstResponder is NSTextView) {
+            if !(toolScreen != nil && undoCleanup()) { undo() }
+            return true
+        }
+        if cmd, code == 36, toolScreen == nil, let c = selected, readyDraft(c) != nil { sendReadyDraft(); return true }   // ⌘↵ sends the ready draft
         if cmd { return false }
+        if toolScreen != nil, !(NSApp.keyWindow?.firstResponder is NSTextView) { return handleToolKey(code: code, ch: ch) }
         if calendarOpen, quickAddOpen, !(NSApp.keyWindow?.firstResponder is NSTextView) {
             if code == 53 { quickAddOpen = false }   // its text box lost the keyboard: Esc still closes it, nothing else leaks
             return true
@@ -172,7 +177,10 @@ extension AppStore {
         case (_, "g"): pendingG = Date()
         case (_, "e"): markDone()
         case (_, "c"): compose()
-        case (_, "r"): if let c = selected, let d = myDraft(in: c) { openDraft(c, message: d) } else { reply(all: false) }
+        case (_, "r"):
+            if let c = selected, let d = myDraft(in: c) { openDraft(c, message: d) }
+            else if let c = selected, readyDraft(c) != nil { editReadyDraft() }   // the reply Keymail wrote ahead of time
+            else { reply(all: false) }
         case (_, "a"): reply(all: true)
         case (_, "f"): forward()
         case (_, "s"): toggleStar()
@@ -182,7 +190,7 @@ extension AppStore {
         case (_, "b"): createEventFromEmail()
         case (_, "l"): openPalette("label")
         case (_, "i"): summarize()
-        case (_, "/"): searchOpen = true
+        case (_, "/"): if searchOpen { searchFocus += 1 } else { searchOpen = true }
         default: return false
         }
         return true

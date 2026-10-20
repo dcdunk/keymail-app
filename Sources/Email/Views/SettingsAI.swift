@@ -14,11 +14,24 @@ struct AIProviderSettings: View {
     @State private var status: [String: String] = [:]      // id → last test result
     @State private var testing: String?
     @State private var customizing: Set<String> = []       // providers showing the "Other…" model field
+    @AppStorage("readyDrafts") private var readyDrafts = false
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("AI providers").font(.scaled(.headline))
             Text("Keymail uses an AI command-line tool that's already signed in on this Mac, billed to that tool's own plan. It runs read-only: email content can only produce text, never run commands or change files.")
                 .font(.scaled(.callout)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Toggle(isOn: Binding(get: { readyDrafts }, set: { on in
+                // Turning it on asks once before any email goes to the AI tool, like the other AI features.
+                readyDrafts = on && store.aiConsent(store.ai)
+                if readyDrafts, !store.state.splits.contains(where: { $0.name == "Needs reply" }),
+                   let s = splitLibrary.first(where: { $0.name == "Needs reply" }) { store.state.splits.append(s) }
+                if readyDrafts { Task { await store.writeReadyDrafts() } }
+            })) {
+                Text("Write drafts ahead of time")
+                Text("When an email needs your reply, \(store.ai.name) writes one in your style before you open it. It waits under the email with a Draft tag; nothing sends until you press Send. Uses your AI plan for each email that needs a reply.")
+            }
+            .toggleStyle(.switch).padding(12)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.04))).settingAnchor("Write drafts ahead of time")
             List {
                 ForEach(AIProvider.all) { p in
                     let isOn = store.state.aiProvider == p.id
@@ -34,12 +47,12 @@ struct AIProviderSettings: View {
                                 if isOn { Text("In use").font(.scaled(.caption).weight(.semibold)).foregroundStyle(Theme.accent) }
                             }
                             statusLine(p)
-                            if installed[p.id] != nil {
+                            if path(p) != nil {
                                 modelPicker(p)
                             }
                         }
                         Spacer()
-                        if installed[p.id] == nil {
+                        if path(p) == nil {
                             Button("Get it") { NSWorkspace.shared.open(URL(string: p.installURL)!) }.quiet()
                         } else {
                             Button(testing == p.id ? "Testing…" : "Test") { test(p) }.quiet().disabled(testing != nil)
@@ -53,18 +66,21 @@ struct AIProviderSettings: View {
         }
         .padding(24)
         .task {
-            for p in AIProvider.all {
+            for p in AIProvider.all where path(p) == nil {
                 let path = await Task.detached { AI.binary(p.binary) }.value
                 if let path { installed[p.id] = path }
             }
         }
     }
 
+    /// Where the tool is: the usual install folders are checked right here (instant), a login-shell lookup fills in the rest.
+    func path(_ p: AIProvider) -> String? { installed[p.id] ?? AI.knownBinary(p.binary) }
+
     @ViewBuilder func statusLine(_ p: AIProvider) -> some View {
         if let s = status[p.id] {
             Label(s, systemImage: s == "Connected" ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .font(.scaled(.caption)).foregroundStyle(s == "Connected" ? .green : .orange).fixedSize(horizontal: false, vertical: true)
-        } else if let path = installed[p.id] {
+        } else if let path = path(p) {
             Text("Installed at \(path) · press Test to check sign-in").font(.scaled(.caption)).foregroundStyle(.secondary)
         } else {
             Text("Not installed").font(.scaled(.caption)).foregroundStyle(.secondary)

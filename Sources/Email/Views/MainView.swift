@@ -30,7 +30,7 @@ struct MainView: View {
                 Group { if store.calendarOpen { CalendarListPanel() } else { FolderPanel() } }
                     .transition(.move(edge: .leading).combined(with: .opacity))
             }
-            if store.calendarOpen { CalendarScreen() } else {
+            if store.calendarOpen { CalendarScreen() } else if let t = store.toolScreen { ToolScreenView(screen: t) } else {
             VStack(spacing: 0) {
                 Header().zIndex(1) // search dropdown must draw above the list below it
                     // Settings covers the top bar; its ✕ sits on the account capsule, which must not steal the click.
@@ -46,12 +46,13 @@ struct MainView: View {
             // The context panel needs room; narrow windows hide it automatically.
             if store.contextVisible, layout.width >= 1100 {
                 if store.calendarOpen { CalendarContextPanel().transition(.move(edge: .trailing).combined(with: .opacity)) }
-                else if let c = store.selected { ContextPanel(conversation: c).transition(.move(edge: .trailing).combined(with: .opacity)) }
+                else if store.toolScreen == nil, let c = store.selected { ContextPanel(conversation: c).transition(.move(edge: .trailing).combined(with: .opacity)) }
             }
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: store.sidebarOpen)
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: store.contextOpen)
         .animation(.easeOut(duration: 0.2), value: store.calendarOpen)
+        .animation(.easeOut(duration: 0.2), value: store.toolScreen)
         .overlayPreferenceValue(CoachAnchorKey.self) { anchors in
             GeometryReader { proxy in CoachTips(anchors: anchors, proxy: proxy) }
         }
@@ -290,6 +291,11 @@ struct Row: View {
                         .foregroundStyle(Theme.chip(name))
                         .padding(.horizontal, 7).padding(.vertical, 2)
                         .background(RoundedRectangle(cornerRadius: 5).fill(Theme.chip(name).opacity(0.12)))
+                }
+                if store.readyDraft(c) != nil {
+                    Label("Draft", systemImage: "pencil.line").font(.scaled(size: 12, weight: .semibold)).foregroundStyle(Theme.accent)
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(Capsule().fill(Theme.accent.opacity(0.14))).help("A reply is written and waiting")
                 }
                 Text(c.latest.subject).font(.scaled(size: 15, weight: unread ? .semibold : .regular)).lineLimit(1).layoutPriority(1)
                 Text(c.latest.snippet).font(.scaled(size: 15)).foregroundStyle(Theme.muted).lineLimit(1)

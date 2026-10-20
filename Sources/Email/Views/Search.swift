@@ -94,6 +94,7 @@ struct TokenSearchBar: View {
     @EnvironmentObject var store: AppStore
     @FocusState private var focused: Bool
     @State private var highlight: Int? = nil
+    @State private var released = false   // the search ran: the keyboard belongs to the results until you click or press /
 
     // Suggestions and quick matches are worked out a moment after you stop typing (not on every keystroke and every
     // redraw), using each email's cached searchable text.
@@ -133,10 +134,11 @@ struct TokenSearchBar: View {
                     .textFieldStyle(.plain).focused($focused)
                     // Focus once the bar is on screen: setting it during the "/" keypress itself was ignored.
                     .onAppear { DispatchQueue.main.async { focused = true }; DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { focused = true } }
-                    .onChange(of: store.searchOpen) { _, open in if open { DispatchQueue.main.async { focused = true } } }
+                    .onChange(of: store.searchOpen) { _, open in if open { released = false; DispatchQueue.main.async { focused = true } } }
+                    .onChange(of: store.searchFocus) { _, _ in released = false; focused = true }
                     .onChange(of: store.searchText) { _, _ in highlight = nil }
                     // Keep typing focus here when chips change, so Backspace keeps working on chips.
-                    .onChange(of: store.search) { _, _ in if store.searchOpen { focused = true } }
+                    .onChange(of: store.search) { _, _ in if store.searchOpen, !released { focused = true } }
                     // ↑↓ walk the suggestions, then on into the "Emails" matches below them.
                     .onKeyPress(.downArrow) { highlight = min((highlight ?? -1) + 1, list.count + quickMatches.count - 1); return .handled }
                     .onKeyPress(.upArrow) { highlight = (highlight ?? 0) > 0 ? highlight! - 1 : nil; return .handled }
@@ -148,7 +150,7 @@ struct TokenSearchBar: View {
                         let matches = quickMatches
                         if let h = highlight, list.indices.contains(h) { lock(list[h]) }
                         else if let h = highlight, matches.indices.contains(h - list.count) { jump(matches[h - list.count]) }
-                        else { store.runSearch() }
+                        else { released = true; store.runSearch() }
                         return .handled
                     }
                     .onKeyPress(.delete) {
@@ -164,7 +166,7 @@ struct TokenSearchBar: View {
             .padding(.horizontal, 14).padding(.vertical, 9)
             // The whole capsule is clickable: padding and gaps between chips put the cursor in the box too.
             .contentShape(Capsule())
-            .onTapGesture { focused = true }
+            .onTapGesture { released = false; focused = true }
             .glass(Capsule())
         }
         .frame(maxWidth: 680)

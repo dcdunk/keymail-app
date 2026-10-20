@@ -39,7 +39,27 @@ extension AppStore {
             }
             return list
         }
+        if let t = toolScreen {
+            list = [Command(title: "Go to Inbox", key: "Esc") { self.closeTool() },
+                    Command(title: t == .cleanup ? "Insights" : "Clean up senders") { self.openTool(t == .cleanup ? .insights : .cleanup) }]
+            if t == .cleanup {
+                for f in CleanupFilter.allCases { list.append(Command(title: "Show: \(f.rawValue)") { self.cleanupFilter = f; self.cleanupIndex = 0 }) }
+            } else {
+                for d in [7, 30, 90] { list.append(Command(title: "Insights: last \(d) days") { self.insightsDays = d }) }
+            }
+            return list
+        }
+        list.append(Command(title: "Clean up senders") { self.openTool(.cleanup) })
+        list.append(Command(title: "Insights") { self.openTool(.insights) })
         if calendarEnabled { list.append(Command(title: "Go to Calendar", key: "G C") { self.openCalendar() }) }
+        if let c = selected, readyDraft(c) != nil {
+            list += [Command(title: "Send ready draft", key: "⌘↵") { self.sendReadyDraft() },
+                     Command(title: "Edit ready draft", key: Hotkeys.label("r")) { self.editReadyDraft() },
+                     Command(title: "Write ready draft again") { self.rewriteReadyDraft() },
+                     Command(title: "Throw away ready draft") { self.discardReadyDraft() }]
+        } else if let c = selected, Self.readyDraftsOn, needsReply(c, me: me) {
+            list.append(Command(title: "Write a reply draft with \(ai.name)") { self.rewriteReadyDraft() })
+        }
         if calendarEnabled, let c = selected {
             list.append(Command(title: "Block time on the calendar for this email") { self.startPlacing(c.id) })
         }

@@ -67,6 +67,7 @@ struct ThreadView: View {
                         else { CollapsedMessage(message: m) { store.threadToggled.formSymmetricDifference([m.key]) } }
                     }
                     if !newestFirst { inlineReply }
+                    if store.composing?.context?.id != conversation.id { ReadyDraftCard(conversation: conversation) }
                 }
                 .frame(maxWidth: 960)               // emails stay readable on big monitors
                 .frame(maxWidth: .infinity)

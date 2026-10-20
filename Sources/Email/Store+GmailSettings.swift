@@ -223,21 +223,11 @@ extension AppStore {
     }
 
     func unsubscribe() {
-        guard let m = selected?.messages.last(where: { !$0.listUnsubscribe.isEmpty }) else { banner = "This sender has no unsubscribe link."; return }
-        switch unsubscribeAction(header: m.listUnsubscribe, oneClickPost: m.listUnsubscribePost) {
-        case .oneClick(let url):
-            var req = URLRequest(url: url); req.httpMethod = "POST"
-            req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-            req.httpBody = Data("List-Unsubscribe=One-Click".utf8)
-            Task {
-                let ok = ((try? await URLSession.shared.data(for: req))?.1 as? HTTPURLResponse).map { $0.statusCode < 400 } ?? false
-                banner = ok ? "Unsubscribed." : "Unsubscribe failed. Opening the link instead."
-                if !ok { NSWorkspace.shared.open(url) }
-            }
-            markDone()
-        case .open(let url): NSWorkspace.shared.open(url); markDone()
-        case .none: banner = "This sender has no unsubscribe link."
+        guard let m = selected?.messages.last(where: { !$0.listUnsubscribe.isEmpty }), unsubscribe(using: m) else {
+            banner = "This sender has no unsubscribe link."; return
         }
+        banner = "Unsubscribed."
+        markDone()
     }
 }
 

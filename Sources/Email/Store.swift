@@ -67,6 +67,8 @@ struct SavedState: Codable {
     var microsoftPreview: [String] = []        // old preview list; moved into `accounts` on load
     var microsoft: [String] = []               // which accounts are Microsoft (Outlook.com, Hotmail, Microsoft 365)
     var eventLinks: [String: String] = [:]     // calendar event (UID, or "title|minute") → conversation id it came from
+    var readyDrafts: [String: ReadyDraft] = [:] // conversation id → reply written ahead of time
+    var cleanupKept: [String] = []             // senders Clean up no longer lists ("Keep")
 
     init() {}
     /// Tolerates missing keys so adding a setting never wipes your accounts and splits.
@@ -96,6 +98,7 @@ struct SavedState: Codable {
         microsoftPreview = v(.microsoftPreview, base.microsoftPreview)
         microsoft = v(.microsoft, base.microsoft)
         eventLinks = v(.eventLinks, base.eventLinks)
+        readyDrafts = v(.readyDrafts, base.readyDrafts); cleanupKept = v(.cleanupKept, base.cleanupKept)
         // Accounts connected during the sign-in preview join the inbox now that mail reading exists.
         for a in microsoftPreview where !accounts.contains(a) { accounts.append(a); microsoft.append(a) }
         microsoftPreview = []
@@ -277,6 +280,15 @@ final class AppStore: ObservableObject {
     let calendar = CalendarService()
     // Calendar screen (g c). Its view, week start, default calendar and hidden calendars live in UserDefaults.
     @Published var calendarOpen = false
+    @Published var searchFocus = 0                    // bumped by / to put the cursor back in an open search bar
+    @Published var toolScreen: ToolScreen?          // Clean up senders or Insights, in place of the inbox (⌘K)
+    @Published var cleanupFilter = CleanupFilter.most
+    @Published var cleanupIndex = 0
+    @Published var cleanupSelected: Set<String> = []
+    @Published var cleanupDone: [String: String] = [:]   // sender → what just happened ("Unsubscribed", "Archived 12")
+    var cleanupUndo: (senders: [String], conversations: [Conversation])?
+    @Published var insightsDays = 30
+    @Published var draftsWriting: Set<String> = []  // conversation ids whose ready draft is being written
     @Published var calDate = Date()                  // the day the view is built around
     @Published var calEvents: [CalEvent] = []        // what the current view shows
     @Published var calUpcoming: [CalEvent] = []      // the next 7 days, for the context panel

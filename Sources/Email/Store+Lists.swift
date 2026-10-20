@@ -44,7 +44,8 @@ extension AppStore {
     func context(_ all: [Conversation]) -> QueryContext {
         let freeMail: Set<String> = ["gmail.com", "googlemail.com"]
         let domains = Set(state.accounts.compactMap { $0.lowercased().split(separator: "@").last.map(String.init) }).subtracting(freeMail)
-        return QueryContext(labelNames: labelNames, teamDomains: domains, reminded: reminded(all), importance: state.importance)
+        let drafted = Set(all.filter { readyDraft($0) != nil }.map(\.id))
+        return QueryContext(labelNames: labelNames, teamDomains: domains, reminded: reminded(all), importance: state.importance, drafted: drafted)
     }
 
     /// Inbox conversations grouped by tab, computed once per render.

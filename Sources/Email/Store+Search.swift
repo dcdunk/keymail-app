@@ -28,6 +28,8 @@ extension AppStore {
         guard !search.isEmpty else { return }
         searchFiltersOpen = false
         runQuery(gmailQuery(search), title: "Search: " + search.chips.joined(separator: " · "), local: search)
+        // Hand the keyboard to the results: ↑↓ browse them, ← → open the side panels. Click the bar or press / to type again.
+        DispatchQueue.main.async { NSApp.keyWindow?.makeFirstResponder(nil) }
     }
 
     func goFolder(_ name: String) {

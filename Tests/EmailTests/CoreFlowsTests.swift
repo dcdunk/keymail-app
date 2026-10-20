@@ -10,6 +10,7 @@ import EmailCore
 ///  2. Every keyboard command and the mouse actions on rows work.
 ///  3. ⌘K puts the cursor straight into the palette's text box.
 ///  4. The calendar: G C / G I and the top-bar button switch views, and every calendar key works.
+///  5. Clean up senders and Insights open from ⌘K, and their keys work; ready drafts send, edit and go away.
 /// Runs against an isolated store (temp folder, throwaway Keymail key; see AppFlavor.isTesting), never real mail.
 @MainActor
 final class CoreFlowsTests: XCTestCase {
@@ -39,7 +40,7 @@ final class CoreFlowsTests: XCTestCase {
     }
     func resetUI() {
         store.composing = nil; store.paletteOpen = false; store.searchOpen = false; store.closePopup()
-        store.closeCalendar()
+        store.closeCalendar(); store.closeTool()
         store.sidebarOpen = false
         store.threadOpen = false; store.folder = nil; store.searchResults = nil; store.summary = nil
         store.goTab(store.shownTabs.first ?? ""); store.selectedID = store.visible.first?.id
@@ -720,4 +721,94 @@ extension CoreFlowsTests {
 private struct PaletteHost: View {
     @EnvironmentObject var store: AppStore
     var body: some View { Color.clear.overlay(alignment: .top) { if store.paletteOpen { PaletteView() } } }
+
+}
+
+@MainActor
+extension CoreFlowsTests {
+    // MARK: Clean up senders, Insights, ready drafts
+
+    func runCommand(_ title: String) {
+        store.openPalette(title)
+        guard let i = store.filteredCommands.firstIndex(where: { $0.title == title }) else { return XCTFail("⌘K has \"\(title)\"") }
+        store.runPalette(i)
+    }
+
+    func testCleanUpAndInsightsOpenFromThePaletteAndEscGoesBack() {
+        runCommand("Clean up senders")
+        XCTAssertEqual(store.toolScreen, .cleanup, "⌘K → Clean up senders")
+        press("\u{1b}", code: 53); XCTAssertNil(store.toolScreen, "Esc goes back to the inbox")
+        runCommand("Insights")
+        XCTAssertEqual(store.toolScreen, .insights, "⌘K → Insights")
+        runCommand("Clean up senders"); XCTAssertEqual(store.toolScreen, .cleanup, "and from there to Clean up")
+        press("c", code: 8); XCTAssertNil(store.composing, "inbox keys don't leak into Clean up")
+        press("g", code: 5); press("c", code: 8)
+        XCTAssertTrue(store.calendarOpen, "G C still goes to the calendar"); XCTAssertNil(store.toolScreen)
+        store.closeCalendar(); store.openTool(.insights)
+        press("g", code: 5); press("i", code: 34); XCTAssertNil(store.toolScreen, "G I goes back to the inbox")
+    }
+
+    func testCleanUpKeysSelectArchiveKeepAndUndo() {
+        let news = "hello@productweekly.example"
+        store.openTool(.cleanup)
+        let list = store.cleanupSenders
+        let i = try! XCTUnwrap(list.firstIndex { $0.email == news }, "the sample newsletter is listed")
+        store.cleanupIndex = 0
+        for _ in 0..<i { press("j", code: 38) }
+        XCTAssertEqual(store.cleanupIndex, i, "J moves down the senders")
+        press("k", code: 40); press("j", code: 38); XCTAssertEqual(store.cleanupIndex, i, "K moves up")
+        press("x", code: 7); XCTAssertEqual(store.cleanupSelected, [news], "X selects")
+        press("x", code: 7); XCTAssertTrue(store.cleanupSelected.isEmpty, "X again unselects")
+        press("e", code: 14)
+        XCTAssertTrue(store.inboxConversations(from: news).isEmpty, "E archives everything from the sender")
+        press("z", code: 6, .command)
+        XCTAssertFalse(store.inboxConversations(from: news).isEmpty, "⌘Z puts it back")
+        press("u", code: 32)
+        XCTAssertTrue(store.inboxConversations(from: news).isEmpty, "U unsubscribes and archives")
+        XCTAssertEqual(store.cleanupDone[news]?.hasPrefix("Unsubscribed"), true)
+        press("z", code: 6, .command)
+        let sender = store.cleanupSenders[0].email
+        store.cleanupIndex = 0
+        press("s", code: 1)
+        XCTAssertTrue(store.state.cleanupKept.contains(sender), "S keeps a sender")
+        XCTAssertFalse(store.cleanupSenders.contains { $0.email == sender }, "kept senders leave the list")
+        press("\t", code: 48); XCTAssertEqual(store.cleanupFilter, .never, "Tab switches the filter")
+    }
+
+    func testReadyDraftSendsEditsAndGoesAway() throws {
+        let c = try XCTUnwrap(store.allConversations.first { needsReply($0, me: store.me) }, "the sample inbox has an email that needs a reply")
+        store.state.readyDrafts[c.id] = ReadyDraft(messageId: c.latest.id, text: "Sounds good, see you then.", why: ["Your writing style"], written: Date())
+        store.selectedID = c.id; store.open(c)
+        XCTAssertNotNil(store.readyDraft(c))
+        XCTAssertTrue(store.commands.contains { $0.title == "Send ready draft" }, "⌘K offers the ready draft")
+        press("r", code: 15)
+        XCTAssertEqual(store.composing?.draft.body.hasPrefix("Sounds good, see you then."), true, "R opens the ready draft to edit")
+        XCTAssertNil(store.readyDraft(c), "and it moves into the reply")
+        store.composing = nil
+        store.state.readyDrafts[c.id] = ReadyDraft(messageId: c.latest.id, text: "On it.", why: [], written: Date())
+        press("\r", code: 36, .command)
+        XCTAssertEqual(store.pendingSends.last?.draft.body.hasPrefix("On it."), true, "⌘↵ sends it, with Undo Send")
+        press("z", code: 6, .command); store.composing = nil
+        store.state.readyDrafts[c.id] = ReadyDraft(messageId: c.latest.id, text: "Maybe.", why: [], written: Date())
+        runCommand("Throw away ready draft")
+        XCTAssertNil(store.readyDraft(c), "Throw away removes it")
+        XCTAssertTrue(store.state.readyDrafts[c.id]?.discarded == true, "and Keymail won't write another for this email")
+    }
+
+    func testAfterASearchArrowsBrowseResultsAndOpenPanels() async {
+        press("/", code: 44); XCTAssertTrue(store.searchOpen, "/ opens search")
+        store.searchText = "launch"
+        store.runSearch()
+        for _ in 0..<50 where store.busy != nil { await Task.yield() }
+        let v = store.visible
+        XCTAssertFalse(v.isEmpty, "the search finds the sample email")
+        store.selectedID = v.first?.id
+        if v.count > 1 { press("", code: 125); XCTAssertEqual(store.selectedID, v[1].id, "↓ browses the results") }
+        press("", code: 126); XCTAssertEqual(store.selectedID, v.first?.id, "↑ goes back up")
+        press("", code: 123); XCTAssertTrue(store.foldersVisible, "← opens the folders panel")
+        press("", code: 124); store.sidebarFocused = false
+        press("/", code: 44); XCTAssertTrue(store.searchOpen, "/ goes back to the search box")
+        let before = store.searchFocus
+        press("/", code: 44); XCTAssertEqual(store.searchFocus, before + 1, "/ with the bar already open puts the cursor back in it")
+    }
 }

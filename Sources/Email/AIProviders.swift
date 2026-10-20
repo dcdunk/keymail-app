@@ -48,11 +48,16 @@ struct AIProvider: Identifiable, Hashable {
 }
 
 enum AI {
-    static func binary(_ name: String) -> String? {
+    /// The usual install folders only: instant, so Settings can show what's installed as soon as it opens.
+    static func knownBinary(_ name: String) -> String? {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let candidates = ["/opt/homebrew/bin/\(name)", "/usr/local/bin/\(name)", "\(home)/.local/bin/\(name)",
                           "\(home)/.claude/local/\(name)", "\(home)/.npm-global/bin/\(name)"]
-        if let hit = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) { return hit }
+        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
+    }
+
+    static func binary(_ name: String) -> String? {
+        if let hit = knownBinary(name) { return hit }
         // Apps launched from Finder don't get your shell PATH, so ask a login shell.
         let p = Process(); let out = Pipe()
         p.executableURL = URL(fileURLWithPath: "/bin/zsh"); p.arguments = ["-lc", "command -v \(name)"]; p.standardOutput = out
