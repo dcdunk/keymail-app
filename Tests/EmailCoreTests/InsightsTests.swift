@@ -77,4 +77,14 @@ final class InsightsTests: XCTestCase {
         XCTAssertTrue(looksLikeIndividual(from("Sam <sam@mail.bigco.example>"), known: ["sam@mail.bigco.example"]),
                       "someone you've emailed before always counts")
     }
+
+    func testCalendarInvitesNeverGetADraft() {
+        // Gmail delivers invites as an .ics attachment, often from the organizer's own address.
+        var invite = m("Lunch Thursday", "Priya Shah <priya@seedfund.example>")
+        invite.attachments = [AttachmentRef(id: "a", name: "invite.ics", mimeType: "application/ics", size: 900)]
+        XCTAssertFalse(looksLikeIndividual(invite, known: ["priya@seedfund.example"]), "even from someone you know")
+        XCTAssertFalse(needsReply(Conversation(account: "me@example.com", threadId: invite.threadId, messages: [invite]), me: me))
+        XCTAssertFalse(looksLikeIndividual(m("Accepted: Lunch Thursday", "Priya Shah <priya@seedfund.example>"), known: []), "RSVPs too")
+        XCTAssertTrue(looksLikeIndividual(m("Lunch Thursday?", "Priya Shah <priya@seedfund.example>"), known: []), "a person asking still counts")
+    }
 }

@@ -39,7 +39,16 @@ public func isFromPerson(_ m: Message) -> Bool {
     let roles = ["receipt", "receipts", "billing", "invoice", "invoices", "alerts", "alert", "orders", "order", "news",
                  "newsletter", "info", "updates", "marketing", "notify", "hello", "team", "support", "accounts", "security"]
     if roles.contains(local) { return false }
-    return autoArchiveCategory(m) == nil && m.calendar == nil
+    return autoArchiveCategory(m) == nil && !isCalendarMail(m)
+}
+
+/// A calendar invite, update or RSVP: an invite inside the email, an .ics attachment (how Gmail delivers them), or an
+/// invite subject. These get answered with the RSVP buttons, never with a draft written ahead of time.
+public func isCalendarMail(_ m: Message) -> Bool {
+    if m.calendar != nil || m.attachments.contains(where: { $0.mimeType == "text/calendar" || $0.name.lowercased().hasSuffix(".ics") }) { return true }
+    let s = m.subject.lowercased()
+    return ["invitation:", "updated invitation", "accepted:", "declined:", "tentatively accepted:", "canceled event", "cancelled event",
+            "canceled:", "cancelled:", "new event:", "event updated"].contains { s.hasPrefix($0) }
 }
 
 /// Mail that reads like an individual wrote it, not a company: used to decide which emails get a draft written ahead of time.
@@ -86,7 +95,7 @@ public enum InsightCategory: String, CaseIterable {
 }
 
 public func insightCategory(_ m: Message) -> InsightCategory {
-    if m.calendar != nil { return .calendar }
+    if isCalendarMail(m) { return .calendar }
     if isFromPerson(m) { return .people }
     if autoArchiveCategory(m) != nil { return .newsletters }
     return .notifications
