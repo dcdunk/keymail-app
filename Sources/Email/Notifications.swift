@@ -12,6 +12,7 @@ final class Notifier: NSObject, ObservableObject, UNUserNotificationCenterDelega
     @Published var badgeBlocked = false   // macOS only draws the Dock badge when "Badge app icon" is allowed
 
     static var notifyMode: String { UserDefaults.standard.string(forKey: "notifyMode") ?? "important" }
+    static var sound: Bool { UserDefaults.standard.object(forKey: "notifySound") as? Bool ?? true }
     static var badgeMode: String { UserDefaults.standard.string(forKey: "badgeMode") ?? "important" }
 
     func start(_ store: AppStore) {
@@ -38,13 +39,24 @@ final class Notifier: NSObject, ObservableObject, UNUserNotificationCenterDelega
 
     func notify(_ arrivals: [(message: Message, conversationId: String)]) {
         guard Self.notifyMode != "off", !arrivals.isEmpty, let store else { return }
+        // Notch style: only while you're in another app, same as banners. Fewer than 5 each get a turn in the notch.
+        if NotchBanner.enabled, !NSApp.isActive, arrivals.count <= 4 {
+            let shown = arrivals.allSatisfy { a in
+                let from = parseAddresses(a.message.from).first
+                return NotchBanner.shared.show(.init(
+                    title: from?.display ?? a.message.from,
+                    subtitle: store.state.accounts.count > 1 ? "\(store.label(a.message.account)) · \(a.message.subject)" : a.message.subject,
+                    body: a.message.snippet, sender: from, open: { [weak self] in self?.open(a.conversationId) }))
+            }
+            if shown { return }
+        }
         let center = UNUserNotificationCenter.current()
         // A burst (for example after waking the Mac) becomes one summary instead of a wall of banners.
         if arrivals.count > 4 {
             let c = UNMutableNotificationContent()
             c.title = "\(arrivals.count) new emails"
             c.body = arrivals.suffix(3).compactMap { parseAddresses($0.message.from).first?.display }.joined(separator: ", ")
-            c.sound = .default
+            c.sound = Self.sound ? .default : nil
             center.add(UNNotificationRequest(identifier: UUID().uuidString, content: c, trigger: nil))
             return
         }
@@ -56,7 +68,7 @@ final class Notifier: NSObject, ObservableObject, UNUserNotificationCenterDelega
             c.threadIdentifier = a.conversationId // macOS groups replies in one thread together
             c.userInfo = ["conversation": a.conversationId]
             if store.state.accounts.count > 1 { c.subtitle = "\(store.label(a.message.account)) · \(a.message.subject)" }
-            c.sound = .default
+            c.sound = Self.sound ? .default : nil
             center.add(UNNotificationRequest(identifier: a.message.key, content: c, trigger: nil))
         }
     }
@@ -64,7 +76,7 @@ final class Notifier: NSObject, ObservableObject, UNUserNotificationCenterDelega
     /// Settings → "Send a test notification". Shows even while Keymail is in front.
     func sendTest() {
         let c = UNMutableNotificationContent()
-        c.title = "Keymail"; c.body = "Notifications are working."; c.sound = .default
+        c.title = "Keymail"; c.body = "Notifications are working."; c.sound = Self.sound ? .default : nil
         c.userInfo = ["test": true]
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "test-\(UUID())", content: c, trigger: nil)) { err in
             if let err { Task { @MainActor in self.store?.log("notify: test failed: \(err.localizedDescription)") } }
@@ -90,17 +102,18 @@ final class Notifier: NSObject, ObservableObject, UNUserNotificationCenterDelega
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
                                             withCompletionHandler done: @escaping (UNNotificationPresentationOptions) -> Void) {
         let test = notification.request.content.userInfo["test"] != nil
-        Task { @MainActor in done(NSApp.isActive && !test ? [.list] : [.banner, .list, .sound]) }
+        Task { @MainActor in done(NSApp.isActive && !test ? [.list] : (Self.sound ? [.banner, .list, .sound] : [.banner, .list])) }
     }
 
     // Clicking a notification opens that email.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                             withCompletionHandler done: @escaping () -> Void) {
         let id = response.notification.request.content.userInfo["conversation"] as? String
-        Task { @MainActor in
-            NSApp.activate(ignoringOtherApps: true)
-            if let id, let store = self.store, let c = store.allConversations.first(where: { $0.id == id }) { store.open(c) }
-            done()
-        }
+        Task { @MainActor in self.open(id); done() }
+    }
+
+    func open(_ id: String?) {
+        NSApp.activate(ignoringOtherApps: true)
+        if let id, let store, let c = store.allConversations.first(where: { $0.id == id }) { store.open(c) }
     }
 }

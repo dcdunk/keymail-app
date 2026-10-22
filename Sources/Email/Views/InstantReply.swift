@@ -28,12 +28,9 @@ struct InstantReplyBar: View {
                 ProgressView().controlSize(.small)
                 Text("\(store.ai.name) is writing replies…").font(.scaled(.callout)).foregroundStyle(.secondary)
                 Spacer()
-            } else {
-                Button { store.instantReply() } label: { Label("Instant reply", systemImage: "sparkles") }
-                HStack(spacing: 4) { KeyHint("⇧R"); Text("then").font(.scaled(.caption)).foregroundStyle(.secondary); KeyHint("1"); KeyHint("2"); KeyHint("3") }
-                Spacer()
             }
+            // The Instant reply button lives in the email's AI tools above; this row only holds the replies it writes.
         }
-        .padding(.horizontal, layout.compact ? 16 : 40).padding(.bottom, 8)
+        .padding(.horizontal, layout.compact ? 16 : 40).padding(.bottom, options == nil && store.instantLoading != conversation.id ? 0 : 8)
     }
 }

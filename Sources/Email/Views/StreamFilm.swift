@@ -36,6 +36,7 @@ struct StreamInbox: View {
 struct StreamItem: View {
     @EnvironmentObject var store: AppStore
     @AppStorage("emailButtons") private var emailButtons = "text"
+    @AppStorage("emailButtonKeys") private var showKeys = true
     let c: Conversation
     let current: Bool
     var body: some View {
@@ -78,7 +79,7 @@ struct StreamItem: View {
                         HStack(spacing: 5) {
                             Image(systemName: icon).accessibilityLabel(l)
                             if emailButtons == "text" { Text(l) }
-                            if current { KeyHint(k) }
+                            if current && showKeys { KeyHint(k) }
                         }.font(.scaled(.callout)).padding(.horizontal, 8).frame(height: 28)
                     }.buttonStyle(ToolStyle()).help("\(l) (\(k))")
                 }

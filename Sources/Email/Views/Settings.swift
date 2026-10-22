@@ -23,7 +23,7 @@ struct SettingsPanel: View {
     /// Sidebar order, which ↑/↓ also follow. `items` are single settings search can jump to; each is a row marked `.settingAnchor`.
     static let sections: [Section] = [
         .init(id: "general", title: "General", icon: "gearshape", group: "Mail", keywords: "thread order newest oldest top quoted history earlier messages undo send notifications badge remote images sender logos privacy spelling grammar writing auto archive calendar fetch sync tips",
-              items: ["Messages in a thread", "Earlier messages in each email", "Back to inbox after the last unread email", "Reply inside the conversation", "Show folders sidebar", "Show context panel", "Undo send", "Notify me about", "Dock badge counts",
+              items: ["Messages in a thread", "Earlier messages in each email", "Back to inbox after the last unread email", "Reply inside the conversation", "Show folders sidebar", "Show context panel", "Undo send", "Notify me about", "Notification style", "Play a sound", "Dock badge counts",
                       "Load remote images", "Show sender logos", "Check spelling while typing", "Check grammar", "Correct spelling automatically", "Smart quotes and dashes", "Fetch mail"]),
         .init(id: "splits", title: "Inbox", icon: "tray", group: "Mail", keywords: "tabs splits split inbox important other single one inbox focused rules", items: ["Important and Other"]),
         .init(id: "signatures", title: "Signatures", icon: "signature", group: "Mail", keywords: "signature html logo"),
@@ -33,7 +33,7 @@ struct SettingsPanel: View {
               items: ["Calendars", "Show the calendar", "Week starts on", "Days in a week", "Default view", "New events go to", "Calendar colors", "Show my day beside invites"]),
         .init(id: "gmail", title: "Gmail", icon: "envelope.badge", group: "Accounts", keywords: "out of office vacation auto reply labels signature sync"),
         .init(id: "appearance", title: "Appearance", icon: "textformat.size", group: "Personalize", keywords: "draft compose buttons icons links appearance text font size bigger larger zoom dark light email content opacity glass window card",
-              items: ["Inbox layout", "Text size", "Appearance", "Email content", "Draft buttons", "Window opacity", "Email card opacity"]),
+              items: ["Inbox layout", "Text size", "Appearance", "Email content", "Draft buttons", "Email buttons", "Show shortcut keys", "Window opacity", "Email card opacity"]),
         .init(id: "hotkeys", title: "Hotkeys", icon: "keyboard", group: "Personalize", keywords: "keyboard shortcuts keys commands customize remap"),
         .init(id: "ai", title: "AI providers", icon: "sparkles", group: "Personalize", keywords: "claude codex gemini write summarize instant reply drafts ahead ready draft"),
         .init(id: "agents", title: "MCP", icon: "point.3.connected.trianglepath.dotted", group: "Personalize", keywords: "mcp claude desktop chatgpt codex gemini agent connect automation"),
@@ -227,6 +227,7 @@ struct AppearanceSettings: View {
     @EnvironmentObject var store: AppStore
     @AppStorage("draftButtons") private var draftButtons = "icons"
     @AppStorage("emailButtons") private var emailButtons = "text"
+    @AppStorage("emailButtonKeys") private var emailButtonKeys = true
     @AppStorage("textScale") private var textScale = 1.0
     @AppStorage("windowOpacity") private var windowOpacity = 0.7
     @AppStorage("cardOpacity") private var cardOpacity = 1.0
@@ -270,8 +271,10 @@ struct AppearanceSettings: View {
                 Section("Emails") {
                     Picker(selection: $emailButtons) {
                         Text("Quiet icons").tag("icons"); Text("Text links").tag("text")
-                    } label: { Text("Email buttons"); Text("Reply, Forward, Done and the rest under an open email. Shortcut keys always show.") }
+                    } label: { Text("Email buttons"); Text("Reply, Forward, Done and the rest above an open email.") }
                     .pickerStyle(.segmented).settingAnchor("Email buttons")
+                    Toggle(isOn: $emailButtonKeys) { Text("Show shortcut keys"); Text("The key for each button (R, E, Shift R…). Hover a button to see its key either way.") }
+                        .settingAnchor("Show shortcut keys")
                 }
             }
             .formStyle(.grouped).scrollContentBackground(.hidden)
@@ -342,6 +345,8 @@ struct GeneralSettings: View {
     @AppStorage("backToInboxWhenDone") private var backToInbox = true
     @AppStorage("replyInline") private var replyInline = false
     @AppStorage("notifyMode") private var notifyMode = "important"
+    @AppStorage("notifyStyle") private var notifyStyle = "notch"
+    @AppStorage("notifySound") private var notifySound = true
     @AppStorage("badgeMode") private var badgeMode = "important"
     @ObservedObject private var notifier = Notifier.shared
     var body: some View {
@@ -393,6 +398,23 @@ struct GeneralSettings: View {
                 }
                 .settingAnchor("Notify me about")
                 .onChange(of: notifyMode) { _, v in if v != "off" { notifier.requestPermission() } }
+                if notifyMode != "off" {
+                    Toggle("Play a sound", isOn: $notifySound).settingAnchor("Play a sound")
+                    Picker("Notification style", selection: $notifyStyle) { Text("From the notch").tag("notch"); Text("macOS banner").tag("system") }
+                        .pickerStyle(.segmented).settingAnchor("Notification style")
+                    if notifyStyle == "notch" {
+                        HStack {
+                            Text(NotchBanner.notchScreen == nil ? "No notch on this screen right now, so new mail shows as a macOS banner."
+                                                                : "New mail drops out of the notch. Focus modes don't silence it.")
+                                .font(.scaled(.caption)).foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Preview") {
+                                _ = NotchBanner.shared.show(.init(title: "Keymail", subtitle: "New mail drops out of the notch", body: "Click to open it. Rest the pointer on it to keep it open.",
+                                                                 sender: nil, open: {}))
+                            }.disabled(NotchBanner.notchScreen == nil)
+                        }
+                    }
+                }
                 Picker("Dock badge counts", selection: $badgeMode) {
                     Text("Unread important").tag("important"); Text("All unread").tag("all"); Text("Nothing").tag("off")
                 }

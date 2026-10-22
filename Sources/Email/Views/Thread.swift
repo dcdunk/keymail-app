@@ -16,6 +16,7 @@ struct ThreadView: View {
 
     @AppStorage("threadNewestFirst") private var newestFirst = false
     @AppStorage("emailButtons") private var emailButtons = "text"   // "icons" or "text"
+    @AppStorage("emailButtonKeys") private var showKeys = true
     @AppStorage("emailContentTheme") private var contentTheme = "auto"
     @Environment(\.colorScheme) private var scheme
     var contentDark: Bool { contentTheme == "dark" || (contentTheme == "auto" && scheme == .dark) }
@@ -34,6 +35,57 @@ struct ThreadView: View {
 
     @ViewBuilder var readyDraft: some View {
         if store.composing?.context?.id != conversation.id { ReadyDraftCard(conversation: conversation) }
+    }
+
+    typealias Action = (key: String, label: String, icon: String, run: () -> Void)
+
+    /// Above the email, in three groups: answer it, deal with it, let AI help. Claude Code and next/previous sit apart on the right.
+    var actionBar: some View {
+        HStack(spacing: 10) {
+            group([(Hotkeys.label("r"), "Reply", "arrowshape.turn.up.left", { store.reply(all: false) }),
+                   (Hotkeys.label("a"), "Reply all", "arrowshape.turn.up.left.2", { store.reply(all: true) }),
+                   (Hotkeys.label("f"), "Forward", "arrowshape.turn.up.right", { store.forward() })])
+            group([(Hotkeys.label("e"), "Done", "checkmark", { store.markDone() }),
+                   (Hotkeys.label("h"), "Remind", "clock", { store.openPalette("remind") }),
+                   (Hotkeys.label("b"), "Event", "calendar.badge.plus", { store.createEventFromEmail() }),
+                   ("⌫", "Delete", "trash", { store.trash() })])
+            group([("⇧R", "Instant reply", "sparkles", { store.instantReply() }),
+                   (Hotkeys.label("i"), "Summarize", "text.append", { store.summarize() })], ai: true)
+            Spacer(minLength: 0)
+            Button { store.sendToClaudeCode() } label: {
+                HStack(spacing: 6) { BrandLogo(brand: "claude", size: 15); if !layout.compact { Text("Claude Code") } }
+                    .font(.scaled(.callout)).padding(.horizontal, 8).frame(height: 28)
+            }.buttonStyle(ToolStyle()).help("Send this email to Claude Code")
+            HStack(spacing: 0) {
+                Button { store.move(-1) } label: { Image(systemName: "chevron.up").frame(width: 28, height: 28) }.buttonStyle(ToolStyle()).help("Previous (\(Hotkeys.label("k")))")
+                Button { store.move(1) } label: { Image(systemName: "chevron.down").frame(width: 28, height: 28) }.buttonStyle(ToolStyle()).help("Next (\(Hotkeys.label("j")))")
+            }
+        }
+        .font(.scaled(.callout)).foregroundStyle(.secondary)
+        .padding(.horizontal, layout.compact ? 16 : 40).padding(.bottom, 12)
+    }
+
+    /// A set of related actions on one soft pill. The AI set is tinted and labelled so it reads apart from the rest.
+    func group(_ actions: [Action], ai: Bool = false) -> some View {
+        HStack(spacing: 2) {
+            if ai && !layout.compact {
+                Text("AI").font(.scaled(size: 10, weight: .bold)).tracking(0.6).foregroundStyle(Theme.accent).padding(.leading, 6).padding(.trailing, 2)
+            }
+            ForEach(actions, id: \.label) { a in
+                Button(action: a.run) {
+                    HStack(spacing: 6) {
+                        Image(systemName: a.icon).accessibilityLabel(a.label)
+                        if !layout.compact {
+                            if emailButtons == "text" { Text(a.label) }
+                            if showKeys { KeyHint(a.key) }
+                        }
+                    }.font(.scaled(.callout)).padding(.horizontal, 8).frame(height: 28)
+                }.buttonStyle(ToolStyle()).help("\(a.label) (\(KeyHint.display(a.key)))")
+            }
+        }
+        .padding(2)
+        .background(Capsule().fill(ai ? Theme.accent.opacity(0.10) : Color.primary.opacity(0.05)))
+        .overlay(Capsule().strokeBorder(ai ? Theme.accent.opacity(0.25) : Color.primary.opacity(0.06)))
     }
 
     var body: some View {
@@ -59,6 +111,7 @@ struct ThreadView: View {
                 }
             }
             .padding(.horizontal, layout.compact ? 16 : 40).padding(.top, 4).padding(.bottom, 10)
+            actionBar
             InstantReplyBar(conversation: conversation)
             UnsubscribeBar(conversation: conversation)
             ScrollView {
@@ -77,36 +130,6 @@ struct ThreadView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, layout.compact ? 16 : 40).padding(.top, 6).padding(.bottom, 60)
             }
-            HStack(spacing: 4) {
-                let actions: [(String, String, String, () -> Void)] = [
-                    (Hotkeys.label("r"), "Reply", "arrowshape.turn.up.left", { store.reply(all: false) }),
-                    (Hotkeys.label("a"), "Reply all", "arrowshape.turn.up.left.2", { store.reply(all: true) }),
-                    (Hotkeys.label("f"), "Forward", "arrowshape.turn.up.right", { store.forward() }),
-                    (Hotkeys.label("e"), "Done", "checkmark", { store.markDone() }),
-                    (Hotkeys.label("h"), "Remind", "clock", { store.openPalette("remind") }),
-                    (Hotkeys.label("b"), "Event", "calendar.badge.plus", { store.createEventFromEmail() }),
-                    (Hotkeys.label("i"), "Summarize", "text.append", { store.summarize() }),
-                    ("", "Claude Code", "brand:claude", { store.sendToClaudeCode() }),
-                    ("⌫", "Delete", "trash", { store.trash() }),
-                ]
-                ForEach(actions, id: \.1) { k, l, icon, run in
-                    Button(action: run) {
-                        HStack(spacing: 6) {
-                            if icon.hasPrefix("brand:") { BrandLogo(brand: String(icon.dropFirst(6)), size: 15) }
-                            else { Image(systemName: icon).accessibilityLabel(l) }
-                            if !layout.compact {
-                                if emailButtons == "text" { Text(l) }
-                                if !k.isEmpty { KeyHint(k) }
-                            }
-                        }.font(.scaled(.callout)).padding(.horizontal, 8).frame(height: 28)
-                    }.buttonStyle(ToolStyle()).help(k.isEmpty ? l : "\(l) (\(k))")
-                }
-                Spacer()
-                Button { store.move(-1) } label: { Image(systemName: "chevron.up").frame(width: 28, height: 28) }.buttonStyle(ToolStyle()).help("Previous (\(Hotkeys.label("k")))")
-                Button { store.move(1) } label: { Image(systemName: "chevron.down").frame(width: 28, height: 28) }.buttonStyle(ToolStyle()).help("Next (\(Hotkeys.label("j")))")
-            }
-            .font(.scaled(.callout)).foregroundStyle(.secondary)
-            .padding(.horizontal, layout.compact ? 16 : 40).padding(.vertical, 12)
         }
         .id(conversation.id) // fresh expand state per thread
     }
