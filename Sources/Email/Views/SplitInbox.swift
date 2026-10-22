@@ -92,6 +92,9 @@ struct SplitRow: View {
         .padding(.horizontal, 10).padding(.vertical, 9)
         .background(RoundedRectangle(cornerRadius: 10).fill(selected ? Theme.selection : hover ? Color.primary.opacity(0.04) : .clear))
         .contentShape(Rectangle())
-        .onHover { hover = $0 }
+        .onHover { h in
+            hover = h   // and the right-click menu acts on this row (it was only wired for the full-width list)
+            if h { store.rightClickTarget = c } else if store.rightClickTarget?.id == c.id { store.rightClickTarget = nil }
+        }
     }
 }

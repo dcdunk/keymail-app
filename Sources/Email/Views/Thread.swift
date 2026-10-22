@@ -40,20 +40,31 @@ struct ThreadView: View {
     typealias Action = (key: String, label: String, icon: String, run: () -> Void)
 
     /// Above the email, in three groups: answer it, deal with it, let AI help. Claude Code and next/previous sit apart on the right.
+    /// Narrow windows (a vertical monitor, split view) drop names, then key badges, so the row never pushes the window wider.
     var actionBar: some View {
+        ViewThatFits(in: .horizontal) {
+            actionRow(names: emailButtons == "text" && !layout.compact, keys: showKeys && !layout.compact, claudeName: !layout.compact)
+            actionRow(names: false, keys: showKeys && !layout.compact, claudeName: !layout.compact)
+            actionRow(names: false, keys: false, claudeName: false)
+        }
+        .font(.scaled(.callout)).foregroundStyle(.secondary)
+        .padding(.horizontal, layout.compact ? 16 : 40).padding(.bottom, 12)
+    }
+
+    func actionRow(names: Bool, keys: Bool, claudeName: Bool) -> some View {
         HStack(spacing: 10) {
             group([(Hotkeys.label("r"), "Reply", "arrowshape.turn.up.left", { store.reply(all: false) }),
                    (Hotkeys.label("a"), "Reply all", "arrowshape.turn.up.left.2", { store.reply(all: true) }),
-                   (Hotkeys.label("f"), "Forward", "arrowshape.turn.up.right", { store.forward() })])
+                   (Hotkeys.label("f"), "Forward", "arrowshape.turn.up.right", { store.forward() })], names: names, keys: keys)
             group([(Hotkeys.label("e"), "Done", "checkmark", { store.markDone() }),
                    (Hotkeys.label("h"), "Remind", "clock", { store.openPalette("remind") }),
                    (Hotkeys.label("b"), "Event", "calendar.badge.plus", { store.createEventFromEmail() }),
-                   ("⌫", "Delete", "trash", { store.trash() })])
+                   ("⌫", "Delete", "trash", { store.trash() })], names: names, keys: keys)
             group([("⇧R", "Instant reply", "sparkles", { store.instantReply() }),
-                   (Hotkeys.label("i"), "Summarize", "text.append", { store.summarize() })], ai: true)
+                   (Hotkeys.label("i"), "Summarize", "text.append", { store.summarize() })], ai: true, names: names, keys: keys)
             Spacer(minLength: 0)
             Button { store.sendToClaudeCode() } label: {
-                HStack(spacing: 6) { BrandLogo(brand: "claude", size: 15); if !layout.compact { Text("Claude Code") } }
+                HStack(spacing: 6) { BrandLogo(brand: "claude", size: 15); if claudeName { Text("Claude Code") } }
                     .font(.scaled(.callout)).padding(.horizontal, 8).frame(height: 28)
             }.buttonStyle(ToolStyle()).help("Send this email to Claude Code")
             HStack(spacing: 0) {
@@ -61,24 +72,20 @@ struct ThreadView: View {
                 Button { store.move(1) } label: { Image(systemName: "chevron.down").frame(width: 28, height: 28) }.buttonStyle(ToolStyle()).help("Next (\(Hotkeys.label("j")))")
             }
         }
-        .font(.scaled(.callout)).foregroundStyle(.secondary)
-        .padding(.horizontal, layout.compact ? 16 : 40).padding(.bottom, 12)
     }
 
     /// A set of related actions on one soft pill. The AI set is tinted and labelled so it reads apart from the rest.
-    func group(_ actions: [Action], ai: Bool = false) -> some View {
+    func group(_ actions: [Action], ai: Bool = false, names: Bool, keys: Bool) -> some View {
         HStack(spacing: 2) {
-            if ai && !layout.compact {
+            if ai && (names || keys) {
                 Text("AI").font(.scaled(size: 10, weight: .bold)).tracking(0.6).foregroundStyle(Theme.accent).padding(.leading, 6).padding(.trailing, 2)
             }
             ForEach(actions, id: \.label) { a in
                 Button(action: a.run) {
                     HStack(spacing: 6) {
                         Image(systemName: a.icon).accessibilityLabel(a.label)
-                        if !layout.compact {
-                            if emailButtons == "text" { Text(a.label) }
-                            if showKeys { KeyHint(a.key) }
-                        }
+                        if names { Text(a.label) }
+                        if keys { KeyHint(a.key) }
                     }.font(.scaled(.callout)).padding(.horizontal, 8).frame(height: 28)
                 }.buttonStyle(ToolStyle()).help("\(a.label) (\(KeyHint.display(a.key)))")
             }

@@ -53,6 +53,9 @@ struct MainView: View {
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: store.contextOpen)
         .animation(.easeOut(duration: 0.2), value: store.calendarOpen)
         .animation(.easeOut(duration: 0.2), value: store.toolScreen)
+        // Exactly the window's width: if the inbox asks for more, Settings, menus and popups still line up with the
+        // window instead of the wider content (Settings lost its right edge and scroll bar in split view).
+        .frame(width: layout.width, alignment: .leading)
         .overlayPreferenceValue(CoachAnchorKey.self) { anchors in
             GeometryReader { proxy in CoachTips(anchors: anchors, proxy: proxy) }
         }
