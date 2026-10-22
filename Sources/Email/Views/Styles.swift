@@ -54,7 +54,8 @@ extension View {
 enum Theme {
     static let accent = Color(red: 0.29, green: 0.40, blue: 0.93)
     static let selection = Color(red: 0.29, green: 0.40, blue: 0.93).opacity(0.13)
-    static let muted = Color.secondary.opacity(0.75)
+    /// Snippet grey: a little lighter than .secondary, except over clear glass where it needs full strength.
+    static var muted: Color { Color.secondary.opacity(WindowOpacity.boostsText(UserDefaults.standard.object(forKey: "windowOpacity") as? Double ?? 0.7) ? 1 : 0.75) }
     static let chipPalette: [Color] = [.green, .red, .purple, .brown, .blue, .orange, .teal, .pink]
     static func chip(_ name: String) -> Color { chipPalette[paletteIndex(name.unicodeScalars.reduce(0) { $0 &* 31 &+ Int($1.value) }, count: chipPalette.count)] }
 }

@@ -24,7 +24,13 @@ struct WindowOpacity: ViewModifier {
                 .ignoresSafeArea()
             }
             .background(ClearWindow(translucent: opacity < 0.999))
+            // Clear glass: faint text (snippets, dates, captions) goes to full strength and the faintest steps up a level,
+            // so it doesn't sink into the wallpaper. Primary text is unchanged.
+            .modifier(GlassContrast(on: Self.boostsText(opacity)))
     }
+
+    /// Below the middle of the slider the desktop shows through enough to wash out grey text.
+    static func boostsText(_ opacity: Double) -> Bool { opacity < 0.5 }
 
     /// Slider 0.2…1.0 (same scale as email cards) maps to 15…100% of Keymail's own background over the blur.
     /// The 15% floor (monocode's minimum) keeps the window reading as Keymail, slightly see-through, never a bare grey HUD.
@@ -78,4 +84,12 @@ private func setBackgroundBlur(_ window: NSWindow, radius: Int32) {
     guard let (conn, set) = blurSymbols else { return }
     let cid = unsafeBitCast(conn, to: MainConnection.self)()
     _ = unsafeBitCast(set, to: SetRadius.self)(cid, window.windowNumber, radius)
+}
+
+struct GlassContrast: ViewModifier {
+    let on: Bool
+    func body(content: Content) -> some View {
+        if on { content.foregroundStyle(.primary, Color.primary.opacity(0.8), Color(nsColor: .secondaryLabelColor)) }
+        else { content }
+    }
 }
