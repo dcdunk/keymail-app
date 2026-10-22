@@ -55,10 +55,15 @@ struct BehindWindowBlur: NSViewRepresentable {
 /// Lets the window itself be transparent so the blur shows through.
 struct ClearWindow: NSViewRepresentable {
     let translucent: Bool
+    final class Coordinator { var applied: Bool? }
+    func makeCoordinator() -> Coordinator { Coordinator() }
     func makeNSView(context: Context) -> NSView { NSView() }
     func updateNSView(_ v: NSView, context: Context) {
+        // The slider updates this on every tick; only touch the window when see-through actually flips.
+        let c = context.coordinator
         DispatchQueue.main.async {
-            guard let w = v.window else { return }
+            guard let w = v.window, c.applied != translucent else { return }
+            c.applied = translucent
             w.acceptsMouseMovedEvents = true
             w.isOpaque = !translucent
             w.backgroundColor = translucent ? .clear : .windowBackgroundColor
@@ -86,10 +91,12 @@ private func setBackgroundBlur(_ window: NSWindow, radius: Int32) {
     _ = unsafeBitCast(set, to: SetRadius.self)(cid, window.windowNumber, radius)
 }
 
+/// One view either way: an if/else here would rebuild the whole window each time the slider crosses the middle.
 struct GlassContrast: ViewModifier {
     let on: Bool
     func body(content: Content) -> some View {
-        if on { content.foregroundStyle(.primary, Color.primary.opacity(0.8), Color(nsColor: .secondaryLabelColor)) }
-        else { content }
+        content.foregroundStyle(.primary,
+                                on ? AnyShapeStyle(Color.primary.opacity(0.8)) : AnyShapeStyle(.secondary),
+                                on ? AnyShapeStyle(Color(nsColor: .secondaryLabelColor)) : AnyShapeStyle(.tertiary))
     }
 }
