@@ -189,7 +189,8 @@ private func parseOne(_ p: String) -> Address {
             if !inQ && ch == ">", let c = cur { angle = c; cur = nil; continue }
             if cur != nil { cur!.append(ch) } else { plain.append(ch) }
         }
-        let name = plain.trimmingCharacters(in: CharacterSet(charactersIn: " \""))
+        // Encoded names inside quotes ("=?UTF-8?B?…?=") are left raw by Gmail; RFC 2047 forbids them but senders do it (issue #10).
+        let name = decodeEncodedWords(plain.trimmingCharacters(in: CharacterSet(charactersIn: " \""))).trimmingCharacters(in: CharacterSet(charactersIn: " \""))
         if let a = angle { return Address(name: name, email: a.replacingOccurrences(of: "mailto:", with: "", options: .caseInsensitive).trimmingCharacters(in: .whitespaces)) }
         return Address(name: "", email: name)
     }

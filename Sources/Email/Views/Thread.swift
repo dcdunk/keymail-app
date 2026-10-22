@@ -208,6 +208,16 @@ struct MessageCard: View {
                 PhishingPill(senderReasons: senderWarnings(message, known: store.knownContacts),
                              links: message.html.map(suspiciousLinks) ?? [])
                 Text(message.date.formatted(date: .abbreviated, time: .shortened)).font(.scaled(.callout)).foregroundStyle(.secondary)
+                if !message.labelIds.contains("DRAFT") {
+                    // Answer this email, not only the newest one in the thread (issue #7).
+                    Menu {
+                        Button("Reply") { store.reply(all: false, to: message) }
+                        Button("Reply all") { store.reply(all: true, to: message) }
+                        Button("Forward") { store.forward(message) }
+                    } label: { Image(systemName: "arrowshape.turn.up.left") }
+                        .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                        .foregroundStyle(.secondary).help("Reply to this email").accessibilityLabel("Reply to this email")
+                }
                 if collapsible {
                     Button(action: collapse) { Image(systemName: "chevron.up") }.buttonStyle(.plain).foregroundStyle(.secondary)
                 }
@@ -442,9 +452,17 @@ struct EmailWebView: NSViewRepresentable {
         function dark(c){return setL(c,.12+(1-lum(c))*.5)}
         var media=/^(IMG|PICTURE|VIDEO|SVG|svg|CANVAS)$/;
         function onPicture(el){for(var p=el;p&&p.nodeType===1;p=p.parentElement){if(/url\\(/.test(getComputedStyle(p).backgroundImage))return true}return false}
+        /* A small one-off background picture (a circle or logo in a corner) over most of a light design: the colour
+           under it is what the text sits on (issue #11: black headline left on the darkened page). The browser already
+           loaded the picture, so its size is known right away. ponytail: an area check, not pixel sampling; a large
+           photo, a tiled pattern or one not loaded yet still counts as an unknown picture. */
+        function decor(p,cs){if(!/no-repeat/.test(cs.backgroundRepeat)||/cover|contain|%/.test(cs.backgroundSize))return false;
+        var u=/url\\((["']?)(.*?)\\1\\)/.exec(cs.backgroundImage);if(!u)return false;var im=new Image();im.src=u[2];
+        var r=p.getBoundingClientRect();return im.complete&&im.naturalWidth>0&&r.width*r.height>0&&im.naturalWidth*im.naturalHeight<.5*r.width*r.height}
         /* The colour actually behind an element: its own or the nearest ancestor's (null = a picture). */
         function behind(el){for(var p=el;p&&p.nodeType===1;p=p.parentElement){var cs=getComputedStyle(p),bi=cs.backgroundImage;
-        if(bi&&bi!=='none')return /url\\(/.test(bi)?null:rgb(bi);var c=rgb(cs.backgroundColor);if(c&&c[3]>.5)return c}return [30/255,30/255,32/255,1]}
+        if(bi&&bi!=='none'){if(!/url\\(/.test(bi))return rgb(bi);if(!decor(p,cs))return null}
+        var c=rgb(cs.backgroundColor);if(c&&c[3]>.5)return c}return [30/255,30/255,32/255,1]}
         var all=[].slice.call(document.querySelectorAll('html, body, body *')).filter(function(el){return !media.test(el.tagName)&&!onPicture(el)});
         /* 1. Light backgrounds become dark, keeping their hue, including gradients used as a solid fill (a common way
               senders block dark mode). Borders that would vanish get lighter. Images are never touched. */
@@ -455,7 +473,7 @@ struct EmailWebView: NSViewRepresentable {
         if(w>0&&bc&&lum(bc)<.35)el.style.setProperty('border-'+side+'-color',setL(bc,.45),'important')})});
         /* 2. Dark text becomes light only where the colour behind it really is dark now, so text can never end up
               light-on-light (or be changed on top of a picture). */
-        all.forEach(function(el){var fg=rgb(getComputedStyle(el).color),bg=behind(el);
+        [].slice.call(document.querySelectorAll('html, body, body *')).filter(function(el){return !media.test(el.tagName)}).forEach(function(el){var fg=rgb(getComputedStyle(el).color),bg=behind(el);
         if(fg&&bg&&lum(fg)<.6&&lum(bg)<.5)el.style.setProperty('color',setL(fg,.86-lum(fg)*.4),'important')});})();0
         """
 

@@ -44,13 +44,15 @@ extension AppStore {
     }
 
     func compose() { openCompose(Draft(from: sendAddress(defaultAccount)), context: nil) }
-    func reply(all: Bool) {
+    /// Replies to `message`, or to the newest email when nil. Any email in the thread can be answered (issue #7).
+    func reply(all: Bool, to message: Message? = nil) {
         guard let c = selected else { return }
-        var d = replyDraft(to: c.latest, me: c.account, all: all)
+        let target = message ?? c.latest
+        var d = replyDraft(to: target, me: c.account, all: all)
         let mine = me
         // Keep your own aliases out of the To/Cc of a reply-all.
         d.cc = parseAddresses(d.cc).filter { !mine.contains($0.email.lowercased()) }.map(\.formatted).joined(separator: ", ")
-        d.from = replyFrom(c.latest, account: c.account)
+        d.from = replyFrom(target, account: c.account)
         // Settings → General → Reply inside the conversation: the reply sits under the thread you're reading.
         let inline = UserDefaults.standard.bool(forKey: "replyInline") && (threadOpen || inboxLayout == "split" || inboxLayout == "film")
         if inline { threadOpen = true }
@@ -60,10 +62,10 @@ extension AppStore {
         if use == "all" || use == "replies" { applySignature(&dd, from: dd.from); m.draft = dd }
         composing = m
     }
-    func forward() {
+    func forward(_ message: Message? = nil) {
         guard let c = selected else { return }
-        let model = openCompose(forwardDraft(of: c.latest, me: replyFrom(c.latest, account: c.account)), context: c, isReply: true)
-        let m = c.latest
+        let m = message ?? c.latest
+        let model = openCompose(forwardDraft(of: m, me: replyFrom(m, account: c.account)), context: c, isReply: true)
         let files = m.attachments.filter { !$0.isInline }
         guard !files.isEmpty else { return }
         // Forwarding carries the original attachments along.

@@ -12,7 +12,7 @@ extension AppStore {
     }
     var calMondayFirst: Bool { UserDefaults.standard.object(forKey: "calendarMondayFirst") as? Bool ?? (Calendar.current.firstWeekday == 2) }
     var calHidden: Set<String> { Set(UserDefaults.standard.stringArray(forKey: "calendarHidden") ?? []) }
-    var calDays: [Date] { calendarDays(calView, around: calDate, mondayFirst: calMondayFirst) }
+    var calDays: [Date] { calendarDays(calView, around: calDate, mondayFirst: calMondayFirst, workWeek: UserDefaults.standard.bool(forKey: "calendarWorkWeek")) }
     /// Events on calendars you haven't hidden.
     var calShown: [CalEvent] { let h = calHidden; return calEvents.filter { !h.contains($0.calendarId) } }
     var calSelectedEvent: CalEvent? { calEvents.first { $0.id == calSelected } ?? calUpcoming.first { $0.id == calSelected } }

@@ -10,6 +10,9 @@ final class CoreTests: XCTestCase {
     }
 
     func testParseAddresses() {
+        // Issue #10: an encoded name in quotes, the way it arrives from Gmail, shows as the real name.
+        XCTAssertEqual(parseAddresses("\"=?UTF-8?B?7Zmp7J246rWt?=\" <ikhwang@x.com>, =?UTF-8?B?7Zmp7J246rWt?= <b@y.com>").map(\.name),
+                       [String(decoding: Data(base64Encoded: "7Zmp7J246rWt")!, as: UTF8.self), String(decoding: Data(base64Encoded: "7Zmp7J246rWt")!, as: UTF8.self)])
         let a = parseAddresses("\"Chen, Maya\" <maya@x.com>, bob@y.com,Sam Patel <sam@z.io>")
         XCTAssertEqual(a, [Address(name: "Chen, Maya", email: "maya@x.com"), Address(name: "", email: "bob@y.com"),
                            Address(name: "Sam Patel", email: "sam@z.io")])

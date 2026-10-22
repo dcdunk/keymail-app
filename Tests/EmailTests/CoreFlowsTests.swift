@@ -187,6 +187,18 @@ final class CoreFlowsTests: XCTestCase {
         XCTAssertTrue(raw.contains("To: "), "and a recipient")
     }
 
+    func testReplyAndForwardAnEarlierEmailInTheThread() {
+        let c = store.allConversations.first { $0.messages.count > 1 }!
+        let older = c.messages.first { $0.id != c.latest.id && !$0.labelIds.contains("DRAFT") }!
+        store.selectedID = c.id
+        store.reply(all: false, to: older)
+        XCTAssertEqual(store.composing?.draft.inReplyTo, older.messageIdHeader, "the reply answers the email you picked, not the newest")
+        XCTAssertTrue(buildRaw(store.composing!.draft).contains("In-Reply-To: \(older.messageIdHeader)"))
+        store.composing = nil
+        store.forward(older)
+        XCTAssertTrue(store.composing?.draft.quoted?.contains("From: \(older.from)\nDate: \(older.date)") ?? false, "forward carries the email you picked")
+    }
+
     func testScheduledSendIsKept() {
         var d = Draft(from: me); d.to = "a@b.co"; d.subject = "Later"
         store.schedule(d, at: Date().addingTimeInterval(3600), remindDays: 2)

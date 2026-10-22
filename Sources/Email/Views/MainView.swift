@@ -189,7 +189,7 @@ struct ViewSwitchButton: View {
             if unread > 0 {
                 Text(unread > 99 ? "99+" : "\(unread)").font(.scaled(size: 9.5, weight: .bold)).foregroundStyle(.white)
                     .padding(.horizontal, 4).frame(minWidth: 16, minHeight: 16).background(Capsule().fill(Theme.accent))
-                    .offset(x: 5, y: -4).allowsHitTesting(false)
+                    .offset(x: 9, y: -8).zIndex(1).allowsHitTesting(false)   // clear of the envelope (issue #8)
             }
         }
         .help(toCalendar ? "Calendar (G C). Drop an email here to block time for it." : "Inbox (G I)")

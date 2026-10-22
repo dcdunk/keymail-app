@@ -19,6 +19,11 @@ final class CalendarTests: XCTestCase {
         let sun = calendarDays(.week, around: sat, mondayFirst: false, calendar: cal)
         XCTAssertEqual(sun.first, date("2026-10-11 00:00"), "Sunday-first week starts Sun Oct 11")
         XCTAssertEqual(calendarDays(.day, around: sat, mondayFirst: true, calendar: cal), [date("2026-10-17 00:00")])
+        // Issue #6: a 5-day week is Monday to Friday, whichever day the week starts on.
+        for first in [true, false] {
+            let five = calendarDays(.week, around: sat, mondayFirst: first, workWeek: true, calendar: cal)
+            XCTAssertEqual(five, (12...16).map { date("2026-10-\($0) 00:00") })
+        }
     }
 
     func testMonthShowsSixFullWeeksCoveringTheMonth() {

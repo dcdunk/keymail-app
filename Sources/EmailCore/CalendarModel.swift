@@ -39,7 +39,8 @@ public struct CalSource: Identifiable, Equatable, Sendable {
 public enum CalView: String, CaseIterable, Sendable { case day, week, month }
 
 /// The days a view shows around `date`: 1 for day, 7 for week, 42 (six full weeks) for month.
-public func calendarDays(_ view: CalView, around date: Date, mondayFirst: Bool, calendar: Calendar = .current) -> [Date] {
+/// `workWeek` drops Saturday and Sunday from the week view (issue #6).
+public func calendarDays(_ view: CalView, around date: Date, mondayFirst: Bool, workWeek: Bool = false, calendar: Calendar = .current) -> [Date] {
     var cal = calendar
     cal.firstWeekday = mondayFirst ? 2 : 1
     let day = cal.startOfDay(for: date)
@@ -47,7 +48,7 @@ public func calendarDays(_ view: CalView, around date: Date, mondayFirst: Bool, 
     case .day: return [day]
     case .week:
         let start = cal.dateInterval(of: .weekOfYear, for: day)!.start
-        return (0..<7).map { cal.date(byAdding: .day, value: $0, to: start)! }
+        return (0..<7).map { cal.date(byAdding: .day, value: $0, to: start)! }.filter { !workWeek || !cal.isDateInWeekend($0) }
     case .month:
         let first = cal.dateInterval(of: .month, for: day)!.start
         let start = cal.dateInterval(of: .weekOfYear, for: first)!.start
