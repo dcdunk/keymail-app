@@ -12,6 +12,10 @@ final class IMAPConnection {
     private var buffer = Data()
     private var tagN = 0
 
+    /// A connection that went quiet this long is dead (the Mac slept, Wi-Fi changed). Without a limit a read waited
+    /// forever, and since accounts sync one after another, all mail stopped until Keymail was quit.
+    nonisolated(unsafe) static var silence: TimeInterval = 60
+
     init(host: String, port: UInt16 = 993) {
         conn = NWConnection(host: .init(host), port: .init(rawValue: port)!, using: .tls)
     }
@@ -28,6 +32,10 @@ final class IMAPConnection {
                 }
             }
             conn.start(queue: queue)
+            queue.asyncAfter(deadline: .now() + Self.silence) { [conn] in
+                guard !done else { return }
+                done = true; conn.cancel(); c.resume(throwing: URLError(.timedOut))
+            }
         }
         _ = try await readResponse() // server greeting
     }
@@ -45,7 +53,10 @@ final class IMAPConnection {
 
     private func fill() async throws {
         let d: Data = try await withCheckedThrowingContinuation { c in
+            var answered = false   // both closures run on `queue`, so this needs no lock
+            queue.asyncAfter(deadline: .now() + Self.silence) { [conn] in if !answered { conn.cancel() } }   // ends the receive below with an error
             conn.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) { data, _, complete, err in
+                answered = true
                 if let err { c.resume(throwing: err) }
                 else if let data, !data.isEmpty { c.resume(returning: data) }
                 else if complete { c.resume(throwing: AppError("The mail server closed the connection.")) }
