@@ -199,6 +199,35 @@ final class CoreFlowsTests: XCTestCase {
         XCTAssertTrue(store.composing?.draft.quoted?.contains("From: \(older.from)\nDate: \(older.date)") ?? false, "forward carries the email you picked")
     }
 
+    func testNamedFromAddressFindsItsAccount() {
+        let a = store.state.accounts.first!
+        XCTAssertEqual(store.account(for: "Danny Chait <\(a)>"), a, "a From with a name still belongs to its account")
+        XCTAssertEqual(store.account(for: a.uppercased()), a)
+    }
+
+    func testAnAliasOnTwoAccountsSendsThroughTheOnePicked() {
+        guard store.state.accounts.count >= 2 else { return }
+        let a = store.state.accounts[0], b = store.state.accounts[1]
+        store.state.aliases[a] = ["shared@alias.example"]; store.state.aliases[b] = ["shared@alias.example"]
+        defer { store.state.aliases[a] = nil; store.state.aliases[b] = nil }
+        let m = ComposeModel(draft: Draft(from: a, account: a), context: nil)
+        store.changeFrom(m, to: "shared@alias.example", account: b)
+        XCTAssertEqual(store.account(of: m.draft), b, "picked under the second account: saves and sends through it")
+        store.changeFrom(m, to: "shared@alias.example", account: a)
+        XCTAssertEqual(store.account(of: m.draft), a)
+    }
+
+    func testUnreadOnlyKeepsTheOpenedEmailInPlace() {
+        store.unreadOnly = true; defer { store.unreadOnly = false }
+        let v = store.visible
+        XCTAssertGreaterThanOrEqual(v.count, 2, "the sample inbox has unread mail")
+        guard v.count >= 2 else { return }
+        store.open(v[0])                                   // opening marks it read
+        XCTAssertEqual(store.visible.first?.id, v[0].id, "the email you're reading keeps its row")
+        press("j", code: 38)
+        XCTAssertEqual(store.selectedID, v[1].id, "J goes to the next unread email, not past it")
+    }
+
     func testDraggingAnEmailOntoSidebarFolders() {
         let c = store.allConversations.first { $0.inInbox && !$0.isStarred }!
         XCTAssertTrue(store.acceptsDrop("Done") && store.acceptsDrop("Trash") && store.acceptsDrop("Inbox") && store.acceptsDrop("Starred"))

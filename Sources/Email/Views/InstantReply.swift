@@ -13,7 +13,7 @@ struct InstantReplyBar: View {
     @Environment(\.layout) private var layout
     let conversation: Conversation
     var body: some View {
-        let options = store.instantReplies[conversation.id]
+        let options = store.instantReplies[store.instantKey(conversation)]
         HStack(spacing: 8) {
             if let options {
                 ForEach(Array(options.enumerated()), id: \.offset) { i, text in

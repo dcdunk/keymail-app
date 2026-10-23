@@ -43,8 +43,9 @@ extension AppStore {
         }
     }
 
+    /// Only the accounts you're looking at, matching the sender list above.
     func inboxConversations(from sender: String) -> [Conversation] {
-        allConversations.filter { c in c.inInbox && c.messages.contains { parseAddresses($0.from).first?.email.lowercased() == sender } }
+        allConversations.filter { c in (state.activeAccount == nil || c.account == state.activeAccount) && c.inInbox && c.messages.contains { parseAddresses($0.from).first?.email.lowercased() == sender } }
     }
 
     /// Archives everything from these senders that's still in the inbox. Undo puts it back.
@@ -66,7 +67,9 @@ extension AppStore {
     func cleanupUnsubscribe(_ senders: [String]) {
         var failed: [String] = []
         for s in senders {
-            let m = messages.values.filter { parseAddresses($0.from).first?.email.lowercased() == s && !$0.listUnsubscribe.isEmpty }.max { $0.date < $1.date }
+            // A forged copy (failed SPF/DKIM/DMARC) could carry an attacker's link: only follow verified ones.
+            let m = messages.values.filter { parseAddresses($0.from).first?.email.lowercased() == s && !$0.listUnsubscribe.isEmpty
+                && $0.authFailed != true && (state.activeAccount == nil || $0.account == state.activeAccount) }.max { $0.date < $1.date }
             if let m, unsubscribe(using: m) {} else { failed.append(s) }
         }
         let n = cleanupArchive(senders) { "Unsubscribed · archived \($0)" }
@@ -172,7 +175,8 @@ extension AppStore {
         draftsWriting.insert(c.id); defer { draftsWriting.remove(c.id) }
         let who = parseAddresses(c.latest.from).first
         let them = who?.email.lowercased() ?? ""
-        let sent = messages.values.filter { $0.labelIds.contains("SENT") }.sorted { $0.date > $1.date }
+        // Style samples come from this account only: a work email shouldn't be shown to the AI to answer a personal one.
+        let sent = messages.values.filter { $0.labelIds.contains("SENT") && $0.account == c.account }.sorted { $0.date > $1.date }
         let toThem = sent.filter { parseAddresses($0.to + "," + $0.cc).contains { $0.email.lowercased() == them } }
         let samples = (toThem.count >= 3 ? toThem : sent).prefix(5).map { String(splitQuoted($0.plainText).body.prefix(1200)) }
         let busy = calUpcoming.filter { !$0.allDay && $0.start > Date() }.prefix(25)
@@ -210,8 +214,8 @@ extension AppStore {
     /// Sends the ready draft as a reply (with the usual Undo Send window).
     func sendReadyDraft() {
         guard let c = selected, let r = readyDraft(c) else { return }
-        var d = replyDraft(to: c.latest, me: c.account, all: false)
-        d.from = replyFrom(c.latest, account: c.account)
+        var d = replyDraft(to: c.replyTarget, me: c.account, all: false, mine: me)
+        d.from = replyFrom(c.replyTarget, account: c.account)
         d.body = r.text
         if ["all", "replies"].contains(state.signatureUse) { applySignature(&d, from: d.from) }
         state.readyDrafts[c.id] = nil

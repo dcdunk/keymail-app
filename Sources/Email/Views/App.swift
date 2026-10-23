@@ -6,16 +6,37 @@ import EmailCore
 import EventKit
 import QuickLook
 
+/// Quitting (or an update relaunching Keymail) while an email waits out Undo Send sends it first.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let store = AppStore.current, !store.pendingSends.isEmpty else { return .terminateNow }
+        Task { @MainActor in
+            await store.flushPendingSends()
+            NSApp.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
+}
+
 @main
 struct EmailApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = AppStore()
-    init() { NSApplication.shared.setActivationPolicy(.regular) }
+    init() {
+        NSApplication.shared.setActivationPolicy(.regular)
+        // A closed socket or pipe (an AI tool that quit mid-request, curl stopping early) must be an error, not a crash.
+        signal(SIGPIPE, SIG_IGN)
+    }
     var body: some Scene {
         WindowGroup("Keymail") {
             RootView().environmentObject(store).environmentObject(store.calendar)
                 .frame(minWidth: 720, minHeight: 520)
                 .onAppear { store.start(); NSApp.activate(ignoringOtherApps: true) }
+                // Email links open a draft in this window; without this, macOS opened a second Keymail window.
+                .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
+                .onOpenURL { url in store.compose(mailto: url) }
         }
+        .handlesExternalEvents(matching: [])
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1240, height: 780)
         .commands {

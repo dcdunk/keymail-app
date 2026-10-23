@@ -13,6 +13,7 @@ struct SplitInbox: View {
             Divider().opacity(0.5)
             if let c = store.selected {
                 ThreadView(conversation: c, embedded: true).id(c.id)
+                    .onAppear { if !store.threadOpen, store.selectedID == nil || store.selectedID == c.id { store.open(c) } }   // the shown email is the open one
             } else {
                 VStack(spacing: 8) {
                     Image(systemName: "envelope.open").font(.scaled(size: 34, weight: .light))
@@ -96,6 +97,8 @@ struct SplitRow: View {
             hover = h   // and the right-click menu acts on this row (it was only wired for the full-width list)
             if h { store.rightClickTarget = c } else if store.rightClickTarget?.id == c.id { store.rightClickTarget = nil }
         }
+        // A row that scrolls away or is archived while hovered can't leave a stale right-click target behind.
+        .onDisappear { if store.rightClickTarget?.id == c.id { store.rightClickTarget = nil } }
         // Drag onto a sidebar folder or label, or the Calendar button.
         .draggable(c.id) { Label(c.latest.subject, systemImage: "envelope").padding(8).glass(Capsule()) }
     }

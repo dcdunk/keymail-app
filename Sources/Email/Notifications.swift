@@ -88,7 +88,7 @@ final class Notifier: NSObject, ObservableObject, UNUserNotificationCenterDelega
         guard let store else { return }
         var n = 0
         if Self.badgeMode != "off" {
-            let inbox = store.allConversations.filter { $0.inInbox && $0.isUnread }
+            let inbox = store.inboxShown.filter(\.isUnread)
             n = Self.badgeMode == "all" ? inbox.count : {
                 let ctx = store.context(store.allConversations)
                 return inbox.filter { isImportant($0, ctx) }.count

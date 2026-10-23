@@ -192,10 +192,14 @@ extension AppStore {
         guard !q.isEmpty else { return commands }
         let words = q.split(separator: " ")
         let typedTime = parseWhen(q.replacingOccurrences(of: "remind me", with: "").replacingOccurrences(of: "remind", with: "")) != nil
-        return commands.filter { c in
+        let hits = commands.filter { c in
             (typedTime && c.title.hasPrefix("Remind me: ") && !snoozePresets().contains { c.title.contains($0.0) })
                 || words.allSatisfy { c.title.lowercased().contains($0) }
         }
+        // Commands that start with what you typed come first: L then Return applies a label instead of making a
+        // "New split: label …" that merely mentions the word.
+        let first = String(words.first ?? "")
+        return hits.filter { $0.title.lowercased().hasPrefix(first) } + hits.filter { !$0.title.lowercased().hasPrefix(first) }
     }
 
     /// Opens the Send to Claude Code card for the latest email.

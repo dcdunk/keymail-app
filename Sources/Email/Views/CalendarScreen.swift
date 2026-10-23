@@ -204,15 +204,16 @@ struct DayColumn: View {
                 // Above the events while placing: a click anywhere picks that time (snapped to 15 minutes).
                 Color.primary.opacity(0.001).contentShape(Rectangle())
                     .onTapGesture { p in
-                        let minutes = (Double(p.y / hourHeight) * 60 / 15).rounded(.down) * 15
-                        store.placeEmail(at: start.addingTimeInterval(minutes * 60))
+                        let minutes = Int((Double(p.y / hourHeight) * 60 / 15).rounded(.down) * 15)
+                        // By clock time, not seconds since midnight: on a daylight-saving day those differ by an hour.
+                        store.placeEmail(at: Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: start) ?? start)
                     }
                     .zIndex(1).handCursor()
             }
             ForEach(mine) { e in
                 let s = max(e.start, start), f = min(e.end, end)
-                let top = CGFloat(s.timeIntervalSince(start) / 3600) * hourHeight
-                let h = max(18, CGFloat(f.timeIntervalSince(s) / 3600) * hourHeight - 2)
+                let top = CGFloat(clockHours(s, day: start)) * hourHeight
+                let h = max(18, CGFloat((f >= end ? 24 : clockHours(f, day: start)) - clockHours(s, day: start)) * hourHeight - 2)
                 let c = cols[e.id] ?? (0, 1), w = (geo.size.width - 4) / CGFloat(max(c.of, 1))
                 EventBlock(event: e, height: h)
                     .frame(width: max(w - 2, 10), height: h)
@@ -228,7 +229,7 @@ struct NowLine: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { t in
             if days.contains(where: { Calendar.current.isDate($0, inSameDayAs: t.date) }) {
-                let y = CGFloat(t.date.timeIntervalSince(Calendar.current.startOfDay(for: t.date)) / 3600) * hourHeight
+                let y = CGFloat(clockHours(t.date, day: t.date)) * hourHeight
                 HStack(spacing: 0) {
                     Text(t.date.formatted(.dateTime.hour().minute())).font(.scaled(size: 9.5, weight: .semibold)).foregroundStyle(.white)
                         .padding(.horizontal, 4).padding(.vertical, 1).background(Capsule().fill(Color.red))
@@ -448,7 +449,10 @@ struct MonthGrid: View {
                     HStack(spacing: 0) {
                         ForEach(days[(r * 7)..<(r * 7 + 7)], id: \.self) { d in
                             MonthCell(day: d, inMonth: Calendar.current.component(.month, from: d) == month,
-                                      events: events.filter { Calendar.current.isDate($0.start, inSameDayAs: d) }.sorted { $0.start < $1.start })
+                                      events: events.filter { e in   // every day it covers: a Mon-Fri trip shows all week, not just Monday
+                                          let day = Calendar.current.startOfDay(for: d), next = Calendar.current.date(byAdding: .day, value: 1, to: day)!
+                                          return e.start < next && (e.end > day || Calendar.current.isDate(e.start, inSameDayAs: d))
+                                      }.sorted { $0.start < $1.start })
                         }
                     }
                 }
@@ -900,4 +904,12 @@ struct EventEditor: View {
         store.updateEvent(event, title: title, start: start, end: end, notes: notes)
         store.calEditing = nil
     }
+}
+
+/// Where a time sits on the day grid: the hour shown on the clock (9:30 → 9.5). Seconds since midnight put everything
+/// after 2am an hour off on the days the clocks change.
+func clockHours(_ d: Date, day: Date) -> Double {
+    if !Calendar.current.isDate(d, inSameDayAs: day) { return d < day ? 0 : 24 }
+    let c = Calendar.current.dateComponents([.hour, .minute], from: d)
+    return Double(c.hour ?? 0) + Double(c.minute ?? 0) / 60
 }

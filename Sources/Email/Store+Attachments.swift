@@ -15,13 +15,14 @@ extension AppStore {
     /// Downloads images embedded in the body (cid:) so they render. Skips anything over 5 MB.
     func loadInlineImages(_ msgs: [Message]) async {
         for m in msgs where inlineData[m.key] == nil && (m.html?.contains("cid:") ?? false) {
-            var map: [String: String] = [:]
+            var map: [String: String] = [:], failed = false
             for a in m.attachments where a.isInline && a.size < 5_000_000 {
                 if let data = try? await fetchAttachment(account: m.account, messageId: m.id, id: a.id), let cid = a.contentId {
                     map[cid] = "data:\(a.mimeType);base64,\(data.base64EncodedString())"
-                }
+                } else { failed = true }
             }
-            inlineData[m.key] = map
+            // A failed download is tried again next time the email is shown, instead of staying broken all session.
+            if !(failed && map.isEmpty) { inlineData[m.key] = map }
         }
     }
 
@@ -63,7 +64,7 @@ extension AppStore {
         Task {
             if let data = try? await fetchAttachment(account: m.account, messageId: m.id, id: a.id), let img = NSImage(data: data) {
                 thumbnails[key] = img
-            }
+            } else { thumbnails[key] = nil }   // failed: no endless spinner, and the next view tries again
         }
     }
 

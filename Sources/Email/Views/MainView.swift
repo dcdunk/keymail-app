@@ -42,6 +42,10 @@ struct MainView: View {
                 else if store.inboxLayout == "film" { FilmstripInbox() }
                 else if store.threadOpen, let c = store.selected { ThreadView(conversation: c) } else { ListView() }
             }
+            // Sized to the space between the side panels, not the whole window: with both panels open the top bar
+            // and toolbars used to think they had room they didn't, and pushed buttons off-screen.
+            .environment(\.layout, LayoutWidth(width: layout.width - (store.foldersVisible ? 280 : 0)
+                                                - (store.contextVisible && layout.width >= 1100 ? 290 : 0)))
             }
             // The context panel needs room; narrow windows hide it automatically.
             if store.contextVisible, layout.width >= 1100 {
@@ -188,7 +192,7 @@ struct ViewSwitchButton: View {
         }
         .buttonStyle(.plain).foregroundStyle(.primary).glass(Circle(), interactive: true, tint: Theme.accent.opacity(0.25))
         .overlay(alignment: .topTrailing) {
-            let unread = toCalendar ? 0 : store.allConversations.filter { $0.inInbox && $0.isUnread }.count
+            let unread = toCalendar ? 0 : store.inboxShown.filter(\.isUnread).count
             if unread > 0 {
                 Text(unread > 99 ? "99+" : "\(unread)").font(.scaled(size: 9.5, weight: .bold)).foregroundStyle(.white)
                     .padding(.horizontal, 4).frame(minWidth: 16, minHeight: 16).background(Capsule().fill(Theme.accent))
@@ -271,7 +275,7 @@ struct Row: View {
     }
     var body: some View {
         let unread = c.isUnread
-        let chips = c.labels.compactMap { store.labelNames[$0] }.filter { !isAppLabel($0) }.sorted()
+        let chips = c.labels.compactMap { store.labelName($0, account: c.account) }.filter { !isAppLabel($0) }.sorted()
         HStack(spacing: 0) {
             Circle().fill(dot).frame(width: 7, height: 7).frame(width: 26)
             HStack(spacing: 6) {
@@ -327,6 +331,8 @@ struct Row: View {
             hovering = h
             if h { store.rightClickTarget = c } else if store.rightClickTarget?.id == c.id { store.rightClickTarget = nil }
         }
+        // A row that scrolls away or is archived while hovered can't leave a stale right-click target behind.
+        .onDisappear { if store.rightClickTarget?.id == c.id { store.rightClickTarget = nil } }
         // Drag onto the top bar's Calendar button to block time for this email.
         .draggable(c.id) { Label(c.latest.subject, systemImage: "envelope").padding(8).glass(Capsule()) }
     }

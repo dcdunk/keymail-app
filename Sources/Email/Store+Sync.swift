@@ -35,6 +35,10 @@ extension AppStore {
             }
             catch { log("\(a): sync error: \(error.localizedDescription.prefix(300))"); report(error) }
         }
+        // Today's events beside your mail stay current even when the calendar screen isn't open (every 10 minutes).
+        if calendarEnabled, !calendarOpen, Date().timeIntervalSince(lastCalendarRefresh) > 600 {
+            lastCalendarRefresh = Date(); Task { await loadCalendar() }
+        }
         applyInboxRules()
         saveCache()
         notifyArrivals(known: known)
@@ -100,7 +104,11 @@ extension AppStore {
                 // your phone) so Sent matches Gmail.
                 else if info.labels.contains("INBOX") || info.labels.contains("SENT") || cachedThreads.contains(info.threadId) { toFetch.append(id) }
             }
-            for m in await g.messages(toFetch) { messages[m.key] = m }
+            let got = await g.fetch(toFetch)
+            for m in got.messages { messages[m.key] = m }
+            // Some new mail didn't download (Google busy): keep the old bookmark so the next check asks for it again.
+            // Moving on anyway lost those emails until a full resync, about a week later.
+            guard got.failed == 0 else { throw URLError(.cannotLoadFromNetwork) }
             state.historyIds[a] = result.latest
         } else {
             log("\(a): \(state.historyIds[a] == nil ? "no bookmark" : "bookmark expired"), full sync needed")
@@ -140,7 +148,11 @@ extension AppStore {
     func syncICloud(_ a: String) async throws {
         let mine = messages.values.filter { $0.account == a }
         let result = try await icloud(a).syncInbox(cached: Set(mine.compactMap { Int($0.id) }))
-        for m in mine {
+        if result.reset {   // renumbered on the server: the old copies would get the wrong flags, archive the wrong email
+            log("\(a): mailbox renumbered by the server, reloading the inbox")
+            for m in mine where Int(m.id) != nil { messages[m.key] = nil }
+        }
+        for m in mine where !result.reset {
             guard let uid = Int(m.id) else { continue }   // a Sent/Archive copy ("sent:12"): not part of the inbox sync
             guard let flags = result.flags[uid] else { messages[m.key] = nil; continue } // left the inbox
             var labels = m.labelIds.filter { !["UNREAD", "STARRED"].contains($0) }
@@ -151,7 +163,7 @@ extension AppStore {
         for m in result.new { messages[m.key] = m }
     }
 
-    /// Microsoft: the newest 300 inbox emails from the last 30 days. Read/flag/Focused changes come from the list;
+    /// Microsoft: the newest 300 inbox emails, however old. Read/flag/Focused changes come from the list;
     /// full bodies are fetched only for emails not cached yet; emails that left the inbox are dropped.
     func syncMicrosoft(_ a: String) async throws {
         let g = graph(a)
@@ -183,7 +195,7 @@ extension AppStore {
         let now = Date()
         for s in state.snoozes {
             let cached = messages.values.filter { $0.account == s.account && $0.threadId == s.threadId }
-            let repliedEarly = s.ifNoReply && gotReply(Array(cached), me: s.account, after: s.setAt)
+            let repliedEarly = s.ifNoReply && gotReply(Array(cached), me: s.account, after: s.setAt, mine: me)
             guard s.until <= now || repliedEarly else { continue }
             if !isGmail(s.account) {
                 state.snoozes.removeAll { $0 == s }
@@ -192,10 +204,10 @@ extension AppStore {
             }
             do {
                 let g = gmail(s.account)
-                let snoozedId = try await g.snoozeLabelId(existing: labelNames)
+                let snoozedId = try await g.snoozeLabelId(existing: await labelMap(s.account))
                 labelNames[snoozedId] = Gmail.snoozeLabel
                 let msgs = try await g.thread(s.threadId)
-                if s.ifNoReply && gotReply(msgs, me: s.account, after: s.setAt) {
+                if s.ifNoReply && gotReply(msgs, me: s.account, after: s.setAt, mine: me) {
                     // Someone replied, so the reminder is cancelled; the reply already brought it back.
                     try await g.modifyThread(s.threadId, add: [], remove: [snoozedId])
                 } else {
@@ -204,30 +216,42 @@ extension AppStore {
                 }
                 state.snoozes.removeAll { $0 == s }
                 for m in try await g.thread(s.threadId) { messages[m.key] = m }
+            } catch let e as HTTPError where e.status == 404 {
+                state.snoozes.removeAll { $0 == s }   // the email was deleted: nothing to bring back, so stop retrying
             } catch { report(error) }
         }
         for job in state.scheduled where job.at <= now {
             do {
                 try await send(job.draft, remindDays: job.remindDays)
                 state.scheduled.removeAll { $0.id == job.id }
-            } catch { report(AppError("Scheduled send failed, will retry: \(error.localizedDescription)")) }
+            } catch {
+                // A network blip retries quietly. An hour of failures, or a refusal that will never pass (bad address,
+                // too large), stops retrying and hands the email back to you as a draft, instead of a banner every 15s.
+                let transient = (error as? HTTPError)?.isTransient == true || error is URLError || error is NWError
+                if transient && now.timeIntervalSince(job.at) < 3600 { continue }
+                state.scheduled.removeAll { $0.id == job.id }
+                let m = openCompose(job.draft, context: nil)
+                m.error = "Your scheduled email wasn't sent: \(error.localizedDescription.prefix(160))"
+            }
         }
         for f in state.followUps where f.due <= now {
             if !isGmail(f.account) {
                 let msgs = messages.values.filter { $0.account == f.account && $0.threadId == f.threadId }
-                if !gotReply(Array(msgs), me: f.account, after: f.sentAt) { banner = "No reply yet to your email from \(f.account)." }
+                if !gotReply(Array(msgs), me: f.account, after: f.sentAt, mine: me) { banner = "No reply yet to your email from \(f.account)." }
                 state.followUps.removeAll { $0 == f }
                 continue
             }
             do {
                 let msgs = try await gmail(f.account).thread(f.threadId)
-                if !gotReply(msgs, me: f.account, after: f.sentAt) {
+                if !gotReply(msgs, me: f.account, after: f.sentAt, mine: me) {
                     try await gmail(f.account).modifyThread(f.threadId, add: ["INBOX"], remove: [])
                     state.bumped["\(f.account)|\(f.threadId)"] = now
                     for var m in msgs { if m.id == msgs.last?.id { m.labelIds.append("INBOX") }; messages[m.key] = m }
                     banner = "No reply yet: \(msgs.last?.subject ?? "")"
                 }
                 state.followUps.removeAll { $0 == f }
+            } catch let e as HTTPError where e.status == 404 {
+                state.followUps.removeAll { $0 == f }   // the thread was deleted
             } catch { report(error) }
         }
     }

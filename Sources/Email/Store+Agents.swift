@@ -210,15 +210,15 @@ extension AppStore {
         case "draft_email":
             guard let to = str("to"), let body = str("body") else { throw AppError("to and body are required.") }
             let from = str("from_account").flatMap { f in state.accounts.first { $0.lowercased() == f.lowercased() } } ?? defaultAccount
-            var d = Draft(from: sendAddress(from)); d.to = to; d.cc = str("cc") ?? ""; d.subject = str("subject") ?? ""; d.body = body
+            var d = Draft(from: sendAddress(from), account: from); d.to = to; d.cc = str("cc") ?? ""; d.subject = str("subject") ?? ""; d.body = body
             showForReview(d, context: nil, isReply: false)
             return "Opened in Keymail as a draft for the person to review and send."
 
         case "draft_reply":
             let c = try conv()
             guard let body = str("body") else { throw AppError("body is required.") }
-            var d = replyDraft(to: c.latest, me: c.account, all: a["reply_all"] as? Bool ?? false)
-            d.from = replyFrom(c.latest, account: c.account); d.body = body + d.body
+            var d = replyDraft(to: c.replyTarget, me: c.account, all: a["reply_all"] as? Bool ?? false, mine: me)
+            d.from = replyFrom(c.replyTarget, account: c.account); d.body = body + d.body
             showForReview(d, context: c, isReply: true)
             return "Reply opened in Keymail for the person to review and send."
 
@@ -240,13 +240,13 @@ extension AppStore {
                 let c = try conv()
                 participants = Set(([c.account] + (state.aliases[c.account] ?? [])).map { $0.lowercased() }
                     + c.messages.flatMap { parseAddresses($0.from + "," + $0.to + "," + $0.cc).map { $0.email.lowercased() } })
-                d = replyDraft(to: c.latest, me: c.account, all: false); d.from = replyFrom(c.latest, account: c.account)
+                d = replyDraft(to: c.replyTarget, me: c.account, all: false, mine: me); d.from = replyFrom(c.replyTarget, account: c.account)
                 d.body = body + d.body
                 if let to = str("to") { d.to = to }
             } else {
                 guard let to = str("to"), let subject = str("subject") else { throw AppError("to and subject are required for a new email.") }
                 participants = nil
-                d = Draft(from: sendAddress(defaultAccount)); d.to = to; d.subject = subject; d.body = body
+                d = Draft(from: sendAddress(defaultAccount), account: defaultAccount); d.to = to; d.subject = subject; d.body = body
             }
             if let cc = str("cc") { d.cc = cc }
             let use = state.signatureUse
@@ -327,7 +327,7 @@ extension AppStore {
 
     func when(_ text: String) throws -> Date {
         if let d = ISO8601DateFormatter().date(from: text) { return d }
-        let f = ISO8601DateFormatter(); f.formatOptions = [.withFullDate]
+        let f = ISO8601DateFormatter(); f.formatOptions = [.withFullDate]; f.timeZone = .current   // "2026-10-24" is that day here, not UTC midnight (the day before, west of London)
         if let d = f.date(from: text) { return Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: d) ?? d }
         if let d = parseWhen(text.lowercased()) { return d }
         throw AppError("Couldn't understand the time \"\(text)\". Use ISO 8601, e.g. 2026-10-16T09:00:00-07:00.")

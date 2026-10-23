@@ -6,7 +6,7 @@ import SwiftUI
 /// Inline replies (Settings → General → Reply inside the conversation) stay in the main window instead.
 @MainActor final class ComposeWindow: NSObject, NSWindowDelegate {
     static let shared = ComposeWindow()
-    private var window: NSWindow?
+    private(set) var window: NSWindow?
     private var shownID: UUID?
     var isKey: Bool { window?.isKeyWindow ?? false }
 
@@ -46,12 +46,11 @@ import SwiftUI
         window?.contentView = nil
     }
 
-    /// The red close button keeps the draft, the same as Esc.
+    /// The red close button and ⌘W ask the same "Save this draft?" as ✕ and Esc. An empty draft just closes.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if let store = AppStore.current, let m = store.composing {
-            m.saveTask?.cancel()
-            Task { await store.saveDraft(m) }
-            store.composing = nil
+            if m.draft.isBlank && m.draft.draftId == nil && m.draftMessage == nil { m.saveTask?.cancel(); store.composing = nil }
+            else { m.askClose = true }
         }
         return false   // update() hides it; the window object is reused for the next draft
     }

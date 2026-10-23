@@ -145,6 +145,7 @@ final class ComposeModel: ObservableObject, Identifiable {
     @Published var busy = false
     @Published var error: String?
     @Published var savedNote: String?
+    @Published var askClose = false   // "Save this draft?" showing, from ✕, Esc or the window's close button
     var saveTask: Task<Void, Never>?
     var draftMessage: Message?   // the saved draft this compose was reopened from, if any
     var inline = false           // a reply shown inside the conversation instead of its own window
@@ -456,9 +457,17 @@ final class AppStore: ObservableObject {
 
     /// The account that owns a From address (itself, or the account an alias belongs to).
     func account(for from: String) -> String {
-        let f = from.lowercased()
+        // "Danny Chait <danny@x.com>" (a From with your name added) belongs to danny@x.com. Comparing the whole string
+        // matched no account, so drafts and sends from a named address said the account was signed out.
+        let f = (parseAddresses(from).first?.email ?? from).lowercased()
         if let a = state.accounts.first(where: { $0.lowercased() == f }) { return a }
         return state.aliases.first { $0.value.contains { $0.lowercased() == f } }?.key ?? from
+    }
+
+    /// The account a draft saves and sends through: the one picked for it, else the one its From address belongs to.
+    func account(of d: Draft) -> String {
+        if let a = d.account, state.accounts.contains(a) { return a }
+        return account(for: d.from)
     }
 
     /// "Work" if named, otherwise the address.
@@ -468,8 +477,8 @@ final class AppStore: ObservableObject {
     }
 
     /// "Work · danny@x.com" for menus where both help.
-    func fullLabel(_ address: String) -> String {
-        let acct = account(for: address)
+    func fullLabel(_ address: String, account known: String? = nil) -> String {
+        let acct = known ?? account(for: address)
         let n = state.accountNames[acct]?.trimmingCharacters(in: .whitespaces) ?? ""
         return n.isEmpty ? address : "\(n) · \(address)"
     }
@@ -507,6 +516,8 @@ final class AppStore: ObservableObject {
     var lastSynced: [String: Date] = [:]
     var quotaHits: [String: Int] = [:]
     var undoStack: [(c: Conversation, kind: UndoKind)] = []
+    var lastCalendarRefresh = Date()
+    var stickyRow: (tab: String, id: String, index: Int)?   // the opened email keeps its row (see `visible`)
     @Published var pendingSends: [PendingSend] = []
     @Published var vacations: [String: Vacation] = [:]
     @Published var needsSettingsAccess: Set<String> = []

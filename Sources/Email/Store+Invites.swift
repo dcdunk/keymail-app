@@ -150,12 +150,22 @@ extension AppStore {
             catch let e as HTTPError where e.status == 403 && (e.body.contains("accessNotConfigured") || e.body.contains("has not been used")) {
                 throw AppError("The Google Calendar API is turned off for Keymail's Google Cloud project. Turn it on at console.cloud.google.com/apis/library/calendar-json.googleapis.com, wait a minute, then try again.")
             }
-        } else if answer != .declined, let s = inv.start, let end = inv.end, calendar.authorized {
-            // iCloud: put it on the Mac's iCloud calendar (falls back to the default calendar).
-            let cals = calendar.writableCalendars
-            let target = cals.first { $0.source.sourceType == .calDAV && $0.source.title.lowercased().contains("icloud") }
-            try? calendar.create(title: inv.summary, start: s, minutes: max(1, Int(end.timeIntervalSince(s) / 60)),
-                                 notes: inv.details, location: inv.conference?.url.absoluteString ?? inv.location, calendar: target)
+        } else if isMicrosoft(acct), (try? await OutlookCalendar(account: acct, auth: microsoft).respond(uid: inv.uid, answer)) == true {
+            // Outlook answered on its own calendar and told the organizer, the same as Gmail above.
+            return "\(answer.label): \(inv.summary). Your Outlook calendar and \(inv.organizerName.isEmpty ? inv.organizer : inv.organizerName) are updated."
+        } else if !isMicrosoft(acct), let s = inv.start, let end = inv.end, calendar.authorized {
+            // iCloud: the Mac's iCloud calendar (falls back to the default calendar). One copy whatever you answer:
+            // changing Yes to Maybe used to add a second event, and No left the first one in place.
+            let existing = calendar.matching(title: inv.summary, start: s)
+            if answer == .declined {
+                for e in existing { try? calendar.remove(e) }
+            } else if existing.isEmpty {
+                let target = calendar.writableCalendars.first { $0.source.sourceType == .calDAV && $0.source.title.lowercased().contains("icloud") }
+                do {
+                    try calendar.create(title: inv.summary, start: s, minutes: max(1, Int(end.timeIntervalSince(s) / 60)),
+                                        notes: inv.details, location: inv.conference?.url.absoluteString ?? inv.location, calendar: target)
+                } catch { banner = "Your answer was sent, but Keymail couldn't add the event to your calendar: \(error.localizedDescription)" }
+            }
         }
         // The organizer's calendar records the answer from a standard RSVP email.
         var d = Draft(from: me)

@@ -554,4 +554,30 @@ final class QuotedHTMLTests: XCTestCase {
         let m = Message(id: "1", threadId: "1", account: "a", from: "Apple <appleid@id.apple.com>", text: "\u{FFFC}\nDear Danny,")
         XCTAssertEqual(m.plainText, "\nDear Danny,", "Apple's logo placeholder is dropped")
     }
+
+    func testEmailLinksBecomeDrafts() {
+        let d = draftFromMailto(URL(string: "mailto:sam@x.co,ann@y.co?cc=boss@z.co&subject=Hello%20there&body=Line%201%0D%0ALine%202")!, from: "me@a.co")!
+        XCTAssertEqual(parseAddresses(d.to).map(\.email), ["sam@x.co", "ann@y.co"])
+        XCTAssertEqual(parseAddresses(d.cc).map(\.email), ["boss@z.co"])
+        XCTAssertEqual(d.subject, "Hello there")
+        XCTAssertEqual(d.body, "Line 1\nLine 2")
+        XCTAssertEqual(d.from, "me@a.co")
+        XCTAssertEqual(draftFromMailto(URL(string: "mailto:?subject=Hi")!, from: "me@a.co")?.to, "", "no address is fine")
+        XCTAssertEqual(parseAddresses(draftFromMailto(URL(string: "mailto:a+tag@x.co")!, from: "")!.to).first?.email, "a+tag@x.co")
+        XCTAssertNil(draftFromMailto(URL(string: "https://x.co")!, from: ""))
+    }
+
+    func testBlankDraftsCloseWithoutAsking() {
+        var d = Draft(from: "me@a.co")
+        XCTAssertTrue(d.isBlank)
+        d.body = "  \n"; XCTAssertTrue(d.isBlank, "only spaces is still blank")
+        d.subject = "Hi"; XCTAssertFalse(d.isBlank)
+        d = Draft(from: "me@a.co"); d.to = "sam@x.co, "; XCTAssertFalse(d.isBlank)
+    }
+
+    func testFlaggedLinksMatchHowTheClickArrives() {
+        XCTAssertEqual(normalizedLink("https://Evil.com"), normalizedLink("https://evil.com/"))
+        XCTAssertEqual(normalizedLink("HTTPS://evil.com/pay?x=1"), normalizedLink("https://evil.com/pay?x=1"))
+        XCTAssertNotEqual(normalizedLink("https://evil.com/a"), normalizedLink("https://evil.com/b"))
+    }
 }

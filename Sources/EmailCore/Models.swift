@@ -115,6 +115,8 @@ public struct Conversation: Identifiable, Hashable {
 
     public var id: String { account + "|" + threadId }
     public var latest: Message { messages[messages.count - 1] }
+    /// The newest email you can answer: your own unsent draft in the thread doesn't count.
+    public var replyTarget: Message { messages.last { !$0.labelIds.contains("DRAFT") } ?? latest }
     public var labels: Set<String> { Set(messages.flatMap(\.labelIds)) }
     public var isUnread: Bool { labels.contains("UNREAD") }
     public var isStarred: Bool { labels.contains("STARRED") }

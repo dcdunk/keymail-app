@@ -39,14 +39,15 @@ final class ICloudSignInTests: XCTestCase {
     /// One stray "Authentication Failed" from iCloud no longer signs the account out: it takes 3 in a row,
     /// and a good sign-in in between starts the count over.
     func testOneStrayRefusalDoesNotSignOut() {
-        let a = "test-refusal@icloud.com"
-        ICloud.setRejected(a, false)
-        XCTAssertEqual(ICloud.refused(a), 1)
-        XCTAssertEqual(ICloud.refused(a), 2)
+        let a = "test-refusal@icloud.com", t = Date()
+        ICloud.setRejected(a, false); ICloud.refusals(reset: a)
+        XCTAssertEqual(ICloud.refused(a, now: t), 1)
+        XCTAssertEqual(ICloud.refused(a, now: t.addingTimeInterval(5)), 1, "more sign-ins in the same bad moment don't add strikes")
+        XCTAssertEqual(ICloud.refused(a, now: t.addingTimeInterval(300)), 2)
         ICloud.refusals(reset: a)   // signed in fine
-        XCTAssertEqual(ICloud.refused(a), 1, "the count starts over after a good sign-in")
-        XCTAssertEqual(ICloud.refused(a), 2)
-        XCTAssertEqual(ICloud.refused(a), 3, "the third in a row is the one that signs out")
+        XCTAssertEqual(ICloud.refused(a, now: t.addingTimeInterval(600)), 1, "the count starts over after a good sign-in")
+        XCTAssertEqual(ICloud.refused(a, now: t.addingTimeInterval(900)), 2)
+        XCTAssertEqual(ICloud.refused(a, now: t.addingTimeInterval(1200)), 3, "the third, minutes apart, is the one that signs out")
         ICloud.setRejected(a, false)
     }
 }

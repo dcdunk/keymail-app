@@ -68,11 +68,11 @@ struct StreamItem: View {
             HStack(spacing: 2) {
                 let acts: [(String, String, String, () -> Void)] = [
                     (open ? "Space" : "Space", open ? "Collapse" : "Show full email", open ? "chevron.up" : "chevron.down", { store.streamExpanded.formSymmetricDifference([c.id]) }),
-                    (Hotkeys.label("r"), "Reply", "arrowshape.turn.up.left", { store.act(on: c) { store.reply(all: false) } }),
-                    (Hotkeys.label("e"), "Done", "checkmark", { store.act(on: c) { store.markDone() } }),
-                    (Hotkeys.label("h"), "Remind", "clock", { store.act(on: c) { store.openPalette("remind") } }),
-                    (Hotkeys.label("s"), c.isStarred ? "Unstar" : "Star", c.isStarred ? "star.fill" : "star", { store.act(on: c) { store.toggleStar() } }),
-                    ("⌫", "Delete", "trash", { store.act(on: c) { store.trash() } }),
+                    (Hotkeys.label("r"), "Reply", "arrowshape.turn.up.left", { store.act(on: c, reading: true) { store.reply(all: false) } }),
+                    (Hotkeys.label("e"), "Done", "checkmark", { store.act(on: c, reading: true) { store.markDone() } }),
+                    (Hotkeys.label("h"), "Remind", "clock", { store.act(on: c, reading: true) { store.openPalette("remind") } }),
+                    (Hotkeys.label("s"), c.isStarred ? "Unstar" : "Star", c.isStarred ? "star.fill" : "star", { store.act(on: c, reading: true) { store.toggleStar() } }),
+                    ("⌫", "Delete", "trash", { store.act(on: c, reading: true) { store.trash() } }),
                 ]
                 ForEach(acts, id: \.1) { k, l, icon, run in
                     Button(action: run) {
@@ -89,6 +89,9 @@ struct StreamItem: View {
         .padding(16)
         .background(RoundedRectangle(cornerRadius: 16).fill(Color.primary.opacity(current ? 0.05 : 0.025)))
         .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(current ? Theme.accent.opacity(0.6) : Color.primary.opacity(0.06)))
+        // Right-click a card for the same menu as the list and split layouts.
+        .onHover { h in if h { store.rightClickTarget = c } else if store.rightClickTarget?.id == c.id { store.rightClickTarget = nil } }
+        .onDisappear { if store.rightClickTarget?.id == c.id { store.rightClickTarget = nil } }
     }
 }
 
@@ -106,7 +109,8 @@ struct FilmstripInbox: View {
                     ThreadView(conversation: c, embedded: true).id(c.id)
                     flip("chevron.right", "Next (J or →)") { store.move(1) }
                 }
-                .onAppear { if store.selected == nil { store.open(c) } }
+                // The email on screen is the open one, so Space, ".", Shift-O and y/n/? work from the start.
+                .onAppear { if !store.threadOpen { store.open(c) } }
             }
             Scrubber(items: items)
         }

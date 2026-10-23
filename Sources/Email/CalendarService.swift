@@ -78,6 +78,14 @@ final class CalendarService: ObservableObject {
 
     var writableCalendars: [EKCalendar] { store.calendars(for: .event).filter(\.allowsContentModifications) }
 
+    /// Writable Mac events with this title starting at this time: the copy an earlier answer to an invite made.
+    func matching(title: String, start: Date) -> [EKEvent] {
+        let p = store.predicateForEvents(withStart: start.addingTimeInterval(-60), end: start.addingTimeInterval(60), calendars: writableCalendars)
+        return store.events(matching: p).filter { $0.title == title && abs($0.startDate.timeIntervalSince(start)) < 60 }
+    }
+
+    func remove(_ e: EKEvent) throws { try store.remove(e, span: .thisEvent) }
+
     func create(title: String, start: Date, minutes: Int, notes: String, location: String, calendar: EKCalendar?) throws {
         let e = EKEvent(eventStore: store)
         e.title = title

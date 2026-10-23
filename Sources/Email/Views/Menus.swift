@@ -22,9 +22,9 @@ extension AppStore {
         var e: [MenuEntry] = [
             MenuEntry(title: "Open", icon: "envelope.open", key: "↵") { self.open(c) },
             .divider,
-            MenuEntry(title: "Reply", icon: "arrowshape.turn.up.left", key: Hotkeys.label("r")) { self.act(on: c) { self.reply(all: false) } },
-            MenuEntry(title: "Reply all", icon: "arrowshape.turn.up.left.2", key: Hotkeys.label("a")) { self.act(on: c) { self.reply(all: true) } },
-            MenuEntry(title: "Forward", icon: "arrowshape.turn.up.right", key: Hotkeys.label("f")) { self.act(on: c) { self.forward() } },
+            MenuEntry(title: "Reply", icon: "arrowshape.turn.up.left", key: Hotkeys.label("r")) { self.act(on: c, reading: true) { self.reply(all: false) } },
+            MenuEntry(title: "Reply all", icon: "arrowshape.turn.up.left.2", key: Hotkeys.label("a")) { self.act(on: c, reading: true) { self.reply(all: true) } },
+            MenuEntry(title: "Forward", icon: "arrowshape.turn.up.right", key: Hotkeys.label("f")) { self.act(on: c, reading: true) { self.forward() } },
             .divider,
             MenuEntry(title: "Mark done", icon: "checkmark", key: Hotkeys.label("e")) { self.act(on: c) { self.markDone() } },
             MenuEntry(title: c.isStarred ? "Unstar" : "Star", icon: c.isStarred ? "star.slash" : "star", key: Hotkeys.label("s")) { self.act(on: c) { self.toggleStar() } },

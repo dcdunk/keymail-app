@@ -15,7 +15,7 @@ extension AppStore {
 
     /// Demo send: the message appears in the conversation (or Sent) instead of going anywhere.
     func demoSend(_ d: Draft) {
-        let acct = account(for: d.from)
+        let acct = account(of: d)
         let m = Message(id: UUID().uuidString, threadId: d.threadId ?? UUID().uuidString, account: acct, from: d.from, to: d.to,
                         cc: d.cc, subject: d.subject, snippet: String(d.body.prefix(120)), date: Date(), labelIds: ["SENT"],
                         messageIdHeader: d.messageId ?? "", references: d.references, text: d.body)

@@ -2,6 +2,12 @@ import Foundation
 import CryptoKit
 
 public struct Draft: Codable, Hashable {
+    /// Nothing written yet: no recipients, subject, text or attachments. Closing it doesn't ask, and it's never saved.
+    public var isBlank: Bool {
+        to.trimmingCharacters(in: .whitespaces).isEmpty && cc.trimmingCharacters(in: .whitespaces).isEmpty
+            && bcc.trimmingCharacters(in: .whitespaces).isEmpty && subject.isEmpty
+            && body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && files.isEmpty
+    }
     public var from: String
     public var to = ""
     public var cc = ""
@@ -18,7 +24,10 @@ public struct Draft: Codable, Hashable {
     public var signaturePlain: String?   // plain-text signature, placed between `body` and `quoted`
     public var signatureHTML: String?    // its rich version; when set, the email also goes out as HTML
     public var calendarReply: String?    // an iTIP REPLY (.ics) sent alongside the text so the organizer's calendar records it
-    public init(from: String) { self.from = from }
+    /// The account this draft saves and sends through. One address can be an alias on two accounts (an iCloud address
+    /// Gmail also sends as), so the address alone can't say which; nil falls back to looking the address up.
+    public var account: String?
+    public init(from: String, account: String? = nil) { self.from = from; self.account = account }
 }
 
 public struct OutgoingFile: Codable, Hashable, Identifiable {
@@ -27,8 +36,16 @@ public struct OutgoingFile: Codable, Hashable, Identifiable {
     public init(name: String, mimeType: String, data: Data) { self.name = name; self.mimeType = mimeType; self.data = data }
 }
 
-/// Gmail rejects messages over 25 MB; base64 adds about a third.
-public func attachmentsTooLarge(_ files: [OutgoingFile]) -> Bool { files.reduce(0) { $0 + $1.data.count } * 4 / 3 > 24_000_000 }
+/// Each provider's largest email, after base64 (which adds about a third): Gmail 25 MB, iCloud/Yahoo 20 MB, and
+/// Outlook about 3 MB, because Keymail sends Outlook mail as a MIME upload that Microsoft caps at 4 MB.
+public func attachmentLimit(provider: String) -> (bytes: Int, label: String) {
+    switch provider {
+    case "outlook": return (3_000_000, "Outlook's 3 MB limit for emails sent from Keymail")
+    case "icloud": return (19_000_000, "iCloud's 20 MB limit")
+    default: return (24_000_000, "Gmail's 25 MB limit")
+    }
+}
+public func attachmentsTooLarge(_ files: [OutgoingFile], limit: Int = 24_000_000) -> Bool { files.reduce(0) { $0 + $1.data.count } * 4 / 3 > limit }
 
 public func base64url(_ data: Data) -> String {
     data.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
@@ -189,21 +206,26 @@ private func quoted(_ m: Message) -> String {
     return "\n\nOn \(df.string(from: m.date)), \(who) wrote:\n" + lines
 }
 
-public func replyDraft(to m: Message, me: String, all: Bool) -> Draft {
+/// `mine`: every address of yours (aliases too), so a message you sent from an alias still counts as yours.
+public func replyDraft(to m: Message, me: String, all: Bool, mine: Set<String> = []) -> Draft {
     let meL = me.lowercased()
+    let mineL = Set(mine.map { $0.lowercased() }).union([meL])
     let sender = parseAddresses(m.from)
-    // Replying to my own message goes to whoever I sent it to.
-    let to = sender.contains { $0.email.lowercased() == meL } ? parseAddresses(m.to) : sender
+    // Replying to my own message goes to whoever I sent it to. Otherwise to Reply-To when the sender set one
+    // (help desks, forms, mailing lists), else the sender.
+    let fromMe = sender.contains { mineL.contains($0.email.lowercased()) }
+    let replyTo = parseAddresses(m.replyTo ?? "").filter { !$0.email.isEmpty }
+    let to = fromMe ? parseAddresses(m.to) : replyTo.isEmpty ? sender : replyTo
     var cc: [Address] = []
     if all {
         for a in parseAddresses(m.to) + parseAddresses(m.cc) {
             let e = a.email.lowercased()
-            if e != meL, !to.contains(where: { $0.email.lowercased() == e }), !cc.contains(where: { $0.email.lowercased() == e }) {
+            if !mineL.contains(e), !to.contains(where: { $0.email.lowercased() == e }), !cc.contains(where: { $0.email.lowercased() == e }) {
                 cc.append(a)
             }
         }
     }
-    var d = Draft(from: me)
+    var d = Draft(from: me, account: me)
     d.to = to.map(\.formatted).joined(separator: ", ")
     d.cc = cc.map(\.formatted).joined(separator: ", ")
     d.subject = replySubject(m.subject)

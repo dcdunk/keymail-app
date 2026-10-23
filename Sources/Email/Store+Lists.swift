@@ -48,6 +48,13 @@ extension AppStore {
         return QueryContext(labelNames: labelNames, teamDomains: domains, reminded: reminded(all), importance: state.importance, drafted: drafted)
     }
 
+    /// What the inbox shows: in the inbox and not waiting on a reminder. One definition so the sidebar count,
+    /// the unread badge and the tabs agree (iCloud/Outlook reminders stay in the server's inbox and were counted).
+    var inboxShown: [Conversation] {
+        let snoozed = Set(state.snoozes.map(\.conversationId))
+        return allConversations.filter { $0.inInbox && !snoozed.contains($0.id) }
+    }
+
     /// Inbox conversations grouped by tab, computed once per render.
     var tabMembers: [String: [Conversation]] {
         if let t = tabCache { return t }
@@ -78,7 +85,14 @@ extension AppStore {
         var list: [Conversation]
         if let r = searchResults { list = allConversations.filter { r.contains($0.id) } }
         else { list = tabMembers[tabName] ?? [] }
-        return unreadOnly ? list.filter(\.isUnread) : list
+        if unreadOnly { list = list.filter(\.isUnread) }
+        // The email you're reading stays in its row after opening marks it read ("Unread only", an is:unread split).
+        // When it vanished, J jumped to the top and skipped one, and E sent you back to the list.
+        if let s = stickyRow, s.tab == tabName, searchResults == nil, !list.contains(where: { $0.id == s.id }),
+           let c = allConversations.first(where: { $0.id == s.id }), c.inInbox {
+            list.insert(c, at: min(s.index, list.count))
+        }
+        return list
     }
 
     func count(_ name: String, in members: [String: [Conversation]]) -> String {

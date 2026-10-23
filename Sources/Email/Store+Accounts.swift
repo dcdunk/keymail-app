@@ -87,14 +87,14 @@ extension AppStore {
                 } else {
                     var info = URLRequest(url: URL(string: "https://www.googleapis.com/oauth2/v3/userinfo")!)
                     info.setValue("Bearer \(try await auth.accessToken(for: a))", forHTTPHeaderField: "Authorization")
-                    let (d, r) = try await URLSession.shared.data(for: info)
+                    let (d, r) = try await GoogleNet.session.data(for: info)
                     guard (r as? HTTPURLResponse)?.statusCode == 200, let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
                           var pic = j["picture"] as? String else { continue }
                     if let eq = pic.lastIndex(of: "="), pic[eq...].hasPrefix("=s") { pic = String(pic[..<eq]) + "=s256-c" } // bigger than the default 96px
                     guard let u = URL(string: pic) else { continue }
                     req = URLRequest(url: u)
                 }
-                let (data, resp) = try await URLSession.shared.data(for: req)
+                let (data, resp) = try await GoogleNet.session.data(for: req)
                 if (resp as? HTTPURLResponse)?.statusCode == 200 { SenderLogos.shared.setPhoto(a, data) }
             } catch { continue } // no photo or no permission: keep the initial
         }

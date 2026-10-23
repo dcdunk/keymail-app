@@ -156,7 +156,10 @@ enum Keychain {
     static func set(_ value: String, for account: String) {
         let q = [kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: account] as CFDictionary
         var status = SecItemUpdate(q, [kSecValueData: Data(value.utf8)] as CFDictionary)
-        if status == errSecItemNotFound {
+        // Not found, or an entry this build may not change (made by a differently signed build): replace it outright.
+        // Keeping the old one left a revoked sign-in in place, so re-signing in "expired" again an hour later.
+        if status != errSecSuccess {
+            SecItemDelete(q)
             status = SecItemAdd([kSecClass: kSecClassGenericPassword, kSecAttrService: service, kSecAttrAccount: account,
                                  kSecValueData: Data(value.utf8)] as CFDictionary, nil)
         }

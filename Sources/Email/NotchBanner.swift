@@ -34,14 +34,15 @@ final class NotchBanner {
     }
 
     private func next() {
-        guard let (screen, notch) = Self.notchScreen, !queue.isEmpty else { hide(); return }
+        // No notch any more (lid closed): drop what's waiting rather than showing it hours later as "new".
+        guard let (screen, notch) = Self.notchScreen, !queue.isEmpty else { queue.removeAll(); hide(); return }
         let item = queue.removeFirst()
         let size = NotchModel.open
         let p = panel ?? makePanel()
         p.setFrame(NSRect(x: screen.frame.midX - size.width / 2, y: screen.frame.maxY - size.height, width: size.width, height: size.height), display: false)
         model.notch = notch
         p.orderFrontRegardless()
-        model.item = item; model.token = UUID()
+        model.item = item; model.token = UUID(); model.shownAt = Date()
         if Notifier.sound { NSSound(named: "Glass")?.play() }
         withAnimation(.spring(response: 0.42, dampingFraction: 0.78)) { model.expanded = true }
         schedule()
@@ -52,12 +53,14 @@ final class NotchBanner {
         let shown = model.token
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
             guard let self, self.model.token == shown, self.model.item != nil else { return }
-            if self.model.hovering { self.schedule() } else { self.dismiss() }
+            // Kept open while the pointer rests on it, but never more than a minute.
+            if self.model.hovering, Date().timeIntervalSince(self.model.shownAt) < 60 { self.schedule() } else { self.dismiss() }
         }
     }
 
     func dismiss() {
         guard model.expanded else { return }
+        model.hovering = false   // a click hides it before the pointer can "leave", which kept the next one open forever
         withAnimation(.spring(response: 0.32, dampingFraction: 0.9)) { model.expanded = false }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             guard let self else { return }
@@ -87,7 +90,8 @@ final class NotchModel: ObservableObject {
     @Published var item: NotchBanner.Item?
     @Published var expanded = false
     @Published var hovering = false
-    var token = UUID()   // which banner a 5-second timer belongs to
+    var token = UUID()
+    var shownAt = Date()   // which banner a 5-second timer belongs to
     @Published var notch = CGSize(width: 185, height: 32)
 }
 

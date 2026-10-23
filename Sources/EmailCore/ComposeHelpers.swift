@@ -127,3 +127,34 @@ public func removingLastRecipient(_ field: String) -> String? {
     chips.removeLast()
     return chips.map { $0 + ", " }.joined()
 }
+
+/// A mailto: link (RFC 6068) as a new draft: mailto:a@x.com,b@y.com?cc=c@z.com&subject=Hi&body=Line%201
+/// Fields we don't send (In-Reply-To and other headers) are ignored.
+public func draftFromMailto(_ url: URL, from: String) -> Draft? {
+    guard url.scheme?.lowercased() == "mailto" else { return nil }
+    var d = Draft(from: from)
+    let raw = url.absoluteString.dropFirst("mailto:".count)
+    let parts = raw.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
+    func decode(_ s: String) -> String { (s.replacingOccurrences(of: "+", with: "%2B").removingPercentEncoding ?? s) }
+    var to = [decode(parts.first ?? "")].filter { !$0.isEmpty }
+    var cc: [String] = [], bcc: [String] = []
+    for pair in (parts.count > 1 ? parts[1] : "").split(separator: "&") {
+        let kv = pair.split(separator: "=", maxSplits: 1).map(String.init)
+        guard let key = kv.first?.lowercased() else { continue }
+        let value = decode(kv.count > 1 ? kv[1] : "")
+        switch key {
+        case "to": to.append(value)
+        case "cc": cc.append(value)
+        case "bcc": bcc.append(value)
+        case "subject": d.subject = value
+        case "body": d.body = value.replacingOccurrences(of: "\r\n", with: "\n")
+        default: break
+        }
+    }
+    func field(_ list: [String]) -> String {
+        let a = parseAddresses(list.joined(separator: ",")).filter { !$0.email.isEmpty }
+        return a.isEmpty ? "" : a.map { $0.formatted + ", " }.joined()
+    }
+    d.to = field(to); d.cc = field(cc); d.bcc = field(bcc)
+    return d
+}

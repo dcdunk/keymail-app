@@ -50,7 +50,7 @@ struct InviteCard: View {
                     }
                     if needsAccess {
                         HStack(spacing: 8) {
-                            Text("To update your Google Calendar, Keymail needs your OK once.").font(.scaled(.caption)).foregroundStyle(.secondary)
+                            Text("To update your \(store.isMicrosoft(message.account) ? "Outlook" : "Google") Calendar, Keymail needs your OK once.").font(.scaled(.caption)).foregroundStyle(.secondary)
                             Button("Allow calendar access") {
                                 Task { if await store.grantCalendarAccess(for: message.account) { store.calNeedsAccess.remove(message.account); await load() } }
                             }.quiet().font(.scaled(.caption))

@@ -70,7 +70,7 @@ extension AppStore {
     func sendWithUndo(_ d: Draft, remindDays: Int?) {
         var d = d
         if d.messageId == nil {
-            let domain = d.from.split(separator: "@").last.map(String.init) ?? "email.local"
+            let domain = parseAddresses(d.from).first?.email.split(separator: "@").last.map(String.init) ?? "email.local"
             d.messageId = "<\(UUID().uuidString)@\(domain)>"
         }
         composing = nil
@@ -91,6 +91,18 @@ extension AppStore {
         }
         pendingSends.append(PendingSend(draft: d, remindDays: remindDays, task: task))
         banner = delay > 0 ? "Sending in \(delay)s… ⌘Z to undo." : nil
+    }
+
+    /// Quitting while an email waits out its undo window: send it now instead of dropping it. If it can't go out,
+    /// it's saved to Drafts so nothing is lost.
+    func flushPendingSends() async {
+        let waiting = pendingSends
+        pendingSends.removeAll()
+        for p in waiting {
+            p.task.cancel()
+            do { try await send(p.draft, remindDays: p.remindDays) }
+            catch { await saveDraft(ComposeModel(draft: p.draft, context: nil)) }
+        }
     }
 
     func undo() {
@@ -118,7 +130,10 @@ extension AppStore {
                     try await syncICloud(c.account)
                 } else if isMicrosoft(c.account) {
                     // IDs are immutable (see GraphMail), so the same IDs work after the move.
-                    for m in c.messages { try await graph(c.account).move(m.id, to: "inbox") }
+                    // Only what was in the inbox: your sent replies stay in Sent Items (Done and Trash skip them too).
+                    for m in c.messages where !m.labelIds.contains("SENT") && !m.labelIds.contains("DRAFT") {
+                        try await graph(c.account).move(m.id, to: "inbox")
+                    }
                 } else if kind == .trash {
                     try await gmail(c.account).untrashThread(c.threadId)
                 } else {
@@ -130,6 +145,8 @@ extension AppStore {
 
     func markDone() {
         guard let c = selected else { return }
+        // Already out of the inbox (Done, Sent, Trash): nothing to do, and no undo that would push it into the inbox.
+        guard c.inInbox else { banner = "That email is already out of your inbox."; return }
         advance(after: c)
         undoStack.append((c, .done))
         modify(c, remove: ["INBOX"])
@@ -145,6 +162,7 @@ extension AppStore {
         banner = "Moved to Trash. ⌘Z to undo."
         for m in c.messages { messages[m.key] = nil }
         state.readyDrafts[c.id] = nil   // a reply Keymail wrote for it goes too
+        if threadOpen, let s = selected { open(s) }   // like Done: the next email opens (read, fully loaded)
         Task {
             do {
                 if isICloud(c.account) { try await icloud(c.account).move(c.messages.map(\.id).filter { Int($0) != nil }, toTrash: true) }

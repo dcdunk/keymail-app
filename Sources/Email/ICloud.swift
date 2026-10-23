@@ -160,9 +160,17 @@ struct ICloud {
     static func isRejected(_ a: String) -> Bool { rejectedLock.withLock { rejected.contains(a) } }
     static func setRejected(_ a: String, _ on: Bool) { rejectedLock.withLock { if on { rejected.insert(a) } else { rejected.remove(a) }; refusalCount[a] = nil } }
     nonisolated(unsafe) private static var refusalCount: [String: Int] = [:]
+    nonisolated(unsafe) private static var lastRefusal: [String: Date] = [:]
     /// Counts a refused sign-in and returns how many in a row; a successful sign-in resets it.
-    static func refused(_ a: String) -> Int { rejectedLock.withLock { refusalCount[a, default: 0] += 1; return refusalCount[a]! } }
-    static func refusals(reset a: String) { rejectedLock.withLock { refusalCount[a] = nil } }
+    /// At most one strike per 4 minutes: archiving or opening an attachment during one bad moment opens more sign-ins,
+    /// and those used to add up to 3 strikes within seconds.
+    static func refused(_ a: String, now: Date = Date()) -> Int {
+        rejectedLock.withLock {
+            if let last = lastRefusal[a], now.timeIntervalSince(last) < 240 { return refusalCount[a, default: 1] }
+            lastRefusal[a] = now; refusalCount[a, default: 0] += 1; return refusalCount[a]!
+        }
+    }
+    static func refusals(reset a: String) { rejectedLock.withLock { refusalCount[a] = nil; lastRefusal[a] = nil } }
 
     func session<T>(_ body: (IMAPConnection) async throws -> T) async throws -> T {
         guard !Self.isRejected(account) else { throw SignInRejected(account: account, server: server.name) }
@@ -191,11 +199,13 @@ struct ICloud {
         imapSpecialUse(try await c.command("LIST \"\" \"*\"").map(\.line))[use] ?? fallback
     }
 
-    /// The newest `limit` emails in Sent ("sent") or Archive ("archive"). UIDs are per mailbox, so ids get a prefix
-    /// ("sent:123") that INBOX numbers can never match; actions that act by UID only ever use plain INBOX ids.
+    /// The newest `limit` emails in Sent ("sent"), Drafts ("drafts") or Archive ("archive"). UIDs are per mailbox, so ids
+    /// get a prefix ("sent:123") that INBOX numbers can never match; actions that act by UID only ever use plain INBOX ids.
     func recent(_ which: String, limit: Int = 50, skip: Set<String>) async throws -> [Message] {
         try await session { c in
-            let box = which == "sent" ? try await folder(c, "\\Sent", fallback: "Sent Messages") : try await folder(c, "\\Archive", fallback: "Archive")
+            let box = which == "sent" ? try await folder(c, "\\Sent", fallback: "Sent Messages")
+                : which == "drafts" ? try await folder(c, "\\Drafts", fallback: "Drafts")
+                : try await folder(c, "\\Archive", fallback: "Archive")
             try await c.command("SELECT \(imapQuote(box))")
             let uids = imapSearchUIDs(try await c.command("UID SEARCH ALL").map(\.line)).sorted().suffix(limit)
                 .filter { !skip.contains("\(which):\($0)") }
@@ -207,6 +217,7 @@ struct ICloud {
                 m.id = "\(which):\(i.uid)"
                 m.labelIds = m.labelIds.filter { $0 != "IMPORTANT" } + (which == "sent" ? ["SENT"] : [])
                 if which == "sent" { m.labelIds.removeAll { $0 == "UNREAD" } }
+                if which == "drafts" { m.labelIds = m.labelIds.filter { $0 != "UNREAD" } + ["DRAFT"] }
                 out.append(m)
             }
             return out
@@ -214,13 +225,20 @@ struct ICloud {
     }
 
     /// Flags for the newest 300 emails in INBOX, plus full messages for UIDs we don't have yet.
-    func syncInbox(cached: Set<Int>) async throws -> (flags: [Int: [String]], new: [Message]) {
+    /// `reset`: the server renumbered the mailbox (UIDVALIDITY changed), so every cached number now means a different
+    /// email. Everything is fetched fresh and the caller drops the old copies.
+    func syncInbox(cached: Set<Int>) async throws -> (flags: [Int: [String]], new: [Message], reset: Bool) {
         try await session { c in
-            try await c.command("SELECT INBOX")
+            let selected = try await c.command("SELECT INBOX").map(\.line).joined(separator: " ")
+            let validity = selected.range(of: #"UIDVALIDITY (\d+)"#, options: .regularExpression).map { String(selected[$0].dropFirst(12)) }
+            let key = "imapUIDValidity." + account
+            let reset = validity != nil && UserDefaults.standard.string(forKey: key).map { $0 != validity } == true
+            if let validity { UserDefaults.standard.set(validity, forKey: key) }
+            let cached = reset ? [] : cached
             // The newest 300 in the inbox, however old: a 30-day window showed nothing for a quiet inbox whose
             // remaining emails were older than that.
             let uids = Array(imapSearchUIDs(try await c.command("UID SEARCH ALL").map(\.line)).sorted().suffix(300))
-            guard !uids.isEmpty else { return ([:], []) }
+            guard !uids.isEmpty else { return ([:], [], reset) }
             var flags: [Int: [String]] = [:]
             for r in try await c.command("UID FETCH \(uids.map(String.init).joined(separator: ",")) (UID FLAGS)") {
                 if let i = imapFetchInfo(r.line) { flags[i.uid] = i.flags }
@@ -234,7 +252,7 @@ struct ICloud {
                     new.append(messageFromRaw(raw, uid: i.uid, flags: i.flags, account: account, inInbox: true))
                 }
             }
-            return (flags, new)
+            return (flags, new, reset)
         }
     }
 
@@ -287,8 +305,13 @@ struct ICloud {
 
     func attachment(uid: String, id: String) async throws -> Data {
         try await session { c in
-            try await c.command("EXAMINE INBOX")
-            let raw = try await c.command("UID FETCH \(uid) (UID BODY.PEEK[])").compactMap(\.literals.first).first
+            // Sent, Drafts and Archive copies have ids like "sent:12": open that folder and fetch by the plain UID.
+            let parts = uid.split(separator: ":"), box = parts.count == 2 ? String(parts[0]) : "inbox"
+            let folderName = box == "sent" ? try await folder(c, "\\Sent", fallback: "Sent Messages")
+                : box == "drafts" ? try await folder(c, "\\Drafts", fallback: "Drafts")
+                : box == "archive" ? try await folder(c, "\\Archive", fallback: "Archive") : "INBOX"
+            try await c.command("EXAMINE \(imapQuote(folderName))")
+            let raw = try await c.command("UID FETCH \(parts.last ?? "") (UID BODY.PEEK[])").compactMap(\.literals.first).first
             guard let raw, let a = parseRaw(raw).attachments.first(where: { $0.ref.id == id }) else {
                 throw AppError("That email is no longer in the \(server.name) inbox, so its attachment can't be downloaded here.")
             }
@@ -338,19 +361,26 @@ struct ICloud {
         try await Task.detached {
             let p = Process(), input = Pipe(), err = Pipe()
             p.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
-            p.arguments = ["--silent", "--show-error", "--url", smtp, "--ssl-reqd",
+            // --max-time: a stalled mail server can't hold up sending (and scheduled sends, which run inside sync) forever.
+            p.arguments = ["--silent", "--show-error", "--max-time", "180", "--url", smtp, "--ssl-reqd",
                            "--mail-from", sender] + rcpts.flatMap { ["--mail-rcpt", $0] } + ["--upload-file", "-", "-K", cfg.path]
             p.standardInput = input; p.standardError = err; p.standardOutput = Pipe()
             try p.run()
-            input.fileHandleForWriting.write(raw); try? input.fileHandleForWriting.close()
+            // The throwing write: if curl quits early (password refused, offline) a large email can't kill Keymail.
+            try? input.fileHandleForWriting.write(contentsOf: raw); try? input.fileHandleForWriting.close()
             p.waitUntilExit()
             guard p.terminationStatus == 0 else {
                 throw AppError("\(name) couldn't send: \(String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).prefix(200))")
             }
         }.value
-        try? await session { c in
-            let sent = try await folder(c, "\\Sent", fallback: "Sent Messages")
-            try await c.command("APPEND \(imapQuote(sent)) (\\Seen)", literal: raw)
+        do {
+            try await session { c in
+                let sent = try await folder(c, "\\Sent", fallback: "Sent Messages")
+                try await c.command("APPEND \(imapQuote(sent)) (\\Seen)", literal: raw)
+            }
+        } catch {   // sent, but no copy in Sent: say so instead of a silent gap
+            let who = account
+            await MainActor.run { AppStore.current?.log("\(who): sent, but couldn't file a copy in Sent: \(error.localizedDescription.prefix(160))") }
         }
     }
 }

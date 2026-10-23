@@ -332,22 +332,25 @@ struct MessageCard: View {
             // Settings → General: hide the earlier conversation each reply carries (••• shows it). Forwards stay whole.
             let fwd = message.subject.lowercased().hasPrefix("fw")
             let parts = showQuotedHistory || fwd ? (body: html, quoted: nil) : splitQuotedHTML(html)
+            // Keyed the way the click arrives (WebKit lowercases the host and adds a trailing "/"), so a link whose text
+            // shows one site and goes to another always asks first. Both web views get it, the earlier history too.
+            let flagged = Dictionary(suspiciousLinks(html).map { (normalizedLink($0.href), $0.reason) }, uniquingKeysWith: { a, _ in a })
             EmailWebView(html: inlineImages(parts.body, store.inlineData[message.key] ?? [:]), cardOpacity: cardOpacity,
-                         dark: contentDark, blockRemote: !loadRemoteImages && !loadImagesOnce,
-                         suspicious: Dictionary(suspiciousLinks(html).map { ($0.href, $0.reason) }, uniquingKeysWith: { a, _ in a }))
+                         dark: contentDark, blockRemote: !loadRemoteImages && !loadImagesOnce, suspicious: flagged)
                 .id(loadImagesOnce) // the blocker is set when the web view is made, so a new one loads the images
                 .clipShape(RoundedRectangle(cornerRadius: 10))
             if let q = parts.quoted {
                 quotedToggle
                 if showQuoted {
                     EmailWebView(html: inlineImages(q, store.inlineData[message.key] ?? [:]), cardOpacity: cardOpacity,
-                                 dark: contentDark, blockRemote: !loadRemoteImages && !loadImagesOnce)
+                                 dark: contentDark, blockRemote: !loadRemoteImages && !loadImagesOnce, suspicious: flagged)
                         .clipShape(RoundedRectangle(cornerRadius: 10)).opacity(0.8)
                 }
             }
         } else {
             let whole = message.text ?? message.snippet
-            let parts = showQuotedHistory ? (body: whole, quoted: nil) : splitQuoted(whole)
+            // A forward is the point of the email: keep it whole, as the HTML path does.
+            let parts = showQuotedHistory || message.subject.lowercased().hasPrefix("fw") ? (body: whole, quoted: nil) : splitQuoted(whole)
             VStack(alignment: .leading, spacing: 8) {
                 // Match app: plain text sits on the card in app colors. Forced light/dark: it gets the same "paper" as HTML emails.
                 EmailWebView(html: plainToHTML(parts.body), dark: contentDark, themed: contentTheme == "auto")
@@ -546,7 +549,9 @@ struct EmailWebView: NSViewRepresentable {
         /// Web links open directly unless flagged; flagged links, and anything that isn't http(s) or mailto,
         /// get one confirmation showing where they really go (linkWarning is an allowlist).
         func openChecked(_ url: URL) {
-            let reason = suspicious[url.absoluteString] ?? suspicious.first { URL(string: $0.key) == url }?.value
+            // An email link inside an email: a new draft right here, not a round trip through the Mac's default mail app.
+            if url.scheme?.lowercased() == "mailto" { Task { @MainActor in AppStore.current?.compose(mailto: url) }; return }
+            let reason = suspicious[normalizedLink(url.absoluteString)]
                 ?? linkWarning(href: url.absoluteString, shown: "")
             guard let reason else { NSWorkspace.shared.open(url); return }
             Task { @MainActor in AppStore.current?.linkPrompt = LinkPrompt(url: url, reason: reason) }

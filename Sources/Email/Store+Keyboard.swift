@@ -11,9 +11,19 @@ extension AppStore {
     var modalOpen: Bool { editingSnippet != nil || splitSettingsOpen || eventDraft != nil || claudeTask != nil || agentApproval != nil || summary != nil || linkPrompt != nil }
 
     /// A draft in its own window only blocks inbox keys while that window is in front; an inline reply always does.
+    /// A text box or a date/time picker has the keyboard: its keys are its own (arrows in a time field changed the
+    /// time, not the selected event; Backspace there didn't delete the event).
+    var typingInControl: Bool {
+        let r = NSApp.keyWindow?.firstResponder
+        return r is NSTextView || r is NSDatePicker || (r as? NSView)?.superview is NSDatePicker
+    }
+
     var composeHasKeyboard: Bool {
         guard let m = composing else { return false }
-        return m.inline || ComposeWindow.shared.isKey || AppFlavor.isTesting
+        // An inline reply only has the keyboard while its conversation is on screen. Left behind in another thread,
+        // it used to swallow every key, ⌘K included, until you went back to it.
+        if m.inline { return m.context == nil || m.context?.id == selectedID && toolScreen == nil && !calendarOpen }
+        return ComposeWindow.shared.isKey || AppFlavor.isTesting
     }
 
     func showPopup(_ entries: [MenuEntry], anchor: CGRect, width: CGFloat = 290, trailing: Bool = false, custom: AnyView? = nil, host: String = "main") {
@@ -49,7 +59,10 @@ extension AppStore {
 
     /// Right-click on an email row opens Keymail's menu at the mouse. Elsewhere (text, links) the normal Mac menu stays.
     func rightClick(_ e: NSEvent) -> Bool {
-        guard let c = rightClickTarget, !modalOpen, let h = e.window?.contentView?.bounds.height else { return false }
+        // Only over an email row in the main window, with nothing covering it, and only an email that still exists.
+        guard let c = rightClickTarget, !modalOpen, !settingsOpen, !paletteOpen, !calendarOpen, toolScreen == nil,
+              e.window != nil, e.window !== ComposeWindow.shared.window, allConversations.contains(where: { $0.id == c.id }),
+              let h = e.window?.contentView?.bounds.height else { return false }
         let p = CGPoint(x: e.locationInWindow.x - mainFrame.minX, y: h - e.locationInWindow.y - mainFrame.minY)
         popup = nil
         showPopup(conversationEntries(c), anchor: CGRect(origin: p, size: .zero), width: 260)
@@ -73,7 +86,7 @@ extension AppStore {
             }
             return true
         }
-        if settingsOpen { // Settings sits above everything, including an open draft
+        if settingsOpen, !ComposeWindow.shared.isKey { // Settings sits above everything in the main window (the separate draft window keeps its own keys)
             if Hotkeys.recording { return false } // Settings → Hotkeys is capturing this key
             if code == 53 { settingsOpen = false; return true } // Esc
             if cmd, ch == "," { settingsOpen = false; return true }
@@ -114,22 +127,25 @@ extension AppStore {
             if n <= state.accounts.count { switchAccount(state.accounts[n - 1]); return true }
         }
         if cmd, ch == "r" { Task { await tick() }; if calendarOpen { reloadCalendar() }; return true }
-        if cmd, ch == "z", !e.modifierFlags.contains(.shift), !(NSApp.keyWindow?.firstResponder is NSTextView) {
+        if cmd, ch == "z", !e.modifierFlags.contains(.shift), !(typingInControl) {
             if !(toolScreen != nil && undoCleanup()) { undo() }
             return true
         }
-        if cmd, code == 36, toolScreen == nil, let c = selected, readyDraft(c) != nil { sendReadyDraft(); return true }   // ⌘↵ sends the ready draft
+        if cmd, code == 36, toolScreen == nil, !calendarOpen, let c = selected, readyDraft(c) != nil { sendReadyDraft(); return true }   // ⌘↵ sends the ready draft (not from the calendar, where it's hidden)
         if cmd { return false }
-        if toolScreen != nil, !(NSApp.keyWindow?.firstResponder is NSTextView) { return handleToolKey(code: code, ch: ch) }
-        if calendarOpen, quickAddOpen, !(NSApp.keyWindow?.firstResponder is NSTextView) {
+        if toolScreen != nil, !(typingInControl) { return handleToolKey(code: code, ch: ch) }
+        if calendarOpen, quickAddOpen, !(typingInControl) {
             if code == 53 { quickAddOpen = false }   // its text box lost the keyboard: Esc still closes it, nothing else leaks
             return true
         }
-        if calendarOpen, !(NSApp.keyWindow?.firstResponder is NSTextView) {
+        if calendarOpen, !(typingInControl) {
             return handleCalendarKey(code: code, ch: ch, shift: e.modifierFlags.contains(.shift))
         }
-        if code == 51, searchOpen, searchText.isEmpty, !search.isEmpty { removeLastSearchToken(); return true }
-        if sidebarFocused, !(NSApp.keyWindow?.firstResponder is NSTextView) {
+        // Backspace in an empty search box removes the last filter chip. Only in an empty box: in the filters' Subject
+        // field (or any field with text) it's ordinary typing, and used to wipe the whole filter.
+        if code == 51, searchOpen, searchText.isEmpty, !search.isEmpty, !calendarOpen,
+           (NSApp.keyWindow?.firstResponder as? NSTextView)?.string.isEmpty ?? true { removeLastSearchToken(); return true }
+        if sidebarFocused, !(typingInControl) {
             switch (code, ch) {
             case (125, _), (_, "j"): panelIndex = min(panelIndex + 1, panelCount - 1); return true
             case (126, _), (_, "k"): panelIndex = max(panelIndex - 1, 0); return true
@@ -142,8 +158,8 @@ extension AppStore {
             default: break
             }
         }
-        if NSApp.keyWindow?.firstResponder is NSTextView {
-            if code == 53, searchOpen { clearSearch(); return true }
+        if typingInControl {
+            if code == 53, searchOpen, !calendarOpen, toolScreen == nil { clearSearch(); return true }   // not quick-add's Esc
             return false
         }
         if threadOpen, let r = ["y": RSVP.accepted, "?": .tentative, "n": .declined][ch], answerOpenInvite(r) { return true }
@@ -154,7 +170,7 @@ extension AppStore {
         if threadOpen, ch == "." { toggleQuoted(); return true }
         if e.modifierFlags.contains(.shift), ch.lowercased() == "m" { toggleMute(); return true }
         if e.modifierFlags.contains(.shift), ch.lowercased() == "r" { instantReply(); return true }
-        if let n = Int(ch), (1...3).contains(n), let c = selected, instantReplies[c.id] != nil { useInstantReply(n - 1); return true }
+        if let n = Int(ch), (1...3).contains(n), let c = selected, instantReplies[instantKey(c)] != nil { useInstantReply(n - 1); return true }
         if code == 48 { switchTab(e.modifierFlags.contains(.shift) ? -1 : 1); return true } // Tab
         if let g = pendingG, Date().timeIntervalSince(g) < 1.5 {
             pendingG = nil
@@ -164,7 +180,9 @@ extension AppStore {
         }
         switch (code, Hotkeys.resolve(ch)) {
         case (53, _):
-            if threadOpen { threadOpen = false } else if searchResults != nil { clearSearch() } else { banner = nil }
+            // In split, stream and film the email stays on screen, so closing it changed nothing you could see:
+            // the first Esc there leaves the search or folder straight away.
+            if threadOpen, inboxLayout == "list" { threadOpen = false } else if searchResults != nil { clearSearch() } else { banner = nil }
         case (36, _), (_, "o"): if let c = selected { open(c) }
         case (125, _), (_, "j"): move(1)
         case (126, _), (_, "k"): move(-1)

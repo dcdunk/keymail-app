@@ -65,15 +65,22 @@ extension AppStore {
         threadOpen = false; selectedID = nil
         let isDone = q.hasPrefix("-in:inbox")
         let localDone = isDone ? doneHere() : []
-        if isDone { searchResults = localDone }
+        // Empty right away, not the previous list: E on what looked like Starred archived an inbox email you never saw.
+        // A search shows the matching mail already on this Mac at once; the server's results join as they arrive.
+        let localHits = local.map { q in Set(allConversations.filter { c in
+            (state.activeAccount == nil || c.account == state.activeAccount) && c.messages.contains { matchesSearch($0, q) } }.map(\.id)) } ?? []
+        searchResults = isDone ? localDone : localHits
         Task {
             busy = "Searching…"
             var ids: Set<String> = []
             for a in state.accounts where state.activeAccount == nil || state.activeAccount == a {
-                if !isGmail(a), q == "in:sent" || isDone {
-                    // Sent and Done read those folders on the server (iCloud, Yahoo, Outlook), then list what's here.
-                    await fetchFolder(isDone ? "archive" : "sent", account: a)
-                    if !isDone { for m in messages.values where m.account == a && m.labelIds.contains("SENT") { ids.insert(a + "|" + m.threadId) } }
+                if !isGmail(a), q == "in:sent" || q == "in:drafts" || isDone {
+                    // Sent, Drafts and Done read those folders on the server (iCloud, Yahoo, Outlook), then list what's
+                    // here. Drafts used to search the cache for the words "in:drafts" and showed nothing.
+                    let box = isDone ? "archive" : q == "in:drafts" ? "drafts" : "sent"
+                    await fetchFolder(box, account: a)
+                    let label = box == "drafts" ? "DRAFT" : "SENT"
+                    if !isDone { for m in messages.values where m.account == a && m.labelIds.contains(label) { ids.insert(a + "|" + m.threadId) } }
                     continue
                 }
                 if !isGmail(a) {
@@ -101,15 +108,21 @@ extension AppStore {
             }
             busy = nil
             guard folder == title else { return }   // the person moved on while this searched
-            searchResults = ids.union(isDone ? doneHere() : localDone)   // recount: Archive mail fetched above joins in
+            searchResults = ids.union(isDone ? doneHere() : localDone).union(localHits)   // recount: Archive mail fetched above joins in
         }
     }
 
     /// Pulls the newest emails from Sent or Archive on the server into Keymail, skipping ones already here.
     func fetchFolder(_ which: String, account a: String) async {
-        let have = Set(messages.values.filter { $0.account == a }.map(\.id))
+        // Drafts are re-read in full each time, so ones sent or deleted elsewhere drop out of the folder.
+        let have = which == "drafts" ? [] : Set(messages.values.filter { $0.account == a }.map(\.id))
         do {
             let found = isMicrosoft(a) ? try await graph(a).recent(which, skip: have) : try await icloud(a).recent(which, skip: have)
+            if which == "drafts" {
+                log("\(a): drafts folder has \(found.count)")
+                let keep = Set(found.map(\.key))
+                messages = messages.filter { $0.value.account != a || !$0.value.labelIds.contains("DRAFT") || keep.contains($0.key) }
+            }
             for m in found { messages[m.key] = m }
         } catch { log("\(a): \(which) folder: \(error.localizedDescription.prefix(200))") }
     }

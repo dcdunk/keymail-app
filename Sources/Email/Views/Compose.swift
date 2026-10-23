@@ -26,7 +26,7 @@ struct ComposeView: View {
             row("From") {
                 MenuButton(width: 320, entries: { fromEntries }) {
                     HStack(spacing: 5) {
-                        Text(store.fullLabel(model.draft.from)).lineLimit(1)
+                        Text(store.fullLabel(model.draft.from, account: store.account(of: model.draft))).lineLimit(1)
                         Image(systemName: "chevron.down").font(.scaled(size: 9, weight: .semibold)).foregroundStyle(.secondary)
                     }.contentShape(Rectangle())
                 }
@@ -34,7 +34,7 @@ struct ComposeView: View {
                 .keyboardShortcut("f", modifiers: [.command, .shift]).help("Send from (⇧⌘F)")
                 Spacer()
                 Button { close() } label: { Image(systemName: "xmark").font(.scaled(size: 12, weight: .semibold)).frame(width: 30, height: 26).contentShape(Circle()) }
-                    .buttonStyle(.plain).foregroundStyle(.secondary).keyboardShortcut(.cancelAction).help("Close and keep draft (Esc)")
+                    .buttonStyle(.plain).foregroundStyle(.secondary).keyboardShortcut(model.askClose ? nil : .cancelAction).help("Close (Esc)")
             }
             row("To") {
                 RecipientChips(text: $model.draft.to, placeholder: "Recipients", focus: $focus, field: .to, complete: complete)
@@ -116,8 +116,19 @@ struct ComposeView: View {
         // off the From row and the Send bar. Its own window keeps the usual size.
         .frame(minWidth: model.inline ? nil : 620, idealWidth: 820, maxWidth: 1100,
                minHeight: model.inline ? nil : 460, idealHeight: model.inline ? nil : 640, maxHeight: model.inline ? nil : 1000)
+        // A real macOS dialog on the draft's window: a SwiftUI overlay sat above the text editor, and clicks fell through to it.
+        .alert("Save this draft?", isPresented: $model.askClose) {
+            Button("Save draft") { saveAndClose() }.keyboardShortcut(.defaultAction)
+            Button("Discard", role: .destructive) { discard() }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("Saved drafts stay in Drafts so you can finish them later.") }
         .background(TextChecking())
-        .onChange(of: model.draft) { _, _ in store.scheduleDraftSave(model) }
+        // Save when what you wrote changes. The server's own IDs coming back don't count: for Outlook each save gets a
+        // new ID, which re-triggered a save every 2 seconds for as long as the draft was open.
+        .onChange(of: model.draft) { old, new in
+            var o = old; o.draftId = new.draftId; o.messageId = new.messageId
+            if o != new { store.scheduleDraftSave(model) }
+        }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             for p in providers {
                 _ = p.loadObject(ofClass: URL.self) { url, _ in
@@ -218,7 +229,8 @@ struct ComposeView: View {
 
     /// Send stays clickable: with no recipient it says so instead of looking broken.
     func trySend(at date: Date?) {
-        guard !model.draft.to.trimmingCharacters(in: .whitespaces).isEmpty else { store.banner = "Add a recipient first."; return }
+        let d = model.draft   // Cc or Bcc alone is a valid email (a Bcc-only announcement)
+        guard !(d.to + d.cc + d.bcc).trimmingCharacters(in: .whitespaces).isEmpty else { store.banner = "Add a recipient first."; return }
         if let bad = invalidRecipients(model.draft).first { model.error = "\"\(bad)\" isn't a complete email address."; return }
         send(at: date)
     }
@@ -250,10 +262,10 @@ struct ComposeView: View {
         var e: [MenuEntry] = [.header("Send from")]
         for a in store.state.accounts {
             e.append(MenuEntry(title: store.label(a), subtitle: store.label(a) == a ? nil : a, letter: a,
-                               checked: model.draft.from.lowercased() == a.lowercased()) { store.changeFrom(model, to: a) })
+                               checked: model.draft.from.lowercased() == a.lowercased() && store.account(of: model.draft) == a) { store.changeFrom(model, to: a, account: a) })
             for al in store.state.aliases[a] ?? [] {
                 e.append(MenuEntry(title: al, subtitle: "Alias", icon: "arrow.turn.down.right",
-                                   checked: model.draft.from.lowercased() == al.lowercased()) { store.changeFrom(model, to: al) })
+                                   checked: model.draft.from.lowercased() == al.lowercased() && store.account(of: model.draft) == a) { store.changeFrom(model, to: al, account: a) })
             }
         }
         return e
@@ -274,13 +286,24 @@ struct ComposeView: View {
         Button(title, action: action).buttonStyle(.plain).font(.scaled(.callout)).foregroundStyle(.secondary).handCursor()
     }
 
+    /// Closing asks whether to keep the draft. An empty draft just closes.
     func close() {
-        // Closing keeps the draft: it's saved to Drafts and reopens from there.
+        if model.draft.isBlank { discard(quietly: true) } else { model.askClose = true }
+    }
+
+    /// Saved to Drafts; it reopens from there.
+    func saveAndClose() {
         model.saveTask?.cancel()
         let m = model
         Task { await store.saveDraft(m) }
         dismiss()
     }
+
+    func discard(quietly: Bool) {
+        if quietly && model.draft.draftId == nil && model.draftMessage == nil { model.saveTask?.cancel(); dismiss(); return }
+        discard()
+    }
+
 
     func discard() {
         store.discardCompose(model)
@@ -297,7 +320,9 @@ struct ComposeView: View {
             guard let data = try? Data(contentsOf: url) else { model.error = "Couldn't read \(url.lastPathComponent)."; continue }
             let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
             let next = model.draft.files + [OutgoingFile(name: url.lastPathComponent, mimeType: mime, data: data)]
-            if attachmentsTooLarge(next) { model.error = "Attachments are over Gmail's 25 MB limit."; return }
+            let acct = store.account(of: model.draft)
+            let cap = attachmentLimit(provider: store.isMicrosoft(acct) ? "outlook" : store.isICloud(acct) ? "icloud" : "gmail")
+            if attachmentsTooLarge(next, limit: cap.bytes) { model.error = "Attachments are over \(cap.label)."; return }
             model.draft.files = next
         }
     }

@@ -46,7 +46,7 @@ struct CalendarSection: View {
                 Text("Nothing else today").font(.scaled(.callout)).foregroundStyle(.tertiary)
             }
             ForEach(today.prefix(6)) { e in
-                Button { store.openCalendar(); store.calSelected = e.id } label: {
+                Button { store.calDate = e.start; store.openCalendar(); store.calSelected = e.id } label: {   // on its own day
                     HStack(alignment: .top, spacing: 8) {
                         RoundedRectangle(cornerRadius: 2).fill(store.calColor(e)).frame(width: 3, height: 30)
                         VStack(alignment: .leading, spacing: 1) {

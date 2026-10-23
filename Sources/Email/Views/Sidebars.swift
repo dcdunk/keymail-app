@@ -15,7 +15,7 @@ struct FolderPanel: View {
     @State private var dropTarget: String?   // the folder an email is being dragged over
     var body: some View {
         let account = store.state.activeAccount
-        let inboxCount = store.allConversations.filter(\.inInbox).count
+        let inboxCount = store.inboxShown.count
         let labels = store.panelLabels
         VStack(alignment: .leading, spacing: 0) {
             MenuButton(width: 320, entries: { store.accountEntries() }) {
@@ -37,7 +37,7 @@ struct FolderPanel: View {
                     let keys = ["Inbox": "G I", "Starred": "G S", "Drafts": "G D", "Sent": "G T", "Done": "G E", "Reminders": "G H"]
                     ForEach(Array(AppStore.panelFolders.enumerated()), id: \.element) { i, name in
                         row(name, subtitle: name == "Inbox" ? "Important · Other" : nil,
-                            count: name == "Inbox" ? inboxCount : name == "Reminders" ? store.state.snoozes.count : name == "Scheduled" ? store.state.scheduled.count : 0,
+                            count: name == "Inbox" ? inboxCount : name == "Reminders" ? store.state.snoozes.filter { store.state.activeAccount == nil || $0.account == store.state.activeAccount }.count : name == "Scheduled" ? store.state.scheduled.count : 0,
                             key: keys[name] ?? "", on: name == "Inbox" ? store.folder == nil : store.folder == name,
                             highlighted: store.sidebarFocused && store.panelIndex == i) { store.activatePanel(i) }
                     }
@@ -182,7 +182,7 @@ struct ContextPanel: View {
                 .font(.scaled(.caption)).foregroundStyle(.tertiary)
             HStack(spacing: 2) {
                 tool("square.and.pencil", "Email \(person.firstName.isEmpty ? person.display : person.firstName)") {
-                    var d = Draft(from: store.sendAddress(store.defaultAccount)); d.to = person.email
+                    var d = Draft(from: store.sendAddress(store.defaultAccount), account: store.defaultAccount); d.to = person.email
                     _ = store.openCompose(d, context: nil)
                 }
                 tool("magnifyingglass", "All mail with \(person.email)") {

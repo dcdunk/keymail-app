@@ -51,9 +51,10 @@ struct CalendarSettings: View {
                     .onChange(of: enabled) { _, on in if !on { store.closeCalendar() } }
                 Picker("Week starts on", selection: $mondayFirst) { Text("Monday").tag(true); Text("Sunday").tag(false) }
                     .pickerStyle(.segmented).settingAnchor("Week starts on")
+                    .onChange(of: mondayFirst) { _, _ in store.objectWillChange.send(); store.reloadCalendar() }
                 Picker("Days in a week", selection: $workWeek) { Text("7 days").tag(false); Text("5 days").tag(true) }
                     .pickerStyle(.segmented).settingAnchor("Days in a week")
-                    .onChange(of: workWeek) { _, _ in store.objectWillChange.send() }
+                    .onChange(of: workWeek) { _, _ in store.objectWillChange.send(); store.reloadCalendar() }   // load the days that just appeared
                 Picker("Default view", selection: $view) { ForEach(CalView.allCases, id: \.self) { Text($0.title).tag($0.rawValue) } }
                     .pickerStyle(.segmented).settingAnchor("Default view")
                 Picker("New events go to", selection: $destination) {

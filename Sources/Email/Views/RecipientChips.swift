@@ -49,9 +49,14 @@ struct RecipientChips: View {
             set: { new in
                 let head = committed.map(\.formatted)
                 if new.contains(",") || new.hasSuffix(" ") && new.contains("@") {
-                    // Comma (or a space after a full address) turns the typed text into a chip.
-                    let typed = new.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)
-                    text = (head + (typed.isEmpty ? [] : [typed])).map { $0 + ", " }.joined()
+                    // A comma (or a space after a full address) turns what's typed into chips. A pasted list becomes one
+                    // chip per person; stripping the commas used to merge "Ann <a@x>, Bob <b@y>" into one chip for Bob.
+                    // A comma inside a quoted name ("Doe, Jane") waits for the closing quote.
+                    let parts = splitRecipientField(new)
+                    let done = parseAddresses(parts.head).filter { !$0.email.isEmpty }.map(\.formatted)
+                    let rest = parts.token.trimmingCharacters(in: .whitespaces)
+                    let finishRest = new.hasSuffix(" ") && rest.contains("@") && !rest.contains("\"")
+                    text = (head + done + (finishRest ? [rest] : [])).map { $0 + ", " }.joined() + (finishRest ? "" : rest)
                 } else {
                     text = (head.map { $0 + ", " }.joined()) + new
                 }

@@ -28,7 +28,7 @@ struct AIProviderSettings: View {
                 if readyDrafts { Task { await store.writeReadyDrafts() } }
             })) {
                 Text("Write drafts ahead of time")
-                Text("When an email needs your reply, \(store.ai.name) writes one in your style before you open it. It waits under the email with a Draft tag; nothing sends until you press Send. Uses your AI plan for each email that needs a reply.")
+                Text("When an email needs your reply, \(store.ai.name) writes one in your style before you open it. It waits under the email with a Draft tag; nothing sends until you press Send. To write it, \(store.ai.name) gets that email, a few of your sent emails from the same account and your busy times. Uses your AI plan for each email that needs a reply.")
             }
             .toggleStyle(.switch).padding(12)
             .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.04))).settingAnchor("Write drafts ahead of time")

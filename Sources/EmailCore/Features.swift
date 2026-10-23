@@ -179,9 +179,11 @@ public func parseWhen(_ text: String, now: Date = Date()) -> Date? {
 }
 
 /// True if someone other than me wrote in the thread after `after`.
-public func gotReply(_ messages: [Message], me: String, after: Date) -> Bool {
-    messages.contains { m in
-        m.date > after && !parseAddresses(m.from).contains { $0.email.lowercased() == me.lowercased() }
+/// `mine`: your aliases too, so your own copy sent from an alias isn't mistaken for their reply.
+public func gotReply(_ messages: [Message], me: String, after: Date, mine: Set<String> = []) -> Bool {
+    let all = Set(mine.map { $0.lowercased() }).union([me.lowercased()])
+    return messages.contains { m in
+        m.date > after && !m.labelIds.contains("SENT") && !parseAddresses(m.from).contains { all.contains($0.email.lowercased()) }
     }
 }
 

@@ -70,28 +70,49 @@ struct OutlookCalendar {
 
     func delete(_ e: CalEvent) async throws { try await graph.call("/events/\(Self.eventId(e))", method: "DELETE") }
 
+    /// Answers the invite on the Outlook calendar itself (Outlook already put it there as tentative) and lets the
+    /// organizer know. false when the event isn't on this calendar.
+    func respond(uid: String, _ r: RSVP) async throws -> Bool {
+        let safe = uid.replacingOccurrences(of: "'", with: "''")
+            .addingPercentEncoding(withAllowedCharacters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~@"))) ?? uid
+        let found = try await graph.call("/events?$filter=iCalUId%20eq%20'\(safe)'&$select=id&$top=1")["value"] as? [[String: Any]] ?? []
+        guard let id = found.first?["id"] as? String else { return false }
+        let verb = ["ACCEPTED": "accept", "TENTATIVE": "tentativelyAccept", "DECLINED": "decline"][r.rawValue]!
+        try await graph.call("/events/\(id)/\(verb)", method: "POST", json: ["sendResponse": true])
+        return true
+    }
+
     func answer(_ e: CalEvent, _ r: RSVP) async throws {
         let verb = ["ACCEPTED": "accept", "TENTATIVE": "tentativelyAccept", "DECLINED": "decline"][r.rawValue]!
         try await graph.call("/events/\(Self.eventId(e))/\(verb)", method: "POST", json: ["sendResponse": true])
     }
 
-    func update(_ e: CalEvent, title: String, start: Date, end: Date, notes: String) async throws {
+    /// `notes` nil leaves the description alone.
+    func update(_ e: CalEvent, title: String, start: Date, end: Date, notes: String?) async throws {
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"; f.timeZone = TimeZone(identifier: "UTC")
-        try await graph.call("/events/\(Self.eventId(e))", method: "PATCH", json: [
-            "subject": title, "body": ["contentType": "text", "content": notes],
-            "start": ["dateTime": f.string(from: start), "timeZone": "UTC"], "end": ["dateTime": f.string(from: end), "timeZone": "UTC"]])
+        // All-day events must start and end at midnight: the local calendar day, written as midnight UTC.
+        let day = { (d: Date) -> String in
+            let c = Calendar.current.dateComponents([.year, .month, .day], from: d)
+            return String(format: "%04d-%02d-%02dT00:00:00", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+        }
+        var json: [String: Any] = ["subject": title,
+            "start": ["dateTime": e.allDay ? day(start) : f.string(from: start), "timeZone": "UTC"],
+            "end": ["dateTime": e.allDay ? day(end) : f.string(from: end), "timeZone": "UTC"]]
+        if let notes { json["body"] = ["contentType": "text", "content": notes] }
+        try await graph.call("/events/\(Self.eventId(e))", method: "PATCH", json: json)
     }
 
     func setLocation(_ e: CalEvent, _ place: String) async throws {
         try await graph.call("/events/\(Self.eventId(e))", method: "PATCH", json: ["location": ["displayName": place]])
     }
 
-    func create(title: String, start: Date, minutes: Int, location: String, calendarId: String) async throws {
+    func create(title: String, start: Date, minutes: Int, location: String, calendarId: String, notes: String = "") async throws {
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"; f.timeZone = TimeZone(identifier: "UTC")
         var ev: [String: Any] = ["subject": title,
                                  "start": ["dateTime": f.string(from: start), "timeZone": "UTC"],
                                  "end": ["dateTime": f.string(from: start.addingTimeInterval(Double(minutes) * 60)), "timeZone": "UTC"]]
         if !location.isEmpty { ev["location"] = ["displayName": location] }
+        if !notes.isEmpty { ev["body"] = ["contentType": "text", "content": notes] }   // moving an event here keeps its notes
         let path = calendarId.isEmpty ? "/events" : "/calendars/\(calendarId)/events"
         try await graph.call(path, method: "POST", json: ev)
     }

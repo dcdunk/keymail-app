@@ -34,6 +34,10 @@ final class MicrosoftAuth {
             // (AADSTS65001). Anything else (offline, outage, odd reply) is a normal error, so it never hides the calendar.
             let detail = (j["error_description"] as? String ?? "") + " " + (j["error"] as? String ?? "")
             if scopes != Self.scopes, detail.contains("AADSTS65001") || detail.lowercased().contains("consent") { throw NeedsCalendarAccess() }
+            // A refused or expired sign-in says so; anything else (outage, odd reply) is temporary and retried quietly.
+            guard ["invalid_grant", "interaction_required", "invalid_client", "unauthorized_client"].contains(j["error"] as? String ?? "") else {
+                throw URLError(.cannotConnectToHost)
+            }
             throw AppError(friendlyMicrosoftSignInError(j["error_description"] as? String))
         }
         // Microsoft hands out a new refresh token each time; keep the latest.

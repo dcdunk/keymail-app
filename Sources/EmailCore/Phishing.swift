@@ -151,3 +151,12 @@ public func senderWarnings(_ m: Message, known: Set<String>) -> [String] {
     }
     return out
 }
+
+/// One spelling per link: lowercase scheme and host, no trailing "/" on a bare host. The same link written in the email
+/// and as WebKit hands it over on a click compare equal.
+public func normalizedLink(_ href: String) -> String {
+    guard var c = URLComponents(string: href.trimmingCharacters(in: .whitespacesAndNewlines)) else { return href }
+    c.scheme = c.scheme?.lowercased(); c.host = c.host?.lowercased()
+    if c.path == "/" { c.path = "" }
+    return c.string ?? href
+}

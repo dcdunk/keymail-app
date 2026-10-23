@@ -38,17 +38,26 @@ extension AppStore {
     var addressesWithSignatures: [String] { fromAddresses.filter { !signature(for: $0).isEmpty } }
 
     /// Changing From swaps to that address's signature, if the email has one.
-    func changeFrom(_ model: ComposeModel, to address: String) {
+    func changeFrom(_ model: ComposeModel, to address: String, account: String? = nil) {
         model.draft.from = address
+        model.draft.account = account ?? self.account(for: address)
         if model.draft.signaturePlain != nil { applySignature(&model.draft, from: address) }
     }
 
-    func compose() { openCompose(Draft(from: sendAddress(defaultAccount)), context: nil) }
+    func compose() { openCompose(Draft(from: sendAddress(defaultAccount), account: defaultAccount), context: nil) }
+
+    /// An email link clicked anywhere (Keymail is the Mac's email app, or a link inside an email): a new draft.
+    func compose(mailto url: URL) {
+        guard var d = draftFromMailto(url, from: sendAddress(defaultAccount)) else { return }
+        d.account = defaultAccount
+        NSApp.activate(ignoringOtherApps: true)
+        openCompose(d, context: nil)
+    }
     /// Replies to `message`, or to the newest email when nil. Any email in the thread can be answered (issue #7).
     func reply(all: Bool, to message: Message? = nil) {
         guard let c = selected else { return }
-        let target = message ?? c.latest
-        var d = replyDraft(to: target, me: c.account, all: all)
+        let target = message ?? c.replyTarget
+        var d = replyDraft(to: target, me: c.account, all: all, mine: me)
         let mine = me
         // Keep your own aliases out of the To/Cc of a reply-all.
         d.cc = parseAddresses(d.cc).filter { !mine.contains($0.email.lowercased()) }.map(\.formatted).joined(separator: ", ")
@@ -64,8 +73,9 @@ extension AppStore {
     }
     func forward(_ message: Message? = nil) {
         guard let c = selected else { return }
-        let m = message ?? c.latest
-        let model = openCompose(forwardDraft(of: m, me: replyFrom(m, account: c.account)), context: c, isReply: true)
+        let m = message ?? c.replyTarget
+        var fwd = forwardDraft(of: m, me: replyFrom(m, account: c.account)); fwd.account = c.account
+        let model = openCompose(fwd, context: c, isReply: true)
         let files = m.attachments.filter { !$0.isInline }
         guard !files.isEmpty else { return }
         // Forwarding carries the original attachments along.
@@ -94,26 +104,27 @@ extension AppStore {
         }
         var d = d
         d.from = namedFrom(d.from)
-        let domain = d.from.split(separator: "@").last.map(String.init) ?? "email.local"
+        let domain = parseAddresses(d.from).first?.email.split(separator: "@").last.map(String.init) ?? "email.local"   // not "x.com>" from "Name <a@x.com>"
         if d.messageId == nil { d.messageId = "<\(UUID().uuidString)@\(domain)>" }
         if AppFlavor.isDemo { demoSend(d); return }
-        let acct = account(for: d.from)
+        let acct = account(of: d)
         if isMicrosoft(acct) {
             // Save as a draft, then send it: the draft step tells us the conversation for "remind me if no reply".
             // The autosaved draft (if any) is replaced, not left behind.
             let g = graph(acct)
-            if let old = d.draftId { try? await g.delete(old) }
             let sent = try await g.createDraft(mime: buildRaw(d))
             try await g.sendDraft(sent.id)
+            if let old = d.draftId { try? await g.delete(old) }   // only once it's sent: a failed send keeps the draft
             if let days = remindDays, !sent.conversationId.isEmpty {
                 state.followUps.append(FollowUp(account: acct, threadId: sent.conversationId, sentAt: Date().addingTimeInterval(-5),
                                                 due: Date().addingTimeInterval(Double(days) * 86400)))
             }
             return
         }
-        defer { Task { await self.deleteDraft(d) } }
+        // The saved draft goes once the email is out. A failed send keeps it (it used to be deleted either way).
         if isICloud(acct) {
             try await icloud(acct).send(d)
+            Task { await self.deleteDraft(d) }
             if let days = remindDays {
                 let thread = d.references.split(separator: " ").first.map(String.init) ?? d.messageId!
                 state.followUps.append(FollowUp(account: acct, threadId: thread, sentAt: Date().addingTimeInterval(-5),
@@ -128,6 +139,7 @@ extension AppStore {
             let line = buildRaw(d).components(separatedBy: "\r\n").filter { $0.hasPrefix("To:") || $0.hasPrefix("Cc:") }.joined(separator: " · ")
             throw AppError("Gmail rejected the recipients. It received: \(line)")
         }
+        Task { await self.deleteDraft(d) }
         if let days = remindDays, let thread = j["threadId"] as? String {
             state.followUps.append(FollowUp(account: acct, threadId: thread, sentAt: Date().addingTimeInterval(-5),
                                             due: Date().addingTimeInterval(Double(days) * 86400)))
@@ -149,14 +161,12 @@ extension AppStore {
     func saveDraft(_ model: ComposeModel) async {
         var d = model.draft
         d.from = namedFrom(d.from)
-        let isEmpty = d.to.trimmingCharacters(in: .whitespaces).isEmpty && d.subject.isEmpty
-            && d.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        guard !isEmpty, !AppFlavor.isDemo else { return }
+        guard !d.isBlank, !AppFlavor.isDemo else { return }
         if d.messageId == nil {
-            let domain = d.from.split(separator: "@").last.map(String.init) ?? "email.local"
+            let domain = parseAddresses(d.from).first?.email.split(separator: "@").last.map(String.init) ?? "email.local"   // not "x.com>" from "Name <a@x.com>"
             d.messageId = "<\(UUID().uuidString)@\(domain)>"; model.draft.messageId = d.messageId
         }
-        let acct = account(for: d.from)
+        let acct = account(of: d)
         do {
             if isMicrosoft(acct) {
                 // Microsoft can't edit a draft's raw contents, so each save replaces the previous copy.
@@ -170,7 +180,13 @@ extension AppStore {
             if isICloud(acct) { try await icloud(acct).saveDraft(d) }
             else { model.draft.draftId = try await gmail(acct).saveDraft(d) }
             model.savedNote = "Draft saved"
-        } catch { model.savedNote = "Draft not saved: \(error.localizedDescription.prefix(80))" }
+            log("\(acct): draft saved")
+        } catch {
+            model.savedNote = "Draft not saved: \(error.localizedDescription.prefix(80))"
+            log("\(acct): draft not saved: \(error.localizedDescription.prefix(200))")
+            // Closed with Save draft, so the draft's own note is gone: say it where you'll see it.
+            if composing !== model { banner = "Couldn't save your draft “\(d.subject.isEmpty ? "(no subject)" : d.subject)”: \(error.localizedDescription.prefix(120))" }
+        }
     }
 
     /// The compose trash can. Removes the draft from the screen at once (thread card and Drafts folder), then from
@@ -178,7 +194,7 @@ extension AppStore {
     func discardCompose(_ model: ComposeModel) {
         model.saveTask?.cancel()
         var d = model.draft
-        let acct = account(for: d.from), shown = model.draftMessage
+        let acct = account(of: d), shown = model.draftMessage
         if let shown { messages[shown.key] = nil }
         if isMicrosoft(acct), let id = d.draftId { messages[acct + "|" + id] = nil } // Microsoft draft IDs are message IDs
         banner = "Draft discarded."
@@ -193,15 +209,23 @@ extension AppStore {
     }
 
     func deleteDraft(_ d: Draft) async {
-        let acct = account(for: d.from)
-        if isICloud(acct) { if let mid = d.messageId { try? await icloud(acct).deleteDraft(messageId: mid) } }
-        else if isMicrosoft(acct), let id = d.draftId { try? await graph(acct).delete(id) }
-        else if isGmail(acct), let id = d.draftId { try? await gmail(acct).deleteDraft(id) }
+        let acct = account(of: d)
+        do {
+            if isICloud(acct) { if let mid = d.messageId { try await icloud(acct).deleteDraft(messageId: mid) } }
+            else if isMicrosoft(acct), let id = d.draftId { try await graph(acct).delete(id) }
+            else if isGmail(acct), let id = d.draftId { try await gmail(acct).deleteDraft(id) }
+        } catch let e as HTTPError where e.status == 404 {   // already gone
+        } catch {
+            // Silent before: the draft came back on the next sync with no explanation.
+            log("\(acct): couldn't remove a draft: \(error.localizedDescription.prefix(160))")
+            banner = "Couldn't remove the draft from \(label(acct)) Drafts. You can delete it there."
+        }
     }
 
     /// Drafts can't go to Trash (Gmail answers 404), so they're discarded with the drafts API instead.
     /// Like Gmail's own "Discard draft", this can't be undone.
     func discardDrafts(_ c: Conversation) {
+        undoStack.removeAll()   // can't be undone; ⌘Z must not restore some earlier email instead
         advance(after: c)
         for m in c.messages { messages[m.key] = nil }
         banner = "Draft discarded."
@@ -222,16 +246,29 @@ extension AppStore {
     /// Opening a Gmail draft from the Drafts folder continues editing it.
     func openDraft(_ c: Conversation, message: Message? = nil) {
         let m = message ?? c.latest
-        var d = Draft(from: m.account)
+        // Keep the address it was written from (an alias), not just the account.
+        let fromAddr = parseAddresses(m.from).first?.email ?? ""
+        var d = Draft(from: me.contains(fromAddr.lowercased()) ? fromAddr : m.account, account: m.account)
         d.to = m.to; d.cc = m.cc; d.subject = m.subject; d.body = m.plainText
         d.threadId = c.messages.count > 1 ? m.threadId : nil
         d.messageId = m.messageIdHeader.isEmpty ? nil : m.messageIdHeader
         d.references = m.references
+        d.inReplyTo = m.references.split(separator: " ").last.map(String.init) ?? ""   // the email it answers
+        if isMicrosoft(m.account) { d.draftId = m.id }   // an Outlook draft's ID is its message ID: saves replace it
         let model = ComposeModel(draft: d, context: c.messages.count > 1 ? c : nil)
         model.draftMessage = m
         composing = model
-        guard isGmail(m.account) else { return }
-        Task { model.draft.draftId = (try? await gmail(m.account).draftIds())?[m.id] }
+        let files = m.attachments.filter { !$0.isInline }
+        Task {
+            if isGmail(m.account) { model.draft.draftId = (try? await gmail(m.account).draftIds())?[m.id] }
+            // Its attachments come back too: saving the reopened draft used to drop them.
+            for a in files {
+                do {
+                    let data = try await fetchAttachment(account: m.account, messageId: m.id, id: a.id)
+                    model.draft.files.append(OutgoingFile(name: a.name, mimeType: a.mimeType, data: data))
+                } catch { model.error = "Couldn't reattach \(a.name): \(error.localizedDescription)" }
+            }
+        }
     }
 
     func schedule(_ d: Draft, at: Date, remindDays: Int?) {

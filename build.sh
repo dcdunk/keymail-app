@@ -60,6 +60,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   $FEED
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>Email address</string>
+    <key>CFBundleURLSchemes</key><array><string>mailto</string></array></dict></array>
   <key>LSFileQuarantineEnabled</key><true/>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleIconName</key><string>AppIcon</string>

@@ -71,6 +71,9 @@ final class GoogleAuth {
         let j = try await tokenRequest(["client_id": client.client_id, "client_secret": client.client_secret,
                                         "refresh_token": refresh, "grant_type": "refresh_token"])
         guard let token = j["access_token"] as? String else {
+            // Only "invalid_grant" means the sign-in is gone. Anything else (Google busy, a 5xx page, offline) is
+            // temporary: telling you to sign in again then was wrong, and a minute later it worked.
+            guard j["error"] as? String == "invalid_grant" else { throw URLError(.cannotConnectToHost) }
             throw AppError("\(account) needs to sign in again (Google expires test-mode sign-ins after 7 days). Press ⌘K → Add Email Account.")
         }
         cache[account] = (token, Date().addingTimeInterval(j["expires_in"] as? Double ?? 3000))

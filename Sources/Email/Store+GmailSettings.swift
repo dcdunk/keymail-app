@@ -115,14 +115,25 @@ extension AppStore {
     }
 
     /// Mouse actions on a specific row: select it, then run the same action the keyboard would.
-    func act(on c: Conversation, _ f: () -> Void) { selectedID = c.id; f() }
+    /// `reading: false` (star, done, label… from a right-click, drag or row button) puts you back on the email you were
+    /// reading afterwards: acting on another row used to swap the reading pane to it (or its neighbour).
+    /// Reply, Forward and Open pass true: those are about that email.
+    func act(on c: Conversation, reading: Bool = false, _ f: () -> Void) {
+        let before = selectedID
+        selectedID = c.id
+        f()
+        guard !reading, let before, before != c.id, allConversations.contains(where: { $0.id == before }) else { return }
+        selectedID = before
+    }
 
     func toggleStar() { if let c = selected { c.isStarred ? modify(c, remove: ["STARRED"]) : modify(c, add: ["STARRED"]) } }
     func toggleUnread() { if let c = selected { c.isUnread ? modify(c, remove: ["UNREAD"]) : modify(c, add: ["UNREAD"]) } }
 
     func remind(until date: Date, ifNoReply: Bool) {
         guard let c = selected else { return }
+        undoStack.removeAll()   // ⌘Z isn't how a reminder comes back (Reminders → Remove does); don't undo an older action
         advance(after: c)
+        if threadOpen, let s = selected { open(s) }
         if !isGmail(c.account) {
             // iCloud and Microsoft reminders hide the thread locally; it stays in that account's inbox.
             state.snoozes.removeAll { $0.conversationId == c.id }
@@ -133,7 +144,7 @@ extension AppStore {
         }
         Task {
             do {
-                let label = try await gmail(c.account).snoozeLabelId(existing: labelNames)
+                let label = try await gmail(c.account).snoozeLabelId(existing: await labelMap(c.account))
                 labelNames[label] = Gmail.snoozeLabel
                 state.snoozes.removeAll { $0.conversationId == c.id }
                 state.snoozes.append(Snooze(account: c.account, threadId: c.threadId, until: date, ifNoReply: ifNoReply))
@@ -144,11 +155,25 @@ extension AppStore {
         }
     }
 
+    /// This account's own label IDs. Gmail numbers labels per account (Label_1 means different labels in two
+    /// accounts), so the app-wide name map could hand one account's ID to another and tag the wrong label.
+    func labelMap(_ account: String) async -> [String: String] {
+        if gmailLabels[account] == nil, let l = try? await gmail(account).userLabels() { gmailLabels[account] = l }
+        return Dictionary((gmailLabels[account] ?? []).map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
+    }
+
+    /// A label's name in this email's own account (two Gmail accounts can both have a "Label_3").
+    func labelName(_ id: String, account: String) -> String? {
+        gmailLabels[account]?.first { $0.id == id }?.name ?? labelNames[id]
+    }
+
     func removeReminder() {
         guard let c = selected, state.snoozes.contains(where: { $0.conversationId == c.id }) else { return }
         state.snoozes.removeAll { $0.conversationId == c.id }
         if !isGmail(c.account) { return }
-        let snoozed = labelNames.first { $0.value == Gmail.snoozeLabel || Gmail.legacySnoozeLabels.contains($0.value) }?.key
+        // Only this account's snooze label, never another account's ID that happens to match.
+        let snoozed = (gmailLabels[c.account] ?? []).first { $0.name == Gmail.snoozeLabel || Gmail.legacySnoozeLabels.contains($0.name) }?.id
+            ?? c.labels.first { labelNames[$0] == Gmail.snoozeLabel || Gmail.legacySnoozeLabels.contains(labelNames[$0] ?? "") }
         modify(c, add: ["INBOX"], remove: snoozed.map { [$0] } ?? [])
     }
 
@@ -213,6 +238,7 @@ extension AppStore {
         // Only a standalone draft (nothing but unsent drafts) opens straight into compose. A reply you've started
         // inside a conversation must never block reading it: the thread opens and the draft shows as a card.
         if c.messages.allSatisfy({ $0.labelIds.contains("DRAFT") && !$0.labelIds.contains("SENT") }) { openDraft(c); return }
+        if let i = visible.firstIndex(where: { $0.id == c.id }) { stickyRow = (tabName, c.id, i) }
         selectedID = c.id
         threadOpen = true
         recentlyOpened.removeAll { $0 == c.id }
@@ -250,8 +276,10 @@ extension AppStore {
     }
 
     func unsubscribe() {
-        guard let m = selected?.messages.last(where: { !$0.listUnsubscribe.isEmpty }), unsubscribe(using: m) else {
-            banner = "This sender has no unsubscribe link."; return
+        guard let m = selected?.messages.last(where: { !$0.listUnsubscribe.isEmpty && $0.authFailed != true }), unsubscribe(using: m) else {
+            banner = selected?.messages.contains { !$0.listUnsubscribe.isEmpty } == true
+                ? "This email may be forged, so Keymail won't follow its unsubscribe link." : "This sender has no unsubscribe link."
+            return
         }
         banner = "Unsubscribed."
         markDone()

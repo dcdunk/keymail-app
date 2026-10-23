@@ -35,32 +35,35 @@ struct GraphMail {
                 continue
             }
             if status == 403, scopes != MicrosoftAuth.scopes { throw NeedsCalendarAccess() }
+            if status == 429 || status >= 500 { throw URLError(.cannotConnectToHost) }   // still busy after retries: try later, quietly
             guard (200..<300).contains(status) else {
                 throw AppError(status == 403 ? "Microsoft didn't allow that for \(account)." : "Microsoft couldn't complete that (\(status)). Try again in a moment.")
             }
             return data.isEmpty ? [:] : (try JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
         }
-        throw AppError("Microsoft is busy right now. Keymail will try again.")
+        throw URLError(.cannotConnectToHost)   // busy: retried on a later check without a banner
     }
 
     /// The newest `limit` emails in Sent Items ("sent") or Archive ("archive"), full bodies included.
     func recent(_ which: String, limit: Int = 50, skip: Set<String>) async throws -> [Message] {
-        let box = which == "sent" ? "sentitems" : "archive"
+        let box = ["sent": "sentitems", "drafts": "drafts"][which] ?? "archive"
         let j = try await call("/mailFolders/\(box)/messages?$select=id&$top=\(limit)&$orderby=receivedDateTime%20desc")
         let ids = ((j["value"] as? [[String: Any]]) ?? []).compactMap { $0["id"] as? String }.filter { !skip.contains($0) }
         var out: [Message] = []
         for id in ids {
             guard var m = try? await message(id, inInbox: false) else { continue }
             if which == "sent" { m.labelIds = m.labelIds.filter { $0 != "UNREAD" } + ["SENT"] }
+            if which == "drafts" { m.labelIds = m.labelIds.filter { $0 != "UNREAD" } + ["DRAFT"] }
             out.append(m)
         }
         return out
     }
 
-    /// Newest inbox messages from the last `days`, up to `limit`. Metadata only; bodies come from `message(_:)`.
-    func inbox(days: Int = 30, limit: Int = 300) async throws -> [[String: Any]] {
-        let since = ISO8601DateFormatter().string(from: Date().addingTimeInterval(-Double(days) * 86400))
-        var next: String? = "/mailFolders/inbox/messages?$select=\(graphListFields)&$top=100&$orderby=receivedDateTime%20desc&$filter=receivedDateTime%20ge%20\(since)"
+    /// Newest inbox messages, up to `limit`. Metadata only; bodies come from `message(_:)`.
+    /// No age limit: the newest 300 however old (a 30-day window dropped older mail still sitting in the inbox, the
+    /// same bug iCloud had).
+    func inbox(limit: Int = 300) async throws -> [[String: Any]] {
+        var next: String? = "/mailFolders/inbox/messages?$select=\(graphListFields)&$top=100&$orderby=receivedDateTime%20desc"
         var out: [[String: Any]] = []
         while let page = next, out.count < limit {
             let j = try await call(page)

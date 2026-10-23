@@ -270,11 +270,21 @@ extension AppStore {
                 if e.calendarId.hasPrefix("google:") {
                     let acct = String(e.calendarId.dropFirst(7)), gid = String(e.id.split(separator: "|").last ?? "")
                     let f = ISO8601DateFormatter(), tz = TimeZone.current.identifier
-                    _ = try await GoogleCalendar(account: acct, auth: auth).call("events/\(gid)", method: "PATCH", query: [.init(name: "sendUpdates", value: "all")], json: [
-                        "summary": title, "description": notes,
-                        "start": ["dateTime": f.string(from: start), "timeZone": tz], "end": ["dateTime": f.string(from: end), "timeZone": tz]])
+                    var json: [String: Any] = ["summary": title]
+                    // All-day events keep dates, not times (a dateTime turned them into midnight-to-midnight meetings).
+                    if e.allDay {
+                        let day = { (d: Date) in ISO8601DateFormatter.string(from: d, timeZone: .current, formatOptions: [.withFullDate]) }
+                        json["start"] = ["date": day(start)]; json["end"] = ["date": day(end)]
+                    } else {
+                        json["start"] = ["dateTime": f.string(from: start), "timeZone": tz]; json["end"] = ["dateTime": f.string(from: end), "timeZone": tz]
+                    }
+                    if notes != e.notes { json["description"] = notes }   // untouched notes aren't rewritten
+                    _ = try await GoogleCalendar(account: acct, auth: auth).call("events/\(gid)", method: "PATCH", query: [.init(name: "sendUpdates", value: "all")], json: json)
                 } else if e.calendarId.hasPrefix("outlook:") {
-                    try await OutlookCalendar(account: outlookAccount(e.calendarId), auth: microsoft).update(e, title: title, start: start, end: end, notes: notes)
+                    // Only send the description if you changed it: Keymail only has Outlook's short plain-text preview,
+                    // and sending it back replaced the full agenda and Teams link for every attendee.
+                    try await OutlookCalendar(account: outlookAccount(e.calendarId), auth: microsoft)
+                        .update(e, title: title, start: start, end: end, notes: notes == e.notes ? nil : notes)
                 } else {
                     try calendar.update(e.id) { $0.title = title; $0.startDate = start; $0.endDate = end; $0.notes = notes.isEmpty ? nil : notes }
                 }
@@ -314,7 +324,7 @@ extension AppStore {
                                             account: String(dest.dropFirst(7)), guests: [], invite: false, meet: false)
         } else if dest.hasPrefix("outlook:") {
             try await OutlookCalendar(account: outlookAccount(dest), auth: microsoft)
-                .create(title: q.title, start: q.start, minutes: q.minutes, location: q.location, calendarId: String(dest.split(separator: "|").last ?? ""))
+                .create(title: q.title, start: q.start, minutes: q.minutes, location: q.location, calendarId: String(dest.split(separator: "|").last ?? ""), notes: notes)
         } else {
             let cal = calendar.writableCalendars.first { "mac:" + $0.calendarIdentifier == dest }
             try calendar.create(title: q.title, start: q.start, minutes: q.minutes, notes: notes, location: q.location, calendar: cal)

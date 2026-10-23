@@ -62,17 +62,25 @@ struct Gmail {
     }
 
     /// Fetches full messages 8 at a time. Messages that fail (e.g. deleted meanwhile) are skipped.
-    func messages(_ ids: [String]) async -> [Message] {
-        var out: [Message] = []
+    func messages(_ ids: [String]) async -> [Message] { await fetch(ids).messages }
+
+    /// Same, also counting fetches that failed for a reason other than the message being gone (rate limits, outages),
+    /// so sync can hold its bookmark and ask again instead of skipping that mail for good.
+    func fetch(_ ids: [String]) async -> (messages: [Message], failed: Int) {
+        var out: [Message] = [], failed = 0
         for chunk in stride(from: 0, to: ids.count, by: 8).map({ Array(ids[$0..<min($0 + 8, ids.count)]) }) {
-            await withTaskGroup(of: Message?.self) { g in
+            await withTaskGroup(of: (Message?, Bool).self) { g in
                 for id in chunk {
-                    g.addTask { (try? await call("messages/\(id)", query: [.init(name: "format", value: "full")])).flatMap { parseMessage($0, account: account) } }
+                    g.addTask {
+                        do { return (parseMessage(try await call("messages/\(id)", query: [.init(name: "format", value: "full")]), account: account), false) }
+                        catch let e as HTTPError where e.status == 404 || e.status == 400 { return (nil, false) }   // deleted meanwhile
+                        catch { return (nil, true) }
+                    }
                 }
-                for await m in g { if let m { out.append(m) } }
+                for await (m, bad) in g { if let m { out.append(m) }; if bad { failed += 1 } }
             }
         }
-        return out
+        return (out, failed)
     }
 
     func thread(_ id: String) async throws -> [Message] {
