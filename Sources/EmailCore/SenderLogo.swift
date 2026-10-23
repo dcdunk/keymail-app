@@ -59,7 +59,8 @@ public func logoSites(for domain: String, senderName: String? = nil) -> [String]
     for tld in ["com", "io", "co"] { for n in names { sites.append("\(n).\(tld)") } }
     // The name has nothing in common with the domain (xSuit mailing through getredo.com, a returns service):
     // the domain is a vendor's, so the sender's own name goes first or we'd show the vendor's logo.
-    if let company, !base.contains(company), !company.contains(base) {
+    // Only a one-word name: a product name ("App Store Connect" from apple.com) glued into appstoreconnect.com is a stranger's site.
+    if let company, companyWords(senderName).count == 1, !base.contains(company), !company.contains(base) {
         sites = ["com", "io", "co"].map { "\(company).\($0)" } + sites
     }
     var seen = Set<String>()
@@ -68,11 +69,15 @@ public func logoSites(for domain: String, senderName: String? = nil) -> [String]
 
 /// "The Sonar Team" → "sonar", "xSuit" → "xsuit", "Salesforce Billing" → "salesforce". nil for addresses and blanks.
 func companyName(_ display: String?) -> String? {
-    guard let display, !display.contains("@") else { return nil }
+    let name = companyWords(display).joined()
+    return name.count >= 2 && name.count <= 30 ? name : nil
+}
+
+func companyWords(_ display: String?) -> [String] {
+    guard let display, !display.contains("@") else { return [] }
     let filler: Set<String> = ["the", "team", "billing", "support", "inc", "llc", "ltd", "co", "corp", "hq", "news", "newsletter",
                                "notifications", "updates", "no-reply", "noreply", "donotreply", "do-not-reply", "reply", "alerts", "receipts", "orders", "from", "at", "via", "customer", "service", "care", "&", "and"]
     let words = display.lowercased().components(separatedBy: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-")).inverted)
         .filter { !$0.isEmpty && !filler.contains($0) }
-    let name = words.joined()
-    return name.count >= 2 && name.count <= 30 ? name : nil
+    return words
 }

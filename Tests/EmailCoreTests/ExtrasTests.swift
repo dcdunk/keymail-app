@@ -479,6 +479,7 @@ final class SenderLogoTests: XCTestCase {
         XCTAssertEqual(logoSites(for: "getredo.com", senderName: "xSuit").first, "xsuit.com")       // vendor domain
         XCTAssertEqual(logoSites(for: "sonarsource.email", senderName: "The Sonar Team").first, "sonarsource.email") // related
         XCTAssertEqual(logoSites(for: "trinet.com", senderName: "DoNotReply").first, "trinet.com")
+        XCTAssertEqual(logoSites(for: "apple.com", senderName: "App Store Connect").first, "apple.com")  // product name, not a site
     }
 }
 
