@@ -167,6 +167,11 @@ struct ICloud {
         try await c.open()
         do { try await c.command("LOGIN \(imapQuote(login)) \(imapQuote(try password()))") }
         catch let e as AppError where e.errorDescription?.hasPrefix("Mail server:") == true {   // the server said no
+            let reply = e.errorDescription ?? ""
+            let who = account
+            await MainActor.run { AppStore.current?.log("\(who): sign-in refused: \(reply.prefix(200))") }   // the server's words only, never the password
+            // "Busy, try later" is not "wrong password": only a real refusal stops sign-ins until a new password.
+            guard imapLoginRefusal(reply) else { throw URLError(.cannotConnectToHost) }
             Self.setRejected(account, true)
             throw SignInRejected(account: account, server: server.name)
         }   // anything else (timeouts, dropped connections) is the network: rethrown as is and retried later
@@ -343,6 +348,15 @@ struct ICloud {
 }
 
 /// The server turned down the saved app password. Keymail won't try again until it's re-entered.
+/// A LOGIN "NO" that means the password itself was refused. Apple and Yahoo also say NO when they're busy, throttling
+/// or briefly down ([UNAVAILABLE], [LIMIT], "try again"); those are retried later instead of signing the account out.
+func imapLoginRefusal(_ reply: String) -> Bool {
+    let r = reply.uppercased()
+    if r.contains("AUTHENTICATIONFAILED") || r.contains("AUTHORIZATIONFAILED") { return true }
+    let passing = ["UNAVAILABLE", "[LIMIT]", "TOO MANY", "TRY AGAIN", "TEMPORAR", "THROTTL", "LATER", "INUSE", "SERVERBUG", "BUSY"]
+    return !passing.contains { r.contains($0) }
+}
+
 struct SignInRejected: LocalizedError {
     let account: String, server: String
     var errorDescription: String? {

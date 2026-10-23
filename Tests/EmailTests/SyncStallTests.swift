@@ -25,3 +25,14 @@ final class SyncStallTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(start), 10, "gave up instead of waiting forever")
     }
 }
+
+final class ICloudSignInTests: XCTestCase {
+    /// Only a real password refusal signs an account out; a busy or throttling server is retried later.
+    func testOnlyARealRefusalSignsTheAccountOut() {
+        XCTAssertTrue(imapLoginRefusal("Mail server: NO [AUTHENTICATIONFAILED] Authentication failed."))
+        XCTAssertTrue(imapLoginRefusal("Mail server: NO LOGIN failed"))
+        XCTAssertFalse(imapLoginRefusal("Mail server: NO [UNAVAILABLE] Service temporarily unavailable"))
+        XCTAssertFalse(imapLoginRefusal("Mail server: NO [LIMIT] Too many simultaneous connections"))
+        XCTAssertFalse(imapLoginRefusal("Mail server: NO Please try again later"))
+    }
+}
