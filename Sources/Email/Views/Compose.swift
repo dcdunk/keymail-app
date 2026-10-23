@@ -26,6 +26,9 @@ struct ComposeView: View {
             row("From") {
                 MenuButton(width: 320, entries: { fromEntries }) {
                     HStack(spacing: 5) {
+                        if store.state.accounts.count > 1 {
+                            Circle().fill(store.accountColor(store.account(of: model.draft))).frame(width: 7, height: 7)
+                        }
                         Text(store.fullLabel(model.draft.from, account: store.account(of: model.draft))).lineLimit(1)
                         Image(systemName: "chevron.down").font(.scaled(size: 9, weight: .semibold)).foregroundStyle(.secondary)
                     }.contentShape(Rectangle())

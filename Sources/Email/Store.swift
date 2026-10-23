@@ -54,6 +54,7 @@ struct SavedState: Codable {
     var defaultFrom: [String: String] = [:]    // account → address new emails come from
     var accountNames: [String: String] = [:]   // account → nickname like "Work" (Mac Mail's "Description")
     var senderNames: [String: String] = [:]    // account → the name people see on your email, e.g. "Dan Chait"
+    var accountColors: [String: Int] = [:]     // account → its color in inbox rows (index into AppStore.accountPalette)
     var undoSendSeconds = 10
     var aiProvider = "claude"
     var signatures: [String: String] = [:]     // sending address → signature text
@@ -87,6 +88,7 @@ struct SavedState: Codable {
         defaultFrom = v(.defaultFrom, base.defaultFrom)
         accountNames = v(.accountNames, base.accountNames)
         senderNames = v(.senderNames, base.senderNames)
+        accountColors = v(.accountColors, base.accountColors)
         undoSendSeconds = v(.undoSendSeconds, base.undoSendSeconds)
         aiProvider = v(.aiProvider, base.aiProvider); aiModels = v(.aiModels, base.aiModels)
         signatures = v(.signatures, base.signatures)
@@ -122,6 +124,7 @@ extension SavedState {
         defaultFrom[a] = nil
         accountNames[a] = nil
         senderNames[a] = nil
+        accountColors[a] = nil
         historyIds[a] = nil
         if activeAccount == a { activeAccount = nil }
         snoozes.removeAll { $0.account == a }
@@ -475,6 +478,14 @@ final class AppStore: ObservableObject {
         let n = state.accountNames[account]?.trimmingCharacters(in: .whitespaces) ?? ""
         return n.isEmpty ? sendAddress(account) : n
     }
+
+    /// Each account's color in inbox rows: the one picked in Settings → Accounts, else one by the account's place in the list.
+    static let accountPalette: [Color] = [.blue, .orange, .green, .pink, .purple, .teal, .yellow, .red, .mint, .indigo]
+    func accountColorIndex(_ account: String) -> Int? {
+        if let i = state.accountColors[account], Self.accountPalette.indices.contains(i) { return i }
+        return state.accounts.firstIndex(of: account).map { $0 % Self.accountPalette.count }
+    }
+    func accountColor(_ account: String) -> Color { accountColorIndex(account).map { Self.accountPalette[$0] } ?? .secondary }
 
     /// "Work · danny@x.com" for menus where both help.
     func fullLabel(_ address: String, account known: String? = nil) -> String {

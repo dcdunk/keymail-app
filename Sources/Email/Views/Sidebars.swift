@@ -21,8 +21,9 @@ struct FolderPanel: View {
             MenuButton(width: 320, entries: { store.accountEntries() }) {
                 HStack(spacing: 10) {
                     let name = account.map(store.label) ?? (store.state.accounts.count > 1 ? "All accounts" : store.state.accounts.first.map(store.label) ?? "")
-                    Circle().fill(Theme.chip(name).opacity(0.25)).frame(width: 30, height: 30)
-                        .overlay(Text(String(name.prefix(1)).uppercased()).font(.scaled(size: 13, weight: .semibold)).foregroundStyle(Theme.chip(name)))
+                    let tint = (account ?? (store.state.accounts.count == 1 ? store.state.accounts.first : nil)).map(store.accountColor) ?? Theme.chip(name)
+                    Circle().fill(tint.opacity(0.25)).frame(width: 30, height: 30)
+                        .overlay(Text(String(name.prefix(1)).uppercased()).font(.scaled(size: 13, weight: .semibold)).foregroundStyle(tint))
                     Text(name).font(.scaled(size: 14, weight: .medium)).lineLimit(1).truncationMode(.middle)
                     Spacer()
                     Image(systemName: "chevron.up.chevron.down").font(.scaled(size: 10)).foregroundStyle(.tertiary)

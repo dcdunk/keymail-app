@@ -166,7 +166,7 @@ struct AccountCapsule: View {
         MenuButton(width: 320, trailing: true, entries: { store.accountEntries() }) {
             HStack(spacing: 10) {
                 if store.state.accounts.count > 1 {
-                    Circle().fill(Theme.chip(store.state.activeAccount ?? "all")).frame(width: 7, height: 7)
+                    Circle().fill(store.state.activeAccount.map(store.accountColor) ?? Theme.chip("all")).frame(width: 7, height: 7)
                 }
                 Text(store.state.activeAccount.map(store.label) ?? (store.state.accounts.count > 1 ? "All accounts" : store.state.accounts.first.map(store.label) ?? ""))
                 Image(systemName: "chevron.down").font(.scaled(size: 10, weight: .semibold))

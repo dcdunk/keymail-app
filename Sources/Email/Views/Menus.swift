@@ -148,8 +148,9 @@ struct PopupLayer: View {
             Button { store.activatePopup(i) } label: {
                 HStack(spacing: 10) {
                     if let l = e.letter {
-                        Circle().fill(Theme.chip(l).opacity(0.2)).frame(width: 26, height: 26)
-                            .overlay(Text(String(e.title.prefix(1)).uppercased()).font(.scaled(size: 11.5, weight: .semibold)).foregroundStyle(Theme.chip(l)))
+                        let tint = store.state.accounts.contains(l) ? store.accountColor(l) : Theme.chip(l)
+                        Circle().fill(tint.opacity(0.2)).frame(width: 26, height: 26)
+                            .overlay(Text(String(e.title.prefix(1)).uppercased()).font(.scaled(size: 11.5, weight: .semibold)).foregroundStyle(tint))
                     } else if let icon = e.icon {
                         Image(systemName: icon).font(.scaled(size: 13)).frame(width: 22)
                             .foregroundStyle(e.destructive ? Color.red : Color.secondary)

@@ -652,7 +652,10 @@ struct AccountCard: View {
                     .onDrag { NSItemProvider(object: account as NSString) }
                 BrandLogo(brand: store.brand(account), size: 22)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(store.label(account)).font(.scaled(.headline)).lineLimit(1)
+                    HStack(spacing: 6) {
+                        Circle().fill(store.accountColor(account)).frame(width: 8, height: 8)
+                        Text(store.label(account)).font(.scaled(.headline)).lineLimit(1)
+                    }
                     Text("\(store.providerName(account)) · signed in as \(account)").font(.scaled(.caption)).foregroundStyle(.secondary)
                         .lineLimit(1).truncationMode(.middle)
                 }
@@ -671,6 +674,21 @@ struct AccountCard: View {
                 }
                 field("Name", hint: "What people see when you email them, e.g. Dan Chait", value: store.state.senderNames[account] ?? "") {
                     store.state.senderNames[account] = $0.isEmpty ? nil : $0
+                }
+                GridRow {
+                    Text("Color").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
+                    HStack(spacing: 6) {
+                        ForEach(AppStore.accountPalette.indices, id: \.self) { i in
+                            let on = store.accountColorIndex(account) == i
+                            Button { store.state.accountColors[account] = i } label: {
+                                Circle().fill(AppStore.accountPalette[i]).frame(width: 16, height: 16)
+                                    .overlay(Circle().strokeBorder(.primary.opacity(on ? 0.9 : 0), lineWidth: 2).padding(-3))
+                                    .frame(width: 22, height: 22).contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain).help("Shows next to this account's emails in the inbox")
+                            .accessibilityLabel("Color \(i + 1)").accessibilityAddTraits(on ? .isSelected : [])
+                        }
+                    }
                 }
                 GridRow {
                     Text("Send from").foregroundStyle(.secondary).gridColumnAlignment(.trailing)

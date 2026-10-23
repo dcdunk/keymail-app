@@ -70,7 +70,7 @@ struct SplitRow: View {
                     Text(participantsLabel(c, me: store.me)).font(.scaled(size: 14, weight: unread ? .semibold : .medium)).lineLimit(1)
                     Spacer(minLength: 4)
                     if store.state.accounts.count > 1 {
-                        Text(store.label(c.account)).font(.scaled(.caption2)).foregroundStyle(.tertiary).lineLimit(1)
+                        Text(store.label(c.account)).font(.scaled(.caption2).weight(.medium)).foregroundStyle(store.accountColor(c.account)).lineLimit(1)
                     }
                     Text(shortDate(c.latest.date)).font(.scaled(.caption)).foregroundStyle(.secondary).monospacedDigit()
                 }

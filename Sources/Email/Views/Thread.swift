@@ -221,7 +221,10 @@ struct MessageCard: View {
                         Text(from?.display ?? message.from).font(.scaled(size: 15, weight: .semibold))
                         if let e = from?.email, from?.name.isEmpty == false { Text(e).font(.scaled(.callout)).foregroundStyle(.secondary) }
                     }
-                    Text(recipients).font(.scaled(.callout)).foregroundStyle(.secondary).lineLimit(2)
+                    (Text(recipients).foregroundStyle(.secondary)
+                        + (store.state.accounts.count > 1 ? Text("  ·  ").foregroundStyle(.tertiary)
+                            + Text(store.label(message.account)).fontWeight(.medium).foregroundStyle(store.accountColor(message.account)) : Text("")))
+                        .font(.scaled(.callout)).lineLimit(2)
                 }
                 Spacer()
                 if message.labelIds.contains("DRAFT") && !message.labelIds.contains("SENT") {
