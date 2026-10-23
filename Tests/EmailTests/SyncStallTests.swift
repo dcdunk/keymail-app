@@ -35,4 +35,18 @@ final class ICloudSignInTests: XCTestCase {
         XCTAssertFalse(imapLoginRefusal("Mail server: NO [LIMIT] Too many simultaneous connections"))
         XCTAssertFalse(imapLoginRefusal("Mail server: NO Please try again later"))
     }
+
+    /// One stray "Authentication Failed" from iCloud no longer signs the account out: it takes 3 in a row,
+    /// and a good sign-in in between starts the count over.
+    func testOneStrayRefusalDoesNotSignOut() {
+        let a = "test-refusal@icloud.com"
+        ICloud.setRejected(a, false)
+        XCTAssertEqual(ICloud.refused(a), 1)
+        XCTAssertEqual(ICloud.refused(a), 2)
+        ICloud.refusals(reset: a)   // signed in fine
+        XCTAssertEqual(ICloud.refused(a), 1, "the count starts over after a good sign-in")
+        XCTAssertEqual(ICloud.refused(a), 2)
+        XCTAssertEqual(ICloud.refused(a), 3, "the third in a row is the one that signs out")
+        ICloud.setRejected(a, false)
+    }
 }

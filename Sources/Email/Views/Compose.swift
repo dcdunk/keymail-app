@@ -112,7 +112,10 @@ struct ComposeView: View {
             }
             toolbar
         }
-        .frame(minWidth: 620, idealWidth: 820, maxWidth: 1100, minHeight: 460, idealHeight: 640, maxHeight: 1000)
+        // Inside a conversation the card is as tall as what's in it (a big signature, an error line); a fixed height cut
+        // off the From row and the Send bar. Its own window keeps the usual size.
+        .frame(minWidth: model.inline ? nil : 620, idealWidth: 820, maxWidth: 1100,
+               minHeight: model.inline ? nil : 460, idealHeight: model.inline ? nil : 640, maxHeight: model.inline ? nil : 1000)
         .background(TextChecking())
         .onChange(of: model.draft) { _, _ in store.scheduleDraftSave(model) }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in

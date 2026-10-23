@@ -25,7 +25,7 @@ struct ThreadView: View {
         if let m = store.composing, m.inline, m.context?.id == conversation.id {
             ComposeView(model: m)
                 .padding(.top, 8).padding(.bottom, 6)   // a little breathing room inside the card, top and bottom
-                .frame(height: 454)
+                .frame(minHeight: 454).fixedSize(horizontal: false, vertical: true)
                 .solidPanel(RoundedRectangle(cornerRadius: 14))
                 .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.accent.opacity(0.35)))
                 .environment(\.closeCard, CloseCard { store.composing = nil })

@@ -21,6 +21,17 @@ final class ExtrasTests: XCTestCase {
 
     func testCompleteField() {
         XCTAssertEqual(currentToken("a@b.com, ma"), "ma")
+        // A comma inside a quoted name is part of the name, not a new recipient (reply to "Fitzpatrick, Psy.D.").
+        let reply = Address(name: "Laura-Beth Fitzpatrick, Psy.D.", email: "drl@x.example").formatted + ", "
+        XCTAssertEqual(currentToken(reply), "")
+        XCTAssertEqual(parseAddresses(splitRecipientField(reply).head), [Address(name: "Laura-Beth Fitzpatrick, Psy.D.", email: "drl@x.example")])
+        XCTAssertEqual(currentToken(reply + "sam"), "sam")
+        XCTAssertEqual(removingLastRecipient(reply), "")
+        // A reply's To ("Name <x>", no trailing comma) becomes chips; half-typed text doesn't.
+        XCTAssertEqual(chipsFilled("Sam Okafor <sam@northwind.co>"), "Sam Okafor <sam@northwind.co>, ")
+        XCTAssertEqual(chipsFilled("a@b.co, \"Fitzpatrick, Psy.D.\" <drl@x.example>"), "a@b.co, \"Fitzpatrick, Psy.D.\" <drl@x.example>, ")
+        XCTAssertNil(chipsFilled("a@b.co, sa"))
+        XCTAssertNil(chipsFilled("a@b.co, "))
         XCTAssertEqual(completeField("a@b.com, ma", with: Address(name: "Maya Chen", email: "maya@corp.com")), "a@b.com, Maya Chen <maya@corp.com>, ")
         XCTAssertEqual(completeField("ma", with: Address(name: "", email: "maya@corp.com")), "maya@corp.com, ")
     }

@@ -40,9 +40,7 @@ struct RecipientChips: View {
     let complete: (String) -> String?
 
     var committed: [Address] {
-        var parts = text.components(separatedBy: ",")
-        parts.removeLast()
-        return parseAddresses(parts.joined(separator: ","))
+        parseAddresses(splitRecipientField(text).head)
     }
 
     var body: some View {
@@ -81,7 +79,11 @@ struct RecipientChips: View {
                 // The text field swallows Backspace when it's empty, so .onKeyPress never sees it. The app's key
                 // handler asks the focused recipient row instead (same approach as search tokens).
                 .onChange(of: focus.wrappedValue) { _, now in registerBackspace(now == field) }
-                .onAppear { registerBackspace(focus.wrappedValue == field) }
+                .onAppear {
+                    registerBackspace(focus.wrappedValue == field)
+                    // Addresses Keymail filled in (a reply's To and Cc, a saved draft) show as chips, not as half-typed text.
+                    if let done = chipsFilled(text) { text = done }
+                }
                 .onDisappear { registerBackspace(false) }
         }
     }

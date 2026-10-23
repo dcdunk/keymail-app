@@ -26,14 +26,30 @@ public func contactSuggestions(_ query: String, messages: [Message], me: Set<Str
 
 /// The part of a To/Cc field being typed: everything after the last comma.
 public func currentToken(_ field: String) -> String {
-    (field.components(separatedBy: ",").last ?? "").trimmingCharacters(in: .whitespaces)
+    splitRecipientField(field).token.trimmingCharacters(in: .whitespaces)
+}
+
+/// The finished recipients and the one still being typed, split at the last comma that separates addresses.
+/// Commas inside a quoted name ("Fitzpatrick, Psy.D.") or <…> belong to that address: splitting there turned one
+/// recipient into a chip plus a stray `Psy.D." <…>`.
+public func splitRecipientField(_ field: String) -> (head: String, token: String) {
+    var inQuote = false, inAngle = false, cut: String.Index?
+    for i in field.indices {
+        switch field[i] {
+        case "\"": inQuote.toggle()
+        case "<" where !inQuote: inAngle = true
+        case ">" where !inQuote: inAngle = false
+        case "," where !inQuote && !inAngle: cut = i
+        default: break
+        }
+    }
+    guard let cut else { return ("", field) }
+    return (String(field[..<cut]), String(field[field.index(after: cut)...]))
 }
 
 /// Replaces the token being typed with a full address and readies the field for the next one.
 public func completeField(_ field: String, with a: Address) -> String {
-    var parts = field.components(separatedBy: ",")
-    parts.removeLast()
-    let head = parts.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    let head = parseAddresses(splitRecipientField(field).head).map(\.formatted)
     return (head + [a.formatted]).joined(separator: ", ") + ", "
 }
 
@@ -95,11 +111,18 @@ public func splitQuotedHTML(_ html: String) -> (body: String, quoted: String?) {
 
 /// Backspace in an empty To/Cc/Bcc box: the field without its last address. nil while something is being typed
 /// (Backspace edits that text) or when there's nothing to remove.
+/// A field whose last entry is already a complete address ("Sam <sam@x.co>") with no comma after it, finished so it
+/// shows as a chip. nil when there's nothing to finish or the last entry isn't a full address yet.
+public func chipsFilled(_ field: String) -> String? {
+    let token = currentToken(field)
+    guard !token.isEmpty, let a = parseAddresses(token).first, parseAddresses(token).count == 1,
+          a.email.contains("@"), a.email.split(separator: "@").last?.contains(".") == true, !a.email.contains(" ") else { return nil }
+    return (parseAddresses(splitRecipientField(field).head) + [a]).map { $0.formatted + ", " }.joined()
+}
+
 public func removingLastRecipient(_ field: String) -> String? {
     guard currentToken(field).isEmpty else { return nil }
-    var parts = field.components(separatedBy: ",")
-    parts.removeLast()
-    var chips = parseAddresses(parts.joined(separator: ",")).map(\.formatted)
+    var chips = parseAddresses(splitRecipientField(field).head).map(\.formatted)
     guard !chips.isEmpty else { return nil }
     chips.removeLast()
     return chips.map { $0 + ", " }.joined()

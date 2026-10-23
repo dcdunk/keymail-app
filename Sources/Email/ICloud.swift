@@ -158,7 +158,11 @@ struct ICloud {
     nonisolated(unsafe) private static var rejected = Set<String>()
     private static let rejectedLock = NSLock()
     static func isRejected(_ a: String) -> Bool { rejectedLock.withLock { rejected.contains(a) } }
-    static func setRejected(_ a: String, _ on: Bool) { rejectedLock.withLock { if on { rejected.insert(a) } else { rejected.remove(a) } } }
+    static func setRejected(_ a: String, _ on: Bool) { rejectedLock.withLock { if on { rejected.insert(a) } else { rejected.remove(a) }; refusalCount[a] = nil } }
+    nonisolated(unsafe) private static var refusalCount: [String: Int] = [:]
+    /// Counts a refused sign-in and returns how many in a row; a successful sign-in resets it.
+    static func refused(_ a: String) -> Int { rejectedLock.withLock { refusalCount[a, default: 0] += 1; return refusalCount[a]! } }
+    static func refusals(reset a: String) { rejectedLock.withLock { refusalCount[a] = nil } }
 
     func session<T>(_ body: (IMAPConnection) async throws -> T) async throws -> T {
         guard !Self.isRejected(account) else { throw SignInRejected(account: account, server: server.name) }
@@ -172,9 +176,13 @@ struct ICloud {
             await MainActor.run { AppStore.current?.log("\(who): sign-in refused: \(reply.prefix(200))") }   // the server's words only, never the password
             // "Busy, try later" is not "wrong password": only a real refusal stops sign-ins until a new password.
             guard imapLoginRefusal(reply) else { throw URLError(.cannotConnectToHost) }
+            // iCloud now and then refuses a password that worked a minute ago. Give up only on the 3rd refusal in a row
+            // (the sync waits a few minutes between tries), still far too few to lock the Apple Account.
+            guard Self.refused(account) >= 3 else { throw URLError(.userAuthenticationRequired) }
             Self.setRejected(account, true)
             throw SignInRejected(account: account, server: server.name)
         }   // anything else (timeouts, dropped connections) is the network: rethrown as is and retried later
+        Self.refusals(reset: account)
         return try await body(c)
     }
 

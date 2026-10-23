@@ -27,7 +27,8 @@ extension AppStore {
             catch where (error as? HTTPError)?.isTransient == true || error is URLError || error is NWError {
                 // Rate limits, Google 5xx and network blips: sit this account out a minute, quietly.
                 // Only speak up if it keeps happening.
-                cooldown[a] = Date().addingTimeInterval(65)
+                // A refused sign-in (iCloud, Yahoo) waits 5 minutes before the next try; everything else a minute.
+                cooldown[a] = Date().addingTimeInterval((error as? URLError)?.code == .userAuthenticationRequired ? 300 : 65)
                 quotaHits[a, default: 0] += 1
                 log("\(a): temporary error, pausing 65s (\(quotaHits[a]!) in a row): \(error.localizedDescription.prefix(200))")
                 if quotaHits[a]! >= 3 { report(error) }
