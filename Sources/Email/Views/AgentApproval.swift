@@ -21,8 +21,8 @@ struct AgentApprovalCard: View {
             .padding(.horizontal, 20).padding(.top, 18).padding(.bottom, 12)
 
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
-                row("From", d.from); row("To", d.to)
-                if !d.cc.isEmpty { row("Cc", d.cc) }
+                row("From", d.from); recipients("To", d.to)
+                if !d.cc.isEmpty { recipients("Cc", d.cc) }
                 row("Subject", d.subject)
                 if let days = approval.remindDays { row("Remind", "if no reply in \(days) day\(days == 1 ? "" : "s")") }
             }
@@ -59,6 +59,20 @@ struct AgentApprovalCard: View {
 
     func row(_ k: String, _ v: String) -> some View {
         GridRow { Text(k).foregroundStyle(.secondary).gridColumnAlignment(.trailing); Text(v).lineLimit(2).textSelection(.enabled) }
+    }
+
+    /// Every recipient, in full: anyone not already on the thread is flagged, so an agent can't slip someone in.
+    func recipients(_ k: String, _ header: String) -> some View {
+        let outsiders = notInThread(header, participants: approval.participants)
+        return GridRow {
+            Text(k).foregroundStyle(.secondary).gridColumnAlignment(.trailing)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(header).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                ForEach(outsiders, id: \.self) { a in
+                    Label("\(a) isn't on this thread", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).font(.scaled(.caption))
+                }
+            }
+        }
     }
 
     func finish(_ outcome: String) { store.agentApproval = nil; approval.resolve(outcome) }

@@ -10,7 +10,15 @@ struct AgentApproval: Identifiable {
     var draft: Draft
     var sendAt: Date?
     var remindDays: Int?
+    /// Everyone already on the thread (lowercased), or nil for a new email.
+    var participants: Set<String>? = nil
     let resolve: (String) -> Void
+}
+
+/// Recipients in a To/Cc header who aren't already on the thread, so the approval card can flag them.
+func notInThread(_ header: String, participants: Set<String>?) -> [String] {
+    guard let participants else { return [] }
+    return parseAddresses(header).map(\.email).filter { !participants.contains($0.lowercased()) }
 }
 
 /// Lets the socket thread wait for an answer computed on the main actor.
@@ -227,14 +235,17 @@ extension AppStore {
         case "send_email":
             guard let body = str("body") else { throw AppError("body is required.") }
             guard agentApproval == nil else { throw AppError("Another email is already waiting for the person's approval. Try again after they answer it.") }
-            var d: Draft
+            var d: Draft, participants: Set<String>?
             if str("thread_id") != nil {
                 let c = try conv()
+                participants = Set(([c.account] + (state.aliases[c.account] ?? [])).map { $0.lowercased() }
+                    + c.messages.flatMap { parseAddresses($0.from + "," + $0.to + "," + $0.cc).map { $0.email.lowercased() } })
                 d = replyDraft(to: c.latest, me: c.account, all: false); d.from = replyFrom(c.latest, account: c.account)
                 d.body = body + d.body
                 if let to = str("to") { d.to = to }
             } else {
                 guard let to = str("to"), let subject = str("subject") else { throw AppError("to and subject are required for a new email.") }
+                participants = nil
                 d = Draft(from: sendAddress(defaultAccount)); d.to = to; d.subject = subject; d.body = body
             }
             if let cc = str("cc") { d.cc = cc }
@@ -244,7 +255,7 @@ extension AppStore {
             let days = (a["remind_if_no_reply_days"] as? Int).map { min(30, max(1, $0)) }
             return await withCheckedContinuation { cont in
                 var once = false
-                agentApproval = AgentApproval(draft: d, sendAt: at, remindDays: days) { outcome in
+                agentApproval = AgentApproval(draft: d, sendAt: at, remindDays: days, participants: participants) { outcome in
                     guard !once else { return }; once = true; cont.resume(returning: outcome)
                 }
                 NSApp.activate()
