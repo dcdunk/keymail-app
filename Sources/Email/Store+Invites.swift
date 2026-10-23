@@ -111,6 +111,16 @@ extension AppStore {
     /// Answers an invite so both your calendar and the organizer's show it. Returns what to tell the person.
     func rsvp(_ inv: Invite, _ answer: RSVP, message m: Message) async throws -> String {
         let acct = m.account, me = inviteeAddress(inv, account: acct)
+        if !organizerIsSender(inv, m) {
+            let alert = NSAlert()
+            alert.messageText = "Send your answer to \(inv.organizer)?"
+            alert.informativeText = m.authFailed == true
+                ? "This email failed its sender check (it may be forged), so Keymail won't answer it without asking."
+                : "The invite names \(inv.organizer) as the organizer, but the email came from \(m.from). Only send if you trust it."
+            alert.addButton(withTitle: "Send")
+            alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { throw AppError("Cancelled. No answer was sent.") }
+        }
         if isGmail(acct) {
             let cal = GoogleCalendar(account: acct, auth: auth)
             do {

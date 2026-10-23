@@ -161,3 +161,10 @@ public func isAutomatedAddress(_ email: String) -> Bool {
     return ["noreply", "no-reply", "donotreply", "do-not-reply", "notifications", "notification", "mailer-daemon", "bounce", "calendar-notification"]
         .contains { local == $0 || local.hasPrefix($0 + "+") || local.hasPrefix($0 + "-") || local.hasPrefix($0 + ".") }
 }
+
+/// Safe to send the RSVP without asking: the invite's ORGANIZER is the verified sender of the email it came in.
+/// Otherwise a forged .ics could steer your answer (and your address) to anyone.
+public func organizerIsSender(_ inv: Invite, _ m: Message) -> Bool {
+    guard m.authFailed != true, let from = parseAddresses(m.from).first?.email else { return false }
+    return from.lowercased() == inv.organizer.lowercased()
+}
