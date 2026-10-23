@@ -87,6 +87,33 @@ extension AppStore {
         on ? modify(c, add: [id]) : modify(c, remove: [id])
     }
 
+    /// The folders and labels in the sidebar that accept a dragged email.
+    func acceptsDrop(_ target: String) -> Bool {
+        ["Inbox", "Starred", "Done", "Trash"].contains(target) || panelLabels.contains(target)
+    }
+
+    /// An email dragged onto a sidebar folder or label: the same action its key or menu does, undo included.
+    @discardableResult
+    func drop(_ id: String, on target: String) -> Bool {
+        guard let c = allConversations.first(where: { $0.id == id }) else { return false }
+        switch target {
+        case "Inbox":
+            guard !c.inInbox else { return false }
+            modify(c, add: ["INBOX"]); banner = "Moved to Inbox."
+        case "Starred": if !c.isStarred { modify(c, add: ["STARRED"]) }
+        case "Done": act(on: c) { markDone() }
+        case "Trash": act(on: c) { trash() }
+        default:
+            guard panelLabels.contains(target) else { return false }
+            guard let l = gmailLabels[c.account]?.first(where: { $0.name == target }) else {
+                banner = "Labels work on Gmail emails, and \(label(c.account)) doesn't have “\(target)”."
+                return false
+            }
+            setLabel(l.id, on: c, true); banner = "Labeled “\(target)”."
+        }
+        return true
+    }
+
     /// Mouse actions on a specific row: select it, then run the same action the keyboard would.
     func act(on c: Conversation, _ f: () -> Void) { selectedID = c.id; f() }
 

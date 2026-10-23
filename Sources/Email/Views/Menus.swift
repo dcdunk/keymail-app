@@ -33,6 +33,14 @@ extension AppStore {
                       submenu: remindEntries(c, ifNoReply: true) + [.divider] + remindEntries(c, ifNoReply: false)),
             MenuEntry(title: state.muted.contains(c.id) ? "Unmute" : "Mute", icon: state.muted.contains(c.id) ? "bell" : "bell.slash", key: "⇧M") { self.act(on: c) { self.toggleMute() } },
         ]
+        // Move to: the same places you can drag an email to in the sidebar.
+        var moves: [MenuEntry] = []
+        if !c.inInbox { moves.append(MenuEntry(title: "Inbox", icon: "tray") { self.drop(c.id, on: "Inbox") }) }
+        if c.inInbox { moves.append(MenuEntry(title: "Done", icon: "checkmark") { self.drop(c.id, on: "Done") }) }
+        moves.append(MenuEntry(title: "Trash", icon: "trash") { self.drop(c.id, on: "Trash") })
+        let mine = (gmailLabels[c.account] ?? []).map(\.name).filter { panelLabels.contains($0) }
+        if !mine.isEmpty { moves += [.divider] + mine.map { n in MenuEntry(title: n, icon: "tag") { self.drop(c.id, on: n) } } }
+        e.append(MenuEntry(title: "Move to", icon: "folder", submenu: moves))
         if isGmail(c.account), let labels = gmailLabels[c.account], !labels.isEmpty {
             e.append(MenuEntry(title: "Label", icon: "tag", key: Hotkeys.label("l"), submenu: labels.map { l in
                 MenuEntry(title: l.name, icon: "tag", checked: c.labels.contains(l.id)) { self.setLabel(l.id, on: c, !c.labels.contains(l.id)) }

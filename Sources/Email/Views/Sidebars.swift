@@ -12,6 +12,7 @@ import QuickLook
 struct FolderPanel: View {
     @EnvironmentObject var store: AppStore
     @State private var hovered: String?   // mouse highlight; separate from the ↑/↓ highlight so hovering never scrolls
+    @State private var dropTarget: String?   // the folder an email is being dragged over
     var body: some View {
         let account = store.state.activeAccount
         let inboxCount = store.allConversations.filter(\.inInbox).count
@@ -86,6 +87,8 @@ struct FolderPanel: View {
                         Rectangle().fill(Theme.selection)
                         Rectangle().fill(Theme.accent).frame(width: 3)
                     }
+                } else if dropTarget == title {
+                    RoundedRectangle(cornerRadius: 10).fill(Theme.accent.opacity(0.18)).padding(.horizontal, 8)
                 } else if hovered == title {
                     RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.05)).padding(.horizontal, 8)
                 }
@@ -102,6 +105,13 @@ struct FolderPanel: View {
         .buttonStyle(.plain).handCursor()
         .onHover { inside in
             if inside { hovered = title } else if hovered == title { hovered = nil }
+        }
+        // Drop an email here to move, star, archive, delete or label it.
+        .dropDestination(for: String.self) { ids, _ in
+            guard store.acceptsDrop(title), let id = ids.first else { return false }
+            return store.drop(id, on: title)
+        } isTargeted: { over in
+            if over, store.acceptsDrop(title) { dropTarget = title } else if dropTarget == title { dropTarget = nil }
         }
     }
 }

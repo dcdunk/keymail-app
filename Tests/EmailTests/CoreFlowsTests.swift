@@ -199,6 +199,30 @@ final class CoreFlowsTests: XCTestCase {
         XCTAssertTrue(store.composing?.draft.quoted?.contains("From: \(older.from)\nDate: \(older.date)") ?? false, "forward carries the email you picked")
     }
 
+    func testDraggingAnEmailOntoSidebarFolders() {
+        let c = store.allConversations.first { $0.inInbox && !$0.isStarred }!
+        XCTAssertTrue(store.acceptsDrop("Done") && store.acceptsDrop("Trash") && store.acceptsDrop("Inbox") && store.acceptsDrop("Starred"))
+        XCTAssertFalse(store.acceptsDrop("Sent"), "folders Keymail fills itself don't take drops")
+        XCTAssertTrue(store.drop(c.id, on: "Starred"))
+        XCTAssertTrue(store.allConversations.first { $0.id == c.id }!.isStarred, "dropped on Starred: starred")
+        XCTAssertTrue(store.drop(c.id, on: "Done"))
+        XCTAssertFalse(store.allConversations.first { $0.id == c.id }!.inInbox, "dropped on Done: out of the inbox")
+        XCTAssertTrue(store.drop(c.id, on: "Inbox"))
+        XCTAssertTrue(store.allConversations.first { $0.id == c.id }!.inInbox, "dropped on Inbox: back in")
+        XCTAssertTrue(store.drop(c.id, on: "Trash"))
+        XCTAssertNil(store.allConversations.first { $0.id == c.id }, "dropped on Trash: deleted")
+        XCTAssertFalse(store.drop("no-such-email", on: "Done"))
+    }
+
+    func testRightClickMenuHasMoveTo() {
+        let c = store.allConversations.first { $0.inInbox }!
+        let move = store.conversationEntries(c).first { $0.title == "Move to" }
+        XCTAssertNotNil(move, "right-click menu has Move to")
+        let places = move?.submenu?.map(\.title) ?? []
+        XCTAssertTrue(places.contains("Done") && places.contains("Trash"))
+        XCTAssertFalse(places.contains("Inbox"), "an email already in the inbox isn't offered the inbox")
+    }
+
     func testScheduledSendIsKept() {
         var d = Draft(from: me); d.to = "a@b.co"; d.subject = "Later"
         store.schedule(d, at: Date().addingTimeInterval(3600), remindDays: 2)
