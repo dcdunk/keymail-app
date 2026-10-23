@@ -204,6 +204,7 @@ struct MessageCard: View {
     let collapse: () -> Void
     var showQuoted: Bool { store.quotedShown.contains(message.key) }
     @AppStorage("showQuotedHistory") private var showQuotedHistory = false
+    @State private var showAllRecipients = false
     var loadImagesOnce: Bool { store.imagesShown.contains(message.key) }   // "Load images" for just this message
     @AppStorage("loadRemoteImages") private var loadRemoteImages = false
     @AppStorage("cardOpacity") private var cardOpacity = 1.0
@@ -224,7 +225,11 @@ struct MessageCard: View {
                     (Text(recipients).foregroundStyle(.secondary)
                         + (store.state.accounts.count > 1 ? Text("  ·  ").foregroundStyle(.tertiary)
                             + Text(store.label(message.account)).fontWeight(.medium).foregroundStyle(store.accountColor(message.account)) : Text("")))
-                        .font(.scaled(.callout)).lineLimit(2)
+                        .font(.scaled(.callout)).lineLimit(showAllRecipients ? nil : 2)
+                        .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                        .contentShape(Rectangle()).handCursor()
+                        .onTapGesture { showAllRecipients.toggle() }
+                        .help(showAllRecipients ? "Click to show less" : "Click to show every recipient and address")
                 }
                 Spacer()
                 if message.labelIds.contains("DRAFT") && !message.labelIds.contains("SENT") {
@@ -316,11 +321,7 @@ struct MessageCard: View {
         .background(RoundedRectangle(cornerRadius: 14).fill(Color.primary.opacity(0.035)))
     }
 
-    var recipients: String {
-        let to = parseAddresses(message.to).map { store.me.contains($0.email.lowercased()) ? "me (\($0.email))" : $0.display }.joined(separator: ", ")
-        let cc = parseAddresses(message.cc).map(\.display).joined(separator: ", ")
-        return "to \(to.isEmpty ? "undisclosed recipients" : to)" + (cc.isEmpty ? "" : " · cc \(cc)")
-    }
+    var recipients: String { recipientLine(to: message.to, cc: message.cc, me: store.me, full: showAllRecipients) }
 
     @ViewBuilder var bodyView: some View {
         if let html = message.html {

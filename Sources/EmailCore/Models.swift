@@ -253,3 +253,13 @@ public func escapeHTML(_ s: String) -> String {
     s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
         .replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;")
 }
+
+/// The "to … · cc …" line under a sender. Short: names only. Full (clicked open): every name with its address.
+public func recipientLine(to: String, cc: String, me: Set<String>, full: Bool) -> String {
+    func show(_ a: Address) -> String {
+        if me.contains(a.email.lowercased()) { return "me (\(a.email))" }
+        return full && !a.name.isEmpty ? "\(a.name) <\(a.email)>" : a.display
+    }
+    let t = parseAddresses(to).map(show).joined(separator: ", "), c = parseAddresses(cc).map(show).joined(separator: ", ")
+    return "to \(t.isEmpty ? "undisclosed recipients" : t)" + (c.isEmpty ? "" : " · cc \(c)")
+}

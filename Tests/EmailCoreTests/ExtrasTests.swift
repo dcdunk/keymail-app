@@ -582,3 +582,13 @@ final class QuotedHTMLTests: XCTestCase {
         XCTAssertNotEqual(normalizedLink("https://evil.com/a"), normalizedLink("https://evil.com/b"))
     }
 }
+
+final class RecipientLineTests: XCTestCase {
+    func testShortShowsNamesFullShowsAddresses() {
+        let to = "Chris Hiatt <chris@x.com>, drew@y.com, Danny <danny@pga.com>", me: Set = ["danny@pga.com"]
+        XCTAssertEqual(recipientLine(to: to, cc: "", me: me, full: false), "to Chris Hiatt, drew@y.com, me (danny@pga.com)")
+        XCTAssertEqual(recipientLine(to: to, cc: "Ann <ann@z.com>", me: me, full: true),
+                       "to Chris Hiatt <chris@x.com>, drew@y.com, me (danny@pga.com) · cc Ann <ann@z.com>")
+        XCTAssertEqual(recipientLine(to: "", cc: "", me: me, full: true), "to undisclosed recipients")
+    }
+}
