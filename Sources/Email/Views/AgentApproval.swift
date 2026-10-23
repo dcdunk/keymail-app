@@ -5,6 +5,8 @@ import EmailCore
 struct AgentApprovalCard: View {
     @EnvironmentObject var store: AppStore
     let approval: AgentApproval
+    /// ⌘↵ also sends an inline reply, so a keypress already in flight when the card appears must not approve it.
+    @State private var shownAt = Date()
 
     var body: some View {
         let d = approval.draft
@@ -44,6 +46,7 @@ struct AgentApprovalCard: View {
                 }.quiet().keyboardShortcut("e", modifiers: .command).help("Edit first (⌘E)")
                 Spacer()
                 Button {
+                    guard Date().timeIntervalSince(shownAt) > 1 else { return }
                     if let at = approval.sendAt { store.schedule(d, at: at, remindDays: approval.remindDays) }
                     else { store.sendWithUndo(d, remindDays: approval.remindDays) }
                     finish(approval.sendAt == nil ? "Approved and sent (with Keymail's undo window)." : "Approved and scheduled.")
