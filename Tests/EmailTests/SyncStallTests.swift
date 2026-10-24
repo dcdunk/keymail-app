@@ -1,6 +1,7 @@
 import XCTest
 import Network
 @testable import Email
+import EmailCore
 
 /// A mail server that accepts the connection and then says nothing (what a dead connection looks like after sleep).
 /// Keymail must give up and move on; before, it waited forever and all mail stopped until Keymail was quit.
@@ -49,5 +50,30 @@ final class ICloudSignInTests: XCTestCase {
         XCTAssertEqual(ICloud.refused(a, now: t.addingTimeInterval(900)), 2)
         XCTAssertEqual(ICloud.refused(a, now: t.addingTimeInterval(1200)), 3, "the third, minutes apart, is the one that signs out")
         ICloud.setRejected(a, false)
+    }
+}
+
+@MainActor
+final class ICloudTrashTests: XCTestCase {
+    func testTrashReadsICloudsDeletedMessagesFolder() {
+        XCTAssertEqual(ICloud.mailbox("trash").use, "\\Trash")
+        XCTAssertEqual(ICloud.mailbox("trash").fallback, "Deleted Messages", "where Apple Mail and iCloud.com put deleted mail")
+        XCTAssertEqual(ICloud.mailbox("sent").fallback, "Sent Messages")
+        XCTAssertEqual(ICloud.mailbox("archive").fallback, "Archive")
+    }
+
+    func testTrashFolderListsICloudDeletedMail() async throws {
+        let store = AppStore()
+        store.messages = [:]
+        store.state = SavedState()
+        let a = "me@icloud.com"
+        store.state.accounts = [a]; store.state.icloud = [a]; store.state.onboarded = true
+        var m = Message(id: "trash:7", threadId: "t7", account: a, from: "Ann <ann@x.com>", to: a, subject: "Deleted one", date: Date())
+        m.labelIds = ["TRASH"]
+        store.messages[m.key] = m
+        store.goFolder("Trash")
+        // The server fetch starts on the next turn of the main loop and fails fast here (no real account); wait it out.
+        for _ in 0..<100 where store.searchResults?.isEmpty ?? true { try await Task.sleep(nanoseconds: 100_000_000) }
+        XCTAssertEqual(store.searchResults, [a + "|t7"], "an iCloud email in Deleted Messages shows in Trash")
     }
 }

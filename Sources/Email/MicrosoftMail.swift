@@ -46,7 +46,7 @@ struct GraphMail {
 
     /// The newest `limit` emails in Sent Items ("sent") or Archive ("archive"), full bodies included.
     func recent(_ which: String, limit: Int = 50, skip: Set<String>) async throws -> [Message] {
-        let box = ["sent": "sentitems", "drafts": "drafts"][which] ?? "archive"
+        let box = ["sent": "sentitems", "drafts": "drafts", "trash": "deleteditems"][which] ?? "archive"
         let j = try await call("/mailFolders/\(box)/messages?$select=id&$top=\(limit)&$orderby=receivedDateTime%20desc")
         let ids = ((j["value"] as? [[String: Any]]) ?? []).compactMap { $0["id"] as? String }.filter { !skip.contains($0) }
         var out: [Message] = []
@@ -54,6 +54,7 @@ struct GraphMail {
             guard var m = try? await message(id, inInbox: false) else { continue }
             if which == "sent" { m.labelIds = m.labelIds.filter { $0 != "UNREAD" } + ["SENT"] }
             if which == "drafts" { m.labelIds = m.labelIds.filter { $0 != "UNREAD" } + ["DRAFT"] }
+            if which == "trash" { m.labelIds.append("TRASH") }
             out.append(m)
         }
         return out

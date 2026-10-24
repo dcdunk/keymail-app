@@ -199,13 +199,19 @@ struct ICloud {
         imapSpecialUse(try await c.command("LIST \"\" \"*\"").map(\.line))[use] ?? fallback
     }
 
-    /// The newest `limit` emails in Sent ("sent"), Drafts ("drafts") or Archive ("archive"). UIDs are per mailbox, so ids
+    /// Server folder for each Keymail folder: the special-use flag the server marks it with, and its usual name.
+    /// iCloud's trash is "Deleted Messages", the same folder Apple Mail and iCloud.com use.
+    static func mailbox(_ which: String) -> (use: String, fallback: String) {
+        ["sent": ("\\Sent", "Sent Messages"), "drafts": ("\\Drafts", "Drafts"), "trash": ("\\Trash", "Deleted Messages")][which]
+            ?? ("\\Archive", "Archive")
+    }
+
+    /// The newest `limit` emails in Sent ("sent"), Drafts ("drafts"), Trash ("trash") or Archive ("archive"). UIDs are per mailbox, so ids
     /// get a prefix ("sent:123") that INBOX numbers can never match; actions that act by UID only ever use plain INBOX ids.
     func recent(_ which: String, limit: Int = 50, skip: Set<String>) async throws -> [Message] {
         try await session { c in
-            let box = which == "sent" ? try await folder(c, "\\Sent", fallback: "Sent Messages")
-                : which == "drafts" ? try await folder(c, "\\Drafts", fallback: "Drafts")
-                : try await folder(c, "\\Archive", fallback: "Archive")
+            let (use, fallback) = Self.mailbox(which)
+            let box = try await folder(c, use, fallback: fallback)
             try await c.command("SELECT \(imapQuote(box))")
             let uids = imapSearchUIDs(try await c.command("UID SEARCH ALL").map(\.line)).sorted().suffix(limit)
                 .filter { !skip.contains("\(which):\($0)") }
@@ -218,6 +224,7 @@ struct ICloud {
                 m.labelIds = m.labelIds.filter { $0 != "IMPORTANT" } + (which == "sent" ? ["SENT"] : [])
                 if which == "sent" { m.labelIds.removeAll { $0 == "UNREAD" } }
                 if which == "drafts" { m.labelIds = m.labelIds.filter { $0 != "UNREAD" } + ["DRAFT"] }
+                if which == "trash" { m.labelIds.append("TRASH") }
                 out.append(m)
             }
             return out
