@@ -59,7 +59,6 @@ extension AppStore {
             if Notifier.notifyMode == "important", !isImportant(c, ctx) { return nil }
             return (m, id)
         }
-        if !picked.isEmpty { log("notify: \(picked.count) notification(s) sent") }
         Notifier.shared.notify(picked)
     }
 

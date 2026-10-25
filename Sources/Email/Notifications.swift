@@ -37,18 +37,38 @@ final class Notifier: NSObject, ObservableObject, UNUserNotificationCenterDelega
         }
     }
 
+    enum Route: Equatable { case notch, notchSummary, none, system }
+    /// Where new mail is announced. Notch style never falls back to a corner banner while there's a notch:
+    /// bursts become one notch summary, and nothing shows while Keymail is in front (you're looking at it).
+    /// Corner banners only for the "Banner" style, or when the notch is gone (lid closed).
+    static func route(notchStyle: Bool, hasNotch: Bool, appActive: Bool, count: Int) -> Route {
+        guard notchStyle, hasNotch else { return .system }
+        if appActive { return .none }
+        return count > 4 ? .notchSummary : .notch
+    }
+
     func notify(_ arrivals: [(message: Message, conversationId: String)]) {
         guard Self.notifyMode != "off", !arrivals.isEmpty, let store else { return }
-        // Notch style: only while you're in another app, same as banners. Fewer than 5 each get a turn in the notch.
-        if NotchBanner.enabled, !NSApp.isActive, arrivals.count <= 4 {
-            let shown = arrivals.allSatisfy { a in
+        let route = Self.route(notchStyle: NotchBanner.enabled, hasNotch: NotchBanner.notchScreen != nil, appActive: NSApp.isActive, count: arrivals.count)
+        store.log("notify: \(arrivals.count) via \(route)")
+        switch route {
+        case .none: return
+        case .notchSummary:
+            _ = NotchBanner.shared.show(.init(
+                title: "\(arrivals.count) new emails",
+                subtitle: arrivals.suffix(3).compactMap { parseAddresses($0.message.from).first?.display }.joined(separator: ", "),
+                body: "", sender: nil, open: { [weak self] in self?.open(nil) }))
+            return
+        case .notch:
+            for a in arrivals {
                 let from = parseAddresses(a.message.from).first
-                return NotchBanner.shared.show(.init(
+                _ = NotchBanner.shared.show(.init(
                     title: from?.display ?? a.message.from,
                     subtitle: store.state.accounts.count > 1 ? "\(store.label(a.message.account)) · \(a.message.subject)" : a.message.subject,
                     body: a.message.snippet, sender: from, open: { [weak self] in self?.open(a.conversationId) }))
             }
-            if shown { return }
+            return
+        case .system: break
         }
         let center = UNUserNotificationCenter.current()
         // A burst (for example after waking the Mac) becomes one summary instead of a wall of banners.

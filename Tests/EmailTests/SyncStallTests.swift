@@ -78,3 +78,14 @@ final class ICloudTrashTests: XCTestCase {
         XCTAssertEqual(store.searchResults, [a + "|t7"], "an iCloud email in Deleted Messages shows in Trash")
     }
 }
+
+@MainActor
+final class NotificationRouteTests: XCTestCase {
+    func testNotchStyleNeverFallsBackToCornerBannersWhileThereIsANotch() {
+        XCTAssertEqual(Notifier.route(notchStyle: true, hasNotch: true, appActive: false, count: 1), .notch)
+        XCTAssertEqual(Notifier.route(notchStyle: true, hasNotch: true, appActive: false, count: 9), .notchSummary, "a burst is one notch summary, not a system banner")
+        XCTAssertEqual(Notifier.route(notchStyle: true, hasNotch: true, appActive: true, count: 1), .none, "in Keymail already: nothing pops up")
+        XCTAssertEqual(Notifier.route(notchStyle: true, hasNotch: false, appActive: false, count: 1), .system, "lid closed: normal notifications")
+        XCTAssertEqual(Notifier.route(notchStyle: false, hasNotch: true, appActive: false, count: 1), .system, "Banner style")
+    }
+}
