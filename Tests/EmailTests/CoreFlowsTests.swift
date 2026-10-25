@@ -79,6 +79,22 @@ final class CoreFlowsTests: XCTestCase {
         XCTAssertNotNil(store.allConversations.first { $0.id == c.id }, "⌘Z restores from trash")
     }
 
+    func testJunkAndUndo() {
+        let c = store.selected!
+        press("!", code: 18, .shift)
+        XCTAssertNil(store.allConversations.first { $0.id == c.id }, "! marks it as junk: out of the inbox")
+        XCTAssertEqual(store.banner, "Marked as junk. ⌘Z to undo.")
+        press("z", code: 6, .command)
+        XCTAssertTrue(store.allConversations.first { $0.id == c.id }?.inInbox == true, "⌘Z puts it back in the inbox")
+        XCTAssertTrue(store.commands.map(\.title).contains("Mark as junk"), "in the ⌘K palette")
+        let menu = store.conversationEntries(c)
+        XCTAssertTrue(menu.contains { $0.title == "Mark as junk" }, "in the right-click menu")
+        XCTAssertTrue(menu.first { $0.title == "Move to" }?.submenu?.contains { $0.title == "Spam" } == true, "and under Move to")
+        XCTAssertTrue(store.acceptsDrop("Spam"))
+        XCTAssertTrue(store.drop(c.id, on: "Spam"))
+        XCTAssertNil(store.allConversations.first { $0.id == c.id }, "dropped on Spam: junked")
+    }
+
     func testStarAndUnread() {
         let id = store.selectedID!
         let starred = store.selected!.isStarred, unread = store.selected!.isUnread

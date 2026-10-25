@@ -72,6 +72,7 @@ extension AppStore {
                 Command(title: c.isStarred ? "Unstar" : "Star", key: Hotkeys.label("s")) { self.toggleStar() },
                 Command(title: c.isUnread ? "Mark read" : "Mark unread", key: Hotkeys.label("u")) { self.toggleUnread() },
                 Command(title: "Trash", key: "⌫") { self.trash() },
+                Command(title: "Mark as junk", key: Hotkeys.label("!")) { self.markJunk() },
                 Command(title: "Unsubscribe", key: "⇧U") { self.unsubscribe() },
                 Command(title: "Summarize thread with \(ai.name)", key: Hotkeys.label("i")) { self.summarize() },
                 Command(title: "Instant reply with \(ai.name)", key: "⇧R") { self.instantReply() },

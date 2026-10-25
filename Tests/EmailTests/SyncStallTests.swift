@@ -60,6 +60,7 @@ final class ICloudTrashTests: XCTestCase {
         XCTAssertEqual(ICloud.mailbox("trash").fallback, "Deleted Messages", "where Apple Mail and iCloud.com put deleted mail")
         XCTAssertEqual(ICloud.mailbox("sent").fallback, "Sent Messages")
         XCTAssertEqual(ICloud.mailbox("archive").fallback, "Archive")
+        XCTAssertEqual(ICloud.mailbox("junk").use, "\\Junk", "Mark as junk goes to iCloud's Junk folder")
     }
 
     func testTrashFolderListsICloudDeletedMail() async throws {

@@ -74,12 +74,12 @@ extension AppStore {
             busy = "Searching…"
             var ids: Set<String> = []
             for a in state.accounts where state.activeAccount == nil || state.activeAccount == a {
-                if !isGmail(a), q == "in:sent" || q == "in:drafts" || q == "in:trash" || isDone {
-                    // Sent, Drafts, Trash and Done read those folders on the server (iCloud, Yahoo, Outlook), then list
+                if !isGmail(a), q == "in:sent" || q == "in:drafts" || q == "in:trash" || q == "in:spam" || isDone {
+                    // Sent, Drafts, Trash, Spam and Done read those folders on the server (iCloud, Yahoo, Outlook), then list
                     // what's here. Drafts and Trash used to search the cache for the words "in:drafts"/"in:trash" and showed nothing.
-                    let box = isDone ? "archive" : q == "in:drafts" ? "drafts" : q == "in:trash" ? "trash" : "sent"
+                    let box = isDone ? "archive" : ["in:drafts": "drafts", "in:trash": "trash", "in:spam": "junk"][q] ?? "sent"
                     await fetchFolder(box, account: a)
-                    let label = ["drafts": "DRAFT", "trash": "TRASH"][box] ?? "SENT"
+                    let label = ["drafts": "DRAFT", "trash": "TRASH", "junk": "SPAM"][box] ?? "SENT"
                     if !isDone { for m in messages.values where m.account == a && m.labelIds.contains(label) { ids.insert(a + "|" + m.threadId) } }
                     continue
                 }

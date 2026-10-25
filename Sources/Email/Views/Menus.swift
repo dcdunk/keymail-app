@@ -37,6 +37,7 @@ extension AppStore {
         var moves: [MenuEntry] = []
         if !c.inInbox { moves.append(MenuEntry(title: "Inbox", icon: "tray") { self.drop(c.id, on: "Inbox") }) }
         if c.inInbox { moves.append(MenuEntry(title: "Done", icon: "checkmark") { self.drop(c.id, on: "Done") }) }
+        moves.append(MenuEntry(title: "Spam", icon: "xmark.bin") { self.drop(c.id, on: "Spam") })
         moves.append(MenuEntry(title: "Trash", icon: "trash") { self.drop(c.id, on: "Trash") })
         let mine = (gmailLabels[c.account] ?? []).map(\.name).filter { panelLabels.contains($0) }
         if !mine.isEmpty { moves += [.divider] + mine.map { n in MenuEntry(title: n, icon: "tag") { self.drop(c.id, on: n) } } }
@@ -49,7 +50,8 @@ extension AppStore {
         let important = isImportant(c, context(allConversations))
         e += [.divider, MenuEntry(title: "Move to \(important ? "Other" : "Important")", icon: important ? "tray" : "exclamationmark.circle") { self.setImportance(c.id, important: !important) }]
         if !c.latest.listUnsubscribe.isEmpty { e.append(MenuEntry(title: "Unsubscribe", icon: "hand.raised", key: "⇧U") { self.act(on: c) { self.unsubscribe() } }) }
-        e += [.divider, MenuEntry(title: "Delete", icon: "trash", key: "⌫", destructive: true) { self.act(on: c) { self.trash() } }]
+        e += [.divider, MenuEntry(title: "Mark as junk", icon: "xmark.bin", key: Hotkeys.label("!")) { self.act(on: c) { self.markJunk() } },
+              MenuEntry(title: "Delete", icon: "trash", key: "⌫", destructive: true) { self.act(on: c) { self.trash() } }]
         return e
     }
 

@@ -42,7 +42,7 @@ extension AppStore {
         if add.contains("UNREAD") { try await ic.setFlag([last], "\\Seen", on: false) }
         if add.contains("STARRED") { try await ic.setFlag([last], "\\Flagged", on: true) }
         if remove.contains("STARRED") { try await ic.setFlag(uids, "\\Flagged", on: false) }
-        if remove.contains("INBOX") { try await ic.move(uids, toTrash: false) }
+        if remove.contains("INBOX") { try await ic.move(uids, to: "archive") }
     }
 
     /// Removes the selection from the list and picks the next row, like Superhuman.
@@ -60,7 +60,7 @@ extension AppStore {
 
     // MARK: Undo (⌘Z) for delete and Done
 
-    enum UndoKind { case trash, done }
+    enum UndoKind { case trash, done, junk }
 
     // MARK: Undo send
 
@@ -120,11 +120,12 @@ extension AppStore {
             messages[m.key] = m
         }
         selectedID = c.id
-        banner = kind == .trash ? "Restored from Trash." : "Moved back to inbox."
+        banner = kind == .trash ? "Restored from Trash." : kind == .junk ? "Not junk. Moved back to inbox." : "Moved back to inbox."
         Task {
             do {
                 if isICloud(c.account) {
-                    try await icloud(c.account).restore(messageIds: c.messages.map(\.messageIdHeader), fromTrash: kind == .trash)
+                    try await icloud(c.account).restore(messageIds: c.messages.map(\.messageIdHeader),
+                                                             from: kind == .trash ? "trash" : kind == .junk ? "junk" : "archive")
                     // UIDs change when iCloud moves mail, so drop the old copies and re-fetch.
                     for m in c.messages { messages[m.key] = nil }
                     try await syncICloud(c.account)
@@ -136,6 +137,8 @@ extension AppStore {
                     }
                 } else if kind == .trash {
                     try await gmail(c.account).untrashThread(c.threadId)
+                } else if kind == .junk {
+                    try await gmail(c.account).modifyThread(c.threadId, add: ["INBOX"], remove: ["SPAM"])
                 } else {
                     try await gmail(c.account).modifyThread(c.threadId, add: ["INBOX"], remove: [])
                 }
@@ -165,9 +168,29 @@ extension AppStore {
         if threadOpen, let s = selected { open(s) }   // like Done: the next email opens (read, fully loaded)
         Task {
             do {
-                if isICloud(c.account) { try await icloud(c.account).move(c.messages.map(\.id).filter { Int($0) != nil }, toTrash: true) }
+                if isICloud(c.account) { try await icloud(c.account).move(c.messages.map(\.id).filter { Int($0) != nil }, to: "trash") }
                 else if isMicrosoft(c.account) { for m in c.messages where !m.labelIds.contains("SENT") { try await graph(c.account).move(m.id, to: "deleteditems") } }
                 else { try await gmail(c.account).trashThread(c.threadId) }
+            } catch { report(error) }
+        }
+    }
+
+    /// Junk (!): moves the email to the account's spam folder, which also teaches the provider's spam filter
+    /// (Gmail's Report spam, iCloud's and Outlook's Junk). ⌘Z puts it back.
+    func markJunk() {
+        guard let c = selected else { return }
+        guard !c.labels.contains("SPAM") else { banner = "That email is already in Spam."; return }
+        advance(after: c)
+        undoStack.append((c, .junk))
+        banner = "Marked as junk. ⌘Z to undo."
+        for m in c.messages { messages[m.key] = nil }
+        state.readyDrafts[c.id] = nil
+        if threadOpen, let s = selected { open(s) }
+        Task {
+            do {
+                if isICloud(c.account) { try await icloud(c.account).move(c.messages.map(\.id).filter { Int($0) != nil }, to: "junk") }
+                else if isMicrosoft(c.account) { for m in c.messages where !m.labelIds.contains("SENT") { try await graph(c.account).move(m.id, to: "junkemail") } }
+                else { try await gmail(c.account).modifyThread(c.threadId, add: ["SPAM"], remove: ["INBOX"]) }
             } catch { report(error) }
         }
     }

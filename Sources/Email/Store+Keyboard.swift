@@ -204,6 +204,7 @@ extension AppStore {
         case (_, "s"): toggleStar()
         case (_, "u"): toggleUnread()
         case (_, "#"), (51, _), (117, _): trash() // # like Superhuman, plus Backspace / Delete
+        case (_, "!"): markJunk()
         case (_, "h"): openPalette("remind")
         case (_, "b"): createEventFromEmail()
         case (_, "l"): openPalette("label")

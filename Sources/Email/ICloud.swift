@@ -202,7 +202,8 @@ struct ICloud {
     /// Server folder for each Keymail folder: the special-use flag the server marks it with, and its usual name.
     /// iCloud's trash is "Deleted Messages", the same folder Apple Mail and iCloud.com use.
     static func mailbox(_ which: String) -> (use: String, fallback: String) {
-        ["sent": ("\\Sent", "Sent Messages"), "drafts": ("\\Drafts", "Drafts"), "trash": ("\\Trash", "Deleted Messages")][which]
+        ["sent": ("\\Sent", "Sent Messages"), "drafts": ("\\Drafts", "Drafts"), "trash": ("\\Trash", "Deleted Messages"),
+         "junk": ("\\Junk", "Junk")][which]
             ?? ("\\Archive", "Archive")
     }
 
@@ -225,6 +226,7 @@ struct ICloud {
                 if which == "sent" { m.labelIds.removeAll { $0 == "UNREAD" } }
                 if which == "drafts" { m.labelIds = m.labelIds.filter { $0 != "UNREAD" } + ["DRAFT"] }
                 if which == "trash" { m.labelIds.append("TRASH") }
+                if which == "junk" { m.labelIds.append("SPAM") }
                 out.append(m)
             }
             return out
@@ -271,11 +273,12 @@ struct ICloud {
         }
     }
 
-    /// Moves out of INBOX into Archive (Done) or Trash.
-    func move(_ uids: [String], toTrash: Bool) async throws {
+    /// Moves out of INBOX into Archive ("archive", Done), Trash ("trash") or Junk ("junk").
+    func move(_ uids: [String], to which: String) async throws {
         guard !uids.isEmpty else { return }
         try await session { c in
-            let dest = toTrash ? try await folder(c, "\\Trash", fallback: "Deleted Messages") : try await folder(c, "\\Archive", fallback: "Archive")
+            let (use, fallback) = Self.mailbox(which)
+            let dest = try await folder(c, use, fallback: fallback)
             let caps = try await c.command("CAPABILITY").map(\.line).joined()
             try await c.command("SELECT INBOX")
             let set = uids.joined(separator: ",")
@@ -289,12 +292,13 @@ struct ICloud {
         }
     }
 
-    /// Undo: finds messages in Trash or Archive by Message-ID and moves them back to INBOX.
-    func restore(messageIds: [String], fromTrash: Bool) async throws {
+    /// Undo: finds messages in Trash, Junk or Archive by Message-ID and moves them back to INBOX.
+    func restore(messageIds: [String], from which: String) async throws {
         let ids = messageIds.filter { !$0.isEmpty }
         guard !ids.isEmpty else { throw AppError("Can't undo: these emails have no Message-ID.") }
         try await session { c in
-            let src = fromTrash ? try await folder(c, "\\Trash", fallback: "Deleted Messages") : try await folder(c, "\\Archive", fallback: "Archive")
+            let (use, fallback) = Self.mailbox(which)
+            let src = try await folder(c, use, fallback: fallback)
             let caps = try await c.command("CAPABILITY").map(\.line).joined()
             try await c.command("SELECT \(imapQuote(src))")
             var uids: [Int] = []

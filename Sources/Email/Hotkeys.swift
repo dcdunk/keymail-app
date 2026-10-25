@@ -5,7 +5,7 @@ import Foundation
 enum Hotkeys {
     static let commands: [(key: String, title: String)] = [
         ("c", "Compose"), ("r", "Reply"), ("a", "Reply all"), ("f", "Forward"),
-        ("e", "Mark done"), ("s", "Star / unstar"), ("u", "Mark read / unread"), ("#", "Trash"),
+        ("e", "Mark done"), ("s", "Star / unstar"), ("u", "Mark read / unread"), ("#", "Trash"), ("!", "Mark as junk"),
         ("h", "Remind me"), ("l", "Label"), ("b", "Create calendar event"), ("i", "Summarize thread"),
         ("o", "Open email"), ("j", "Next email"), ("k", "Previous email"), ("/", "Search"), ("g", "Go to… (then i, s, t, e, h, d, or c for Calendar)"),
     ]

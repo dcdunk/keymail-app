@@ -59,6 +59,7 @@ struct ThreadView: View {
             group([(Hotkeys.label("e"), "Done", "checkmark", { store.markDone() }),
                    (Hotkeys.label("h"), "Remind", "clock", { store.openPalette("remind") }),
                    (Hotkeys.label("b"), "Event", "calendar.badge.plus", { store.createEventFromEmail() }),
+                   (Hotkeys.label("!"), "Junk", "xmark.bin", { store.markJunk() }),
                    ("⌫", "Delete", "trash", { store.trash() })], names: names, keys: keys)
             group([("⇧R", "Instant reply", "sparkles", { store.instantReply() }),
                    (Hotkeys.label("i"), "Summarize", "text.append", { store.summarize() })], ai: true, names: names, keys: keys)

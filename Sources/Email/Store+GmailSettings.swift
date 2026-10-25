@@ -89,7 +89,7 @@ extension AppStore {
 
     /// The folders and labels in the sidebar that accept a dragged email.
     func acceptsDrop(_ target: String) -> Bool {
-        ["Inbox", "Starred", "Done", "Trash"].contains(target) || panelLabels.contains(target)
+        ["Inbox", "Starred", "Done", "Spam", "Trash"].contains(target) || panelLabels.contains(target)
     }
 
     /// An email dragged onto a sidebar folder or label: the same action its key or menu does, undo included.
@@ -102,6 +102,7 @@ extension AppStore {
             modify(c, add: ["INBOX"]); banner = "Moved to Inbox."
         case "Starred": if !c.isStarred { modify(c, add: ["STARRED"]) }
         case "Done": act(on: c) { markDone() }
+        case "Spam": act(on: c) { markJunk() }
         case "Trash": act(on: c) { trash() }
         default:
             guard panelLabels.contains(target) else { return false }
