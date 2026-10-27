@@ -173,13 +173,17 @@ public let signatureDelimiter = "-- \n"
 /// What actually gets sent as text: your text, then the signature, then the quoted original.
 public func fullBody(_ d: Draft) -> String {
     let sig = (d.signaturePlain ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-    return d.body + (sig.isEmpty ? "" : "\n\n" + signatureDelimiter + sig) + (d.quoted ?? "")
+    return Markup.toPlain(d.body) + (sig.isEmpty ? "" : "\n\n" + signatureDelimiter + sig) + (d.quoted ?? "")
 }
 
-/// The HTML version of a draft: your text, the rich signature, then the quote. Nil when there's no rich signature.
+/// The HTML version of a draft: your text, the signature, then the quote. Nil when it's all plain text.
 public func composeHTML(_ d: Draft) -> String? {
-    guard let sigHTML = d.signatureHTML, !sigHTML.isEmpty else { return nil }
-    var html = "<div>\(plainToHTML(d.body))</div><br><div class=\"signature\">\(sigHTML)</div>"
+    let sigHTML = d.signatureHTML.flatMap { $0.isEmpty ? nil : $0 }
+    guard sigHTML != nil || Markup.has(d.body) else { return nil }
+    var html = "<div>\(Markup.toHTML(d.body))</div>"
+    let sigPlain = (d.signaturePlain ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    if let sigHTML { html += "<br><div class=\"signature\">\(sigHTML)</div>" }
+    else if !sigPlain.isEmpty { html += "<br><div class=\"signature\">-- <br>\n\(plainToHTML(sigPlain))</div>" }
     let after = (d.quoted ?? "").trimmingCharacters(in: .newlines)
     if !after.isEmpty {
         html += "<br><blockquote style=\"margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex;color:#555\">\(plainToHTML(after))</blockquote>"

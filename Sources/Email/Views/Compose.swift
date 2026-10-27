@@ -13,7 +13,7 @@ struct ComposeView: View {
     @EnvironmentObject var store: AppStore
     @ObservedObject var model: ComposeModel
     @Environment(\.closeCard) private var dismiss
-    @FocusState private var bodyFocused: Bool
+    @StateObject private var fmt = BodyFormatter()
     @FocusState private var focus: Field?
     @State private var showQuote = false
     @State private var showCc = false
@@ -37,7 +37,7 @@ struct ComposeView: View {
                 .keyboardShortcut("f", modifiers: [.command, .shift]).help("Send from (⇧⌘F)")
                 Spacer()
                 Button { close() } label: { Image(systemName: "xmark").font(.scaled(size: 12, weight: .semibold)).frame(width: 30, height: 26).contentShape(Circle()) }
-                    .buttonStyle(.plain).foregroundStyle(.secondary).keyboardShortcut(model.askClose ? nil : .cancelAction).help("Close (Esc)")
+                    .buttonStyle(.plain).foregroundStyle(.secondary).keyboardShortcut(model.askClose || fmt.link != nil ? nil : .cancelAction).help("Close (Esc)")
             }
             row("To") {
                 RecipientChips(text: $model.draft.to, placeholder: "Recipients", focus: $focus, field: .to, complete: complete)
@@ -57,16 +57,15 @@ struct ComposeView: View {
                 .textFieldStyle(.plain).font(.scaled(size: 19, weight: .semibold))
                 .padding(.horizontal, 24).padding(.top, 16).padding(.bottom, 4)
 
-            TextEditor(text: $model.draft.body)
-                .font(.scaled(size: 15)).lineSpacing(3).scrollContentBackground(.hidden)
-                .focused($bodyFocused).padding(.horizontal, 19).padding(.vertical, 6)
+            ComposeBody(text: $model.draft.body, fmt: fmt)
+                .padding(.horizontal, 19).padding(.vertical, 6)
                 .frame(minHeight: 140)
                 .onAppear {
                     showCc = !model.draft.cc.isEmpty; showBcc = !model.draft.bcc.isEmpty
                     // New email: start in To. Reply or forward with recipients filled in: start in the message.
                     // Next run loop, so the card's fields exist before focus moves (it opens as an overlay now).
                     let empty = model.draft.to.trimmingCharacters(in: .whitespaces).isEmpty
-                    DispatchQueue.main.async { if empty { focus = .to } else { bodyFocused = true } }
+                    DispatchQueue.main.async { if empty { focus = .to } else { fmt.focus() } }
                 }
 
             // Keyboard-only shortcuts with no visible button of their own (each mirrors a click target below).

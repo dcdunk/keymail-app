@@ -178,6 +178,59 @@ final class CoreFlowsTests: XCTestCase {
         store.open(v[1]); XCTAssertTrue(store.threadOpen); XCTAssertEqual(store.selectedID, v[1].id, "clicking a row opens it")
     }
 
+    // MARK: Formatting in a draft (bold, italic, links; issue #13)
+
+    func testDraftBoldItalicAndLinkKeys() {
+        var body = "Hi Bob see the plan"
+        let fmt = BodyFormatter()
+        let win = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled], backing: .buffered, defer: false)
+        win.contentView = NSHostingView(rootView: ComposeBody(text: Binding(get: { body }, set: { body = $0 }), fmt: fmt).frame(width: 560, height: 300))
+        win.makeKeyAndOrderFront(nil)
+        defer { win.orderOut(nil); resetUI() }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        let tv = try! XCTUnwrap(fmt.textView)
+        XCTAssertEqual(tv.string, "Hi Bob see the plan")
+        win.makeFirstResponder(tv)
+        @discardableResult func cmd(_ c: String) -> Bool {
+            tv.performKeyEquivalent(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0,
+                windowNumber: win.windowNumber, context: nil, characters: c, charactersIgnoringModifiers: c, isARepeat: false, keyCode: 0)!)
+        }
+
+        // ⌘K inside a draft is for links; it must not open the palette over it.
+        store.composing = ComposeModel(draft: Draft(from: me), context: nil)
+        XCTAssertFalse(press("k", code: 40, .command)); XCTAssertFalse(store.paletteOpen)
+
+        tv.setSelectedRange(NSRange(location: 3, length: 3))   // "Bob"
+        XCTAssertTrue(fmt.hasSelection, "selecting text shows the format bar")
+        XCTAssertTrue(cmd("b")); XCTAssertEqual(body, "Hi **Bob** see the plan")
+        XCTAssertTrue(cmd("i")); XCTAssertEqual(body, "Hi ***Bob*** see the plan")
+        cmd("b"); cmd("i"); XCTAssertEqual(body, "Hi Bob see the plan", "pressing again turns it off")
+
+        tv.setSelectedRange(NSRange(location: 11, length: 8))  // "the plan"
+        XCTAssertTrue(cmd("k")); XCTAssertEqual(fmt.link?.text, "the plan", "⌘K opens the link card with the selected words")
+        fmt.applyLink(text: "our plan", url: "x.com/p")
+        XCTAssertEqual(body, "Hi Bob see [our plan](https://x.com/p)", "custom text, and https:// added")
+        XCTAssertNil(fmt.link)
+
+        tv.setSelectedRange(NSRange(location: 13, length: 0))  // caret inside the link
+        cmd("k")
+        XCTAssertEqual(fmt.link?.url, "https://x.com/p"); XCTAssertEqual(fmt.link?.existing, true, "⌘K on a link edits it")
+        fmt.removeLink(); XCTAssertEqual(body, "Hi Bob see our plan")
+
+        // Text written by AI, a snippet or an agent shows formatted.
+        fmt.show("**Thanks** [Maya](mailto:maya@x.com)")
+        XCTAssertEqual(tv.string, "Thanks Maya"); XCTAssertEqual(fmt.markup(), "**Thanks** [Maya](mailto:maya@x.com)")
+    }
+
+    func testFormattedDraftSendsAsHTMLWithTheLink() {
+        var d = Draft(from: me); d.to = "maya@northwind.co"; d.subject = "Plan"; d.body = "See **this** [plan](https://x.com/p)."
+        let raw = buildRaw(d)
+        XCTAssertTrue(raw.contains("multipart/alternative"))
+        let html = composeHTML(d)!
+        XCTAssertTrue(html.contains("See <b>this</b> <a href=\"https://x.com/p\">plan</a>."))
+        XCTAssertEqual(fullBody(d), "See this plan (https://x.com/p).")
+    }
+
     // MARK: Send and receive
 
     func testSendWithUndoThenUndoBringsTheDraftBack() {

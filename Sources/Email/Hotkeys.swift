@@ -18,7 +18,7 @@ enum Hotkeys {
         ("Space", "Open the next collapsed email in a conversation"), ("⇧O", "Open or close all emails in a conversation"),
         ("." , "Show or hide earlier messages"), ("R on your draft", "Continue editing it"),
         ("⇧⌘F", "Compose: send from"), ("⇧⌘C / ⇧⌘B", "Compose: add Cc / Bcc"), ("⇧⌘S", "Compose: signature"),
-        ("⇧⌘I", "Compose: insert snippet"), ("⇧⌘A", "Compose: attach"), ("⌥⌘⌫", "Compose: remove last attachment"),
+        ("⇧⌘I", "Compose: insert snippet"), ("⌘B / ⌘I", "Compose: bold / italic"), ("⌘K in a draft", "Compose: add or edit a link"), ("⇧⌘A", "Compose: attach"), ("⌥⌘⌫", "Compose: remove last attachment"),
         ("⇧⌘.", "Compose: show quoted text"), ("⇧⌘↵", "Compose: send later / remind me"), ("⇧⌘⌫", "Compose: discard"),
         ("⌘F", "Search: more filters"), ("⌘↵", "Link warning: open anyway"),
         ("G C / G I", "Calendar / back to mail"), ("Calendar: J K", "Next / previous event"), ("Calendar: H L", "Previous / next day, week or month"),
