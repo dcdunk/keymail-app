@@ -404,6 +404,7 @@ struct EmailWebView: NSViewRepresentable {
         if blockRemote, let blocker = RemoteContent.blocker {
             config.userContentController.add(blocker)
         }
+        if !blockRemote { ["kmimg-https", "kmimg-http"].forEach { config.setURLSchemeHandler(ImageFetcher.shared, forURLScheme: $0) } }
         config.userContentController.addUserScript(WKUserScript(source: Coordinator.darkScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         let v = PassThroughWebView(frame: .zero, configuration: config)
         v.navigationDelegate = context.coordinator
@@ -417,7 +418,8 @@ struct EmailWebView: NSViewRepresentable {
     func updateNSView(_ v: PassThroughWebView, context: Context) {
         context.coordinator.suspicious = suspicious
         // U+FFFC is a placeholder some senders (Apple, for its logo) leave in the text; the Mac draws it as an "OBJ" box.
-        let html = html.replacingOccurrences(of: "\u{FFFC}", with: "")
+        var html = html.replacingOccurrences(of: "\u{FFFC}", with: "")
+        if !blockRemote { html = proxyRemoteImages(html) }
         let page = themed ? Self.wrapThemed(html) : Self.wrap(html, padding: padding, opacity: cardOpacity, dark: dark)
         // Emails that ship their own dark design only show it when the page is in dark appearance.
         if !themed { v.appearance = NSAppearance(named: dark && emailHasOwnDarkMode(html) ? .darkAqua : .aqua) }
@@ -570,6 +572,37 @@ struct EmailWebView: NSViewRepresentable {
 
 /// Sends scroll-wheel events to the thread instead of scrolling inside the email,
 /// and shows the pointing hand over links (SwiftUI otherwise keeps resetting it to the arrow).
+/// Fetches an email's images for its web view ("kmimg-https://x" → "https://x") and hands back only the bytes and type,
+/// so a sender's "same-origin only" header can't hide them. Same request the web view would make, minus cookies.
+final class ImageFetcher: NSObject, WKURLSchemeHandler {
+    static let shared = ImageFetcher()
+    private var stopped = Set<ObjectIdentifier>()
+    func webView(_ webView: WKWebView, start task: WKURLSchemeTask) {
+        guard let s = task.request.url?.absoluteString, s.hasPrefix("kmimg-"), let url = URL(string: String(s.dropFirst(6))) else {
+            return task.didFailWithError(URLError(.badURL))
+        }
+        var req = URLRequest(url: url)
+        req.setValue(task.request.value(forHTTPHeaderField: "User-Agent"), forHTTPHeaderField: "User-Agent")
+        req.setValue("image/webp,image/avif,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
+        req.httpShouldHandleCookies = false
+        let id = ObjectIdentifier(task)
+        URLSession.shared.dataTask(with: req) { data, response, error in
+            DispatchQueue.main.async {
+                guard self.stopped.remove(id) == nil else { return }   // the email closed; answering now would crash
+                guard let data, let http = response as? HTTPURLResponse, error == nil else {
+                    return task.didFailWithError(error ?? URLError(.badServerResponse))
+                }
+                let type = http.value(forHTTPHeaderField: "Content-Type") ?? "application/octet-stream"
+                task.didReceive(HTTPURLResponse(url: task.request.url!, statusCode: http.statusCode, httpVersion: nil,
+                                                headerFields: ["Content-Type": type])!)
+                task.didReceive(data)
+                task.didFinish()
+            }
+        }.resume()
+    }
+    func webView(_ webView: WKWebView, stop task: WKURLSchemeTask) { stopped.insert(ObjectIdentifier(task)) }
+}
+
 final class PassThroughWebView: WKWebView {
     private var overLink = false
     private var pending = false

@@ -82,6 +82,20 @@ final class MimeTests: XCTestCase {
         XCTAssertEqual(imapQuote("pa\"ss\\"), "\"pa\\\"ss\\\\\"")
     }
 
+    /// claude.ai's images say "same-origin only", so Keymail fetches email images itself (like Gmail's proxy).
+    func testProxyRemoteImages() {
+        XCTAssertEqual(proxyRemoteImages(#"<img alt="Claude Duet" src="https://claude.ai/a.png" width=182>"#),
+                       #"<img alt="Claude Duet" src="kmimg-https://claude.ai/a.png" width=182>"#)
+        XCTAssertEqual(proxyRemoteImages("<IMG SRC=HTTP://x.com/a.gif>"), "<IMG SRC=kmimg-http://x.com/a.gif>")
+        XCTAssertEqual(proxyRemoteImages(#"<img srcset='https://a.co/1x.png 1x, https://a.co/2x.png 2x'>"#),
+                       #"<img srcset='kmimg-https://a.co/1x.png 1x, kmimg-https://a.co/2x.png 2x'>"#)
+        // Links, alt text, inline (cid/data) images and text outside image tags stay as they are.
+        for s in [#"<a href="https://x.com">https://x.com</a>"#, #"<img alt="see https://x.com" src="data:image/png;base64,AA">"#,
+                  #"<img src="cid:logo">"#, "Visit https://x.com"] {
+            XCTAssertEqual(proxyRemoteImages(s), s)
+        }
+    }
+
     func testHasRemoteContent() {
         XCTAssertTrue(hasRemoteContent(#"<img src="https://t.example.com/p.gif">"#))
         XCTAssertTrue(hasRemoteContent(#"<td style="background: URL('http://x.com/a.png')">"#))

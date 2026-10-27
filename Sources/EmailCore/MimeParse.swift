@@ -234,6 +234,24 @@ public func imapServer(for email: String) -> IMAPServer {
     return IMAPServer(name: "iCloud", imapHost: "imap.mail.me.com", smtpURL: "smtp://smtp.mail.me.com:587")
 }
 
+/// Points <img> src/srcset at Keymail's own image fetcher ("kmimg-https://…"), the way Gmail proxies images.
+/// Some senders (claude.ai) mark images "same-origin only", which the email web view enforces, so they never showed.
+public func proxyRemoteImages(_ html: String) -> String {
+    guard let tag = try? NSRegularExpression(pattern: #"<img\b[^>]*>"#, options: .caseInsensitive),
+          let attr = try? NSRegularExpression(pattern: #"\s(?:src|srcset)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)"#, options: .caseInsensitive),
+          let url = try? NSRegularExpression(pattern: #"\bhttps?://"#, options: .caseInsensitive) else { return html }
+    func each(_ re: NSRegularExpression, _ s: String, _ f: (String) -> String) -> String {
+        let ns = s as NSString
+        var out = "", pos = 0
+        for m in re.matches(in: s, range: NSRange(location: 0, length: ns.length)) {
+            out += ns.substring(with: NSRange(location: pos, length: m.range.location - pos)) + f(ns.substring(with: m.range))
+            pos = NSMaxRange(m.range)
+        }
+        return out + ns.substring(from: pos)
+    }
+    return each(tag, html) { each(attr, $0) { each(url, $0) { "kmimg-" + $0.lowercased() } } }
+}
+
 /// True when an HTML email would load something from the internet (images, CSS backgrounds, fonts).
 public func hasRemoteContent(_ html: String) -> Bool {
     html.range(of: #"(src|background)\s*=\s*["']?\s*(https?:)?//|url\(\s*["']?\s*(https?:)?//"#, options: [.regularExpression, .caseInsensitive]) != nil
