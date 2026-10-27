@@ -36,7 +36,6 @@ struct MainView: View {
                     // Settings covers the top bar; its ✕ sits on the account capsule, which must not steal the click.
                     .allowsHitTesting(!store.settingsOpen).accessibilityHidden(store.settingsOpen)
                 if store.searchFiltersOpen { SearchFilters() }
-                if let b = store.banner { BannerView(text: b) { store.banner = nil } }
                 if store.inboxLayout == "split" { SplitInbox() }
                 else if store.inboxLayout == "stream" { StreamInbox() }
                 else if store.inboxLayout == "film" { FilmstripInbox() }
@@ -65,7 +64,7 @@ struct MainView: View {
         }
         .environment(\.layout, layout)
         .overlay(alignment: .top) { if store.paletteOpen { PaletteView().padding(.top, 90) } }
-        .overlay(alignment: .bottom) { StatusBar() }
+        .overlay(alignment: .bottom) { StatusBar() }   // banner toast + busy pill float over the content, never push it
         .overlay { ModalLayer() }
         .overlay { SettingsPanel() }   // above drafts, so Settings opened from a draft (Edit signatures) is usable
         .overlay { PopupLayer() }
@@ -209,17 +208,20 @@ struct ViewSwitchButton: View {
     }
 }
 
+/// A floating toast ("Moved to Trash. ⌘Z to undo."). It floats over the bottom of the window instead of sitting in
+/// the layout, so showing or closing it never shifts the inbox.
 struct BannerView: View {
     let text: String; let close: () -> Void
     var body: some View {
-        HStack {
-            Text(text).font(.scaled(.callout))
-            Spacer()
-            Button(action: close) { Image(systemName: "xmark").font(.scaled(size: 11, weight: .semibold)).frame(width: 22, height: 22) }.buttonStyle(ToolStyle()).help("Dismiss")
+        HStack(spacing: 10) {
+            Text(text).font(.scaled(.callout)).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+            Button(action: close) { Image(systemName: "xmark").font(.scaled(size: 10, weight: .semibold)).frame(width: 20, height: 20) }
+                .buttonStyle(ToolStyle()).help("Dismiss")
         }
-        .padding(.horizontal, 14).padding(.vertical, 9)
-        .glass(RoundedRectangle(cornerRadius: 14), tint: .orange.opacity(0.25))
-        .padding(.horizontal, 32).padding(.bottom, 6)
+        .padding(.leading, 16).padding(.trailing, 8).padding(.vertical, 7)
+        .floatingPanel(Capsule())   // nearly solid: it sits over mail, which mustn't show through the text
+        .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+        .frame(maxWidth: 560)
     }
 }
 
@@ -341,10 +343,17 @@ struct Row: View {
 struct StatusBar: View {
     @EnvironmentObject var store: AppStore
     var body: some View {
-        if let b = store.busy {
-            HStack(spacing: 8) { ProgressView().controlSize(.small); Text(b).font(.scaled(.callout)) }
-                .padding(.horizontal, 14).padding(.vertical, 8)
-                .glass(Capsule()).padding(.bottom, 16)
+        VStack(spacing: 8) {
+            if let b = store.banner {
+                BannerView(text: b) { store.banner = nil }.transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            if let b = store.busy {
+                HStack(spacing: 8) { ProgressView().controlSize(.small); Text(b).font(.scaled(.callout)) }
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .glass(Capsule())
+            }
         }
+        .padding(.horizontal, 24).padding(.bottom, 16)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: store.banner)
     }
 }

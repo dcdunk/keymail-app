@@ -19,7 +19,6 @@ struct CalendarScreen: View {
     var body: some View {
         VStack(spacing: 0) {
             CalendarHeader()
-            if let b = store.banner { BannerView(text: b) { store.banner = nil } }
             if let id = store.placingEmail, let c = store.allConversations.first(where: { $0.id == id }) {
                 HStack(spacing: 10) {
                     Image(systemName: "envelope").foregroundStyle(Theme.accent)

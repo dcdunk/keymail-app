@@ -30,7 +30,6 @@ struct ToolScreenView: View {
             }
             .glassGroup(spacing: 10)
             .padding(.horizontal, layout.margin).padding(.top, 34).padding(.bottom, 12)
-            if let b = store.banner { BannerView(text: b) { store.banner = nil } }
             if screen == .cleanup { CleanupList() } else { InsightsView() }
         }
     }
