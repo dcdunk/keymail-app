@@ -206,16 +206,32 @@ public func invalidRecipients(_ d: Draft) -> [String] {
         .filter { ok.firstMatch(in: $0, range: NSRange(location: 0, length: ($0 as NSString).length)) == nil }
 }
 
-/// "Sam Patel, You" style label for a thread's senders.
+/// Who's in a thread, by who wrote in it: "Corrie, You". Other people first (by first name, the newest 3), then You.
+/// One other person and no reply from you shows their full name.
 public func participantsLabel(_ c: Conversation, me: Set<String>) -> String {
-    var seen: [String] = []
+    var others: [String] = [], mine = false
     for m in c.messages {
         guard let a = parseAddresses(m.from).first else { continue }
-        let label = me.contains(a.email.lowercased()) ? "You" : a.display
-        if !seen.contains(label) { seen.append(label) }
+        if me.contains(a.email.lowercased()) { mine = true; continue }
+        if !others.contains(a.display) { others.append(a.display) }
     }
-    if seen.count <= 1 { return seen.first ?? "" }
-    return seen.suffix(3).map { $0 == "You" ? $0 : ($0.split(separator: " ").first.map(String.init) ?? $0) }.joined(separator: ", ")
+    if others.isEmpty { return mine ? "You" : "" }
+    if others.count == 1, !mine { return others[0] }
+    return (others.suffix(mine ? 2 : 3).map(shortName) + (mine ? ["You"] : [])).joined(separator: ", ")
+}
+
+/// A sender's first name: "Jim Brown" and "Brown, Jim" → "Jim", "Laura-Beth Fitzpatrick, Psy.D." → "Laura-Beth",
+/// "noreply@x.com" → "noreply".
+public func shortName(_ display: String) -> String {
+    let n = display.trimmingCharacters(in: CharacterSet(charactersIn: " \"'"))
+    if n.contains("@"), !n.contains(" ") { return String(n.split(separator: "@").first ?? Substring(n)) }
+    let parts = n.split(separator: ",", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+    // "Last, First" puts the first name after the comma; "Name, Ph.D." or "Name, Jr" puts a title there.
+    if parts.count == 2, let after = parts[1].split(separator: " ").first {
+        let title = after.contains(".") || after == after.uppercased() || ["Jr", "Sr", "Esq"].contains(String(after))
+        if !title { return String(after) }
+    }
+    return parts.first.flatMap { $0.split(separator: " ").first.map(String.init) } ?? n
 }
 
 /// "9:46 am" for today, "12 Oct" otherwise.

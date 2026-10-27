@@ -25,11 +25,27 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(c.map(\.threadId), ["a", "b"])
         XCTAssertEqual(c[0].messages.map(\.id), ["1", "3"])
         XCTAssertTrue(c[0].inInbox)
-        XCTAssertEqual(participantsLabel(c[0], me: [me]), "x@x.com, You")
+        XCTAssertEqual(participantsLabel(c[0], me: [me]), "x, You")
         // A bumped (unsnoozed) thread jumps to the top.
         let bumped = conversations(from: [msg("1", thread: "a", from: "x@x.com", date: 10), msg("2", thread: "b", from: "y@y.com", date: 20)],
                                    bumped: ["\(me)|a": Date(timeIntervalSince1970: 99)])
         XCTAssertEqual(bumped.first?.threadId, "a")
+    }
+
+    func testParticipantsLabel() {
+        func label(_ froms: [String]) -> String {
+            participantsLabel(conversations(from: froms.enumerated().map { msg("\($0.offset)", thread: "a", from: $0.element, date: Double($0.offset)) })[0], me: [me])
+        }
+        // You wrote first; the other person still leads and "Brown, Jim" reads "Jim".
+        XCTAssertEqual(label(["me@example.com", "\"Brown, Jim\" <jim@pga.com>", "me@example.com"]), "Jim, You")
+        XCTAssertEqual(label(["me@example.com", "Corrie Smith <c@x.com>"]), "Corrie, You")
+        XCTAssertEqual(label(["Corrie Smith <c@x.com>"]), "Corrie Smith", "one sender, no reply: full name")
+        XCTAssertEqual(label(["me@example.com"]), "You")
+        XCTAssertEqual(label(["\"Laura-Beth Fitzpatrick, Psy.D.\" <l@x.com>", "me@example.com"]), "Laura-Beth, You")
+        XCTAssertEqual(label(["A One <a@x.com>", "B Two <b@x.com>", "C Three <c@x.com>", "me@example.com"]), "B, C, You", "newest two others, then You")
+        XCTAssertEqual(label(["A One <a@x.com>", "B Two <b@x.com>", "C Three <c@x.com>", "D Four <d@x.com>"]), "B, C, D")
+        XCTAssertEqual(shortName("\"Smith, John Jr\""), "John")
+        XCTAssertEqual(shortName("Ann Lee, MD"), "Ann")
     }
 
     func testSplitQueries() {
