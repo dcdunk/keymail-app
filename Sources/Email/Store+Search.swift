@@ -69,47 +69,68 @@ extension AppStore {
         // A search shows the matching mail already on this Mac at once; the server's results join as they arrive.
         let localHits = local.map { q in Set(allConversations.filter { c in
             (state.activeAccount == nil || c.account == state.activeAccount) && c.messages.contains { matchesSearch($0, q) } }.map(\.id)) } ?? []
-        searchResults = isDone ? localDone : localHits
+        // Sent, Trash and the other folders show what's already on this Mac at once; the server only adds to it.
+        let label = ["in:sent": "SENT", "is:starred": "STARRED", "in:trash": "TRASH", "in:spam": "SPAM", "in:drafts": "DRAFT"][q]
+        let accounts = state.accounts.filter { state.activeAccount == nil || state.activeAccount == $0 }
+        var found: [String: Set<String>] = [:]
+        for a in accounts { found[a] = cachedHits(label, account: a) }
+        func show() { searchResults = found.values.reduce(localHits) { $0.union($1) }.union(isDone ? doneHere() : localDone) }
+        show()
         Task {
             busy = "Searching…"
-            var ids: Set<String> = []
-            for a in state.accounts where state.activeAccount == nil || state.activeAccount == a {
-                if !isGmail(a), q == "in:sent" || q == "in:drafts" || q == "in:trash" || q == "in:spam" || isDone {
-                    // Sent, Drafts, Trash, Spam and Done read those folders on the server (iCloud, Yahoo, Outlook), then list
-                    // what's here. Drafts and Trash used to search the cache for the words "in:drafts"/"in:trash" and showed nothing.
-                    let box = isDone ? "archive" : ["in:drafts": "drafts", "in:trash": "trash", "in:spam": "junk"][q] ?? "sent"
-                    await fetchFolder(box, account: a)
-                    let label = ["drafts": "DRAFT", "trash": "TRASH", "junk": "SPAM"][box] ?? "SENT"
-                    if !isDone { for m in messages.values where m.account == a && m.labelIds.contains(label) { ids.insert(a + "|" + m.threadId) } }
-                    continue
+            // Every account at once, each one's results shown as soon as it answers (one slow account used to hold up all).
+            await withTaskGroup(of: (String, Set<String>?).self) { g in
+                for a in accounts { g.addTask { await (a, self.serverHits(q, account: a, isDone: isDone, local: local)) } }
+                for await (a, ids) in g {
+                    guard let ids else { continue }
+                    // Sent and Starred keep older cached mail past the server's newest 50; Trash, Spam and Drafts follow the server.
+                    found[a] = label == "SENT" || label == "STARRED" ? ids.union(found[a] ?? []) : ids
+                    if folder == title { show() }   // the person may have moved on while this searched
                 }
-                if !isGmail(a) {
-                    // No Gmail search on iCloud or Microsoft (yet): search what's cached locally.
-                    let words = q.lowercased().split(separator: " ").map(String.init)
-                    for m in messages.values where m.account == a {
-                        let hay = (m.from + " " + m.to + " " + m.subject + " " + m.plainText).lowercased()
-                        let hit: Bool
-                        if let local { hit = matchesSearch(m, local) }
-                        else if q == "is:starred" { hit = m.labelIds.contains("STARRED") }
-                        else if isDone { hit = false }        // doneHere() already covers it
-                        else if q == "in:sent" { hit = false } // a folder iCloud's cache doesn't have
-                        else { hit = words.allSatisfy { hay.contains($0) } }
-                        if hit { ids.insert(a + "|" + m.threadId) }
-                    }
-                    continue
-                }
-                do {
-                    let g = gmail(a)
-                    let found = try await g.listIds(q, max: 50)
-                    let missing = found.filter { messages["\(a)|\($0)"] == nil }
-                    for m in await g.messages(missing) { messages[m.key] = m }
-                    for id in found { if let m = messages["\(a)|\(id)"] { ids.insert(a + "|" + m.threadId) } }
-                } catch { report(error) }
             }
             busy = nil
-            guard folder == title else { return }   // the person moved on while this searched
-            searchResults = ids.union(isDone ? doneHere() : localDone).union(localHits)   // recount: Archive mail fetched above joins in
         }
+    }
+
+    /// Conversations already on this Mac with `label` (SENT, TRASH…).
+    func cachedHits(_ label: String?, account a: String) -> Set<String> {
+        guard let label else { return [] }
+        return Set(messages.values.filter { $0.account == a && $0.labelIds.contains(label) }.map { a + "|" + $0.threadId })
+    }
+
+    /// One account's results from its server. Nil when it couldn't be reached (what's cached stays on screen).
+    func serverHits(_ q: String, account a: String, isDone: Bool, local: SearchQuery?) async -> Set<String>? {
+        var ids: Set<String> = []
+        if !isGmail(a), q == "in:sent" || q == "in:drafts" || q == "in:trash" || q == "in:spam" || isDone {
+            // Sent, Drafts, Trash, Spam and Done read those folders on the server (iCloud, Yahoo, Outlook), then list
+            // what's here. Drafts and Trash used to search the cache for the words "in:drafts"/"in:trash" and showed nothing.
+            let box = isDone ? "archive" : ["in:drafts": "drafts", "in:trash": "trash", "in:spam": "junk"][q] ?? "sent"
+            await fetchFolder(box, account: a)
+            let label = ["drafts": "DRAFT", "trash": "TRASH", "junk": "SPAM"][box] ?? "SENT"
+            return isDone ? [] : cachedHits(label, account: a)
+        }
+        if !isGmail(a) {
+            // No Gmail search on iCloud or Microsoft (yet): search what's cached locally.
+            let words = q.lowercased().split(separator: " ").map(String.init)
+            for m in messages.values where m.account == a {
+                let hay = (m.from + " " + m.to + " " + m.subject + " " + m.plainText).lowercased()
+                let hit: Bool
+                if let local { hit = matchesSearch(m, local) }
+                else if q == "is:starred" { hit = m.labelIds.contains("STARRED") }
+                else if isDone { hit = false }        // doneHere() already covers it
+                else { hit = words.allSatisfy { hay.contains($0) } }
+                if hit { ids.insert(a + "|" + m.threadId) }
+            }
+            return ids
+        }
+        do {
+            let g = gmail(a)
+            let found = try await g.listIds(q, max: 50)
+            let missing = found.filter { messages["\(a)|\($0)"] == nil }
+            for m in await g.messages(missing) { messages[m.key] = m }
+            for id in found { if let m = messages["\(a)|\(id)"] { ids.insert(a + "|" + m.threadId) } }
+            return ids
+        } catch { report(error); return nil }
     }
 
     /// Pulls the newest emails from Sent or Archive on the server into Keymail, skipping ones already here.

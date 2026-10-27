@@ -77,6 +77,24 @@ final class ICloudTrashTests: XCTestCase {
         for _ in 0..<100 where store.searchResults?.isEmpty ?? true { try await Task.sleep(nanoseconds: 100_000_000) }
         XCTAssertEqual(store.searchResults, [a + "|t7"], "an iCloud email in Deleted Messages shows in Trash")
     }
+
+    /// Clicking Sent or Trash lists what's already on this Mac straight away, every account, before any server answers.
+    func testFoldersShowCachedMailInstantly() {
+        let store = AppStore()
+        store.messages = [:]
+        store.state = SavedState()
+        let g = "me@gmail.com", i = "me@icloud.com"
+        store.state.accounts = [g, i]; store.state.icloud = [i]; store.state.onboarded = true
+        for (acct, id, label) in [(g, "s1", "SENT"), (i, "sent:2", "SENT"), (i, "trash:3", "TRASH")] {
+            var m = Message(id: id, threadId: "t-" + id, account: acct, from: acct, to: "ann@x.com", subject: id, date: Date())
+            m.labelIds = [label]
+            store.messages[m.key] = m
+        }
+        store.goFolder("Sent")
+        XCTAssertEqual(store.searchResults, [g + "|t-s1", i + "|t-sent:2"], "no wait for the network")
+        store.goFolder("Trash")
+        XCTAssertEqual(store.searchResults, [i + "|t-trash:3"])
+    }
 }
 
 @MainActor

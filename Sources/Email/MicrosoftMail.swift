@@ -49,9 +49,17 @@ struct GraphMail {
         let box = ["sent": "sentitems", "drafts": "drafts", "trash": "deleteditems", "junk": "junkemail"][which] ?? "archive"
         let j = try await call("/mailFolders/\(box)/messages?$select=id&$top=\(limit)&$orderby=receivedDateTime%20desc")
         let ids = ((j["value"] as? [[String: Any]]) ?? []).compactMap { $0["id"] as? String }.filter { !skip.contains($0) }
+        // Eight at a time: one by one, 50 emails took most of a minute.
+        var fetched: [String: Message] = [:]
+        for chunk in stride(from: 0, to: ids.count, by: 8).map({ Array(ids[$0..<min($0 + 8, ids.count)]) }) {
+            await withTaskGroup(of: Message?.self) { g in
+                for id in chunk { g.addTask { try? await message(id, inInbox: false) } }
+                for await m in g { if let m { fetched[m.id] = m } }
+            }
+        }
         var out: [Message] = []
         for id in ids {
-            guard var m = try? await message(id, inInbox: false) else { continue }
+            guard var m = fetched[id] else { continue }
             if which == "sent" { m.labelIds = m.labelIds.filter { $0 != "UNREAD" } + ["SENT"] }
             if which == "drafts" { m.labelIds = m.labelIds.filter { $0 != "UNREAD" } + ["DRAFT"] }
             if which == "trash" { m.labelIds.append("TRASH") }
