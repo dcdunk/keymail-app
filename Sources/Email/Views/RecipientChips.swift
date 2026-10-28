@@ -37,7 +37,7 @@ struct RecipientChips: View {
     let placeholder: String
     var focus: FocusState<ComposeView.Field?>.Binding
     let field: ComposeView.Field
-    let complete: (String) -> String?
+    let key: (RecipientKey, String) -> String?   // Tab/Return while suggestions show
 
     var committed: [Address] {
         parseAddresses(splitRecipientField(text).head)
@@ -75,9 +75,9 @@ struct RecipientChips: View {
             TextField(committed.isEmpty ? placeholder : "", text: token)
                 .textFieldStyle(.plain).focused(focus, equals: field)
                 .frame(minWidth: 120)
-                .onSubmit { commit() }
+                .onSubmit { if let c = key(.enter, text) { text = c } else { commit() } }
                 .onKeyPress(.tab) {
-                    if let c = complete(text) { text = c; return .handled }
+                    if let c = key(.tab, text) { text = c; return .handled }
                     if !currentToken(text).isEmpty { commit(); return .handled }
                     return .ignored
                 }

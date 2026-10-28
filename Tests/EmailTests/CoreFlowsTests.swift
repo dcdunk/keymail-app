@@ -222,6 +222,21 @@ final class CoreFlowsTests: XCTestCase {
         XCTAssertEqual(tv.string, "Thanks Maya"); XCTAssertEqual(fmt.markup(), "**Thanks** [Maya](mailto:maya@x.com)")
     }
 
+    /// Typing a name in To/Cc/Bcc: Tab moves through the people suggested (and wraps), Return adds the highlighted one.
+    func testRecipientTabCyclesSuggestionsAndReturnAddsTheHighlightedOne() {
+        let ann = Address(name: "Ann Lee", email: "ann@x.com"), andy = Address(name: "Andy Roe", email: "andy@y.com")
+        var pick = 0
+        for want in [1, 0, 1] {
+            let r = recipientKey(.tab, field: "an", suggestions: [ann, andy], pick: pick)
+            XCTAssertEqual(r?.field, "an", "Tab doesn't add anyone"); XCTAssertEqual(r?.pick, want); pick = r?.pick ?? 0
+        }
+        XCTAssertEqual(recipientKey(.enter, field: "sam@z.com, an", suggestions: [ann, andy], pick: pick)?.field,
+                       "sam@z.com, Andy Roe <andy@y.com>, ", "Return adds the second person after tabbing to them")
+        XCTAssertEqual(recipientKey(.enter, field: "an", suggestions: [ann, andy], pick: 0)?.field, "Ann Lee <ann@x.com>, ")
+        XCTAssertNil(recipientKey(.tab, field: "zz", suggestions: [], pick: 0), "nothing suggested: Tab moves on as usual")
+        XCTAssertNil(recipientKey(.enter, field: "zz", suggestions: [], pick: 0), "and Return turns what's typed into a chip")
+    }
+
     func testFormattedDraftSendsAsHTMLWithTheLink() {
         var d = Draft(from: me); d.to = "maya@northwind.co"; d.subject = "Plan"; d.body = "See **this** [plan](https://x.com/p)."
         let raw = buildRaw(d)

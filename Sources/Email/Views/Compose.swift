@@ -18,6 +18,7 @@ struct ComposeView: View {
     @State private var showQuote = false
     @State private var showCc = false
     @State private var showBcc = false
+    @State private var pick = 0   // highlighted suggestion; Tab moves it, Return adds it
     enum Field { case to, cc, bcc }
 
     var body: some View {
@@ -40,17 +41,17 @@ struct ComposeView: View {
                     .buttonStyle(.plain).foregroundStyle(.secondary).keyboardShortcut(model.askClose || fmt.link != nil ? nil : .cancelAction).help("Close (Esc)")
             }
             row("To") {
-                RecipientChips(text: $model.draft.to, placeholder: "Recipients", focus: $focus, field: .to, complete: complete)
+                RecipientChips(text: $model.draft.to, placeholder: "Recipients", focus: $focus, field: .to, key: key)
                 if !showCc { linkButton("Cc") { showCc = true; focus = .cc }.help("Add Cc (⇧⌘C)") }
                 if !showBcc { linkButton("Bcc") { showBcc = true; focus = .bcc }.help("Add Bcc (⇧⌘B)") }
             }
             suggestions(for: model.draft.to, .to) { model.draft.to = $0 }
             if showCc {
-                row("Cc") { RecipientChips(text: $model.draft.cc, placeholder: "", focus: $focus, field: .cc, complete: complete) }
+                row("Cc") { RecipientChips(text: $model.draft.cc, placeholder: "", focus: $focus, field: .cc, key: key) }
                 suggestions(for: model.draft.cc, .cc) { model.draft.cc = $0 }
             }
             if showBcc {
-                row("Bcc") { RecipientChips(text: $model.draft.bcc, placeholder: "", focus: $focus, field: .bcc, complete: complete) }
+                row("Bcc") { RecipientChips(text: $model.draft.bcc, placeholder: "", focus: $focus, field: .bcc, key: key) }
                 suggestions(for: model.draft.bcc, .bcc) { model.draft.bcc = $0 }
             }
             TextField("Subject", text: $model.draft.subject)
@@ -127,6 +128,8 @@ struct ComposeView: View {
         .background(TextChecking())
         // Save when what you wrote changes. The server's own IDs coming back don't count: for Outlook each save gets a
         // new ID, which re-triggered a save every 2 seconds for as long as the draft was open.
+        .onChange(of: [currentToken(model.draft.to), currentToken(model.draft.cc), currentToken(model.draft.bcc)]) { pick = 0 }
+        .onChange(of: focus) { pick = 0 }
         .onChange(of: model.draft) { old, new in
             var o = old; o.draftId = new.draftId; o.messageId = new.messageId
             if o != new { store.scheduleDraftSave(model) }
@@ -336,17 +339,22 @@ struct ComposeView: View {
         store.sendWithUndo(model.draft, remindDays: model.remindDays) // closes compose; ⌘Z brings it back
     }
 
-    /// Tab: first suggestion for what's being typed, if any.
-    func complete(_ text: String) -> String? { matches(text).first.map { completeField(text, with: $0) } }
+    /// Tab or Return in a recipient field: the field's new text, or nil when nothing is suggested.
+    func key(_ k: RecipientKey, _ text: String) -> String? {
+        guard let r = recipientKey(k, field: text, suggestions: matches(text), pick: pick) else { return nil }
+        pick = r.pick
+        return r.field
+    }
 
     func matches(_ text: String) -> [Address] {
         contactSuggestions(currentToken(text), messages: Array(store.messages.values), me: store.me)
     }
 
-    /// People you've emailed, matching what you're typing. Tab takes the first one.
+    /// People you've emailed, matching what you're typing. Tab moves the highlight, Return adds the highlighted one.
     @ViewBuilder func suggestions(for text: String, _ f: Field, set: @escaping (String) -> Void) -> some View {
         let list = focus == f ? matches(text) : []
         if !list.isEmpty {
+            let on = min(pick, list.count - 1)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(Array(list.enumerated()), id: \.element.email) { i, a in
@@ -355,10 +363,10 @@ struct ComposeView: View {
                                 Avatar(address: a, size: 18)
                                 Text(a.name.isEmpty ? a.email : a.name).fontWeight(.medium)
                                 if !a.name.isEmpty { Text(a.email).foregroundStyle(.secondary) }
-                                if i == 0 { Text("⇥").foregroundStyle(.tertiary) }
+                                if i == on { Text("↵").foregroundStyle(.tertiary) }
                             }
                             .font(.scaled(.callout)).padding(.leading, 4).padding(.trailing, 10).padding(.vertical, 4)
-                            .background(Capsule().fill(i == 0 ? Theme.selection : Color.primary.opacity(0.06)))
+                            .background(Capsule().fill(i == on ? Theme.selection : Color.primary.opacity(0.06)))
                             .contentShape(Capsule())
                         }.buttonStyle(.plain)
                     }

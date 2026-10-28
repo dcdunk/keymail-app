@@ -53,6 +53,18 @@ public func completeField(_ field: String, with a: Address) -> String {
     return (head + [a.formatted]).joined(separator: ", ") + ", "
 }
 
+/// A recipient field's keys while suggestions show: Tab moves the highlight to the next person (wrapping around),
+/// Return adds the highlighted one. Nil when nothing is suggested, so the keys do their usual thing.
+public enum RecipientKey { case tab, enter }
+public func recipientKey(_ key: RecipientKey, field: String, suggestions: [Address], pick: Int) -> (field: String, pick: Int)? {
+    guard !suggestions.isEmpty else { return nil }
+    let i = min(max(pick, 0), suggestions.count - 1)
+    switch key {
+    case .tab: return (field, (i + 1) % suggestions.count)
+    case .enter: return (completeField(field, with: suggestions[i]), 0)
+    }
+}
+
 // MARK: Instant reply
 
 /// Claude is asked to separate options with a line containing only "===".
