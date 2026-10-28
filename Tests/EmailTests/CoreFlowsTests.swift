@@ -22,6 +22,7 @@ final class CoreFlowsTests: XCTestCase {
         UserDefaults.standard.removePersistentDomain(forName: Bundle.main.bundleIdentifier ?? "xctest")
         store = AppStore()
         store.messages = [:]
+        store.agentPlans = [:]   // plans are saved to disk; don't carry one test's into the next
         store.state = SavedState()
         store.state.accounts = [me]; store.state.onboarded = true
         store.state.undoSendSeconds = 5
@@ -588,6 +589,25 @@ final class CoreFlowsTests: XCTestCase {
         XCTAssertEqual(store.filteredCommands.first?.title.hasPrefix("Layout: agentic"), true, "⌘K reaches the Agentic layout")
         press("\r", code: 36)
         XCTAssertEqual(store.inboxLayout, "agent")
+    }
+
+    /// A plan (or a declined one) survives quitting and reopening, so it isn't planned again; half-finished ones don't.
+    func testAgenticPlansAreKeptAfterQuittingAndDroppedWhenTheEmailLeaves() {
+        store.setInboxLayout("agent")
+        defer { store.setInboxLayout("list") }
+        let v = store.visible
+        let plan = AgentPlan(headline: "Archive it", summary: "", steps: [.init(kind: .archive, detail: "")])
+        let (k0, k1, k2) = (store.instantKey(v[0]), store.instantKey(v[1]), store.instantKey(v[2]))
+        store.agentPlans = [k0: .ready(plan), k1: .declined, k2: .loading]
+        let reopened = AppStore()
+        XCTAssertEqual(reopened.agentPlans[k0], .ready(plan), "the plan is still there after reopening")
+        XCTAssertEqual(reopened.agentPlans[k1], .declined, "so is a declined one")
+        XCTAssertNil(reopened.agentPlans[k2], "one still being planned starts over")
+        store.selectedID = v[0].id
+        XCTAssertTrue(press("\r", code: 36, .command), "⌘↵ approves the saved plan")
+        store.pruneAgentPlans()
+        XCTAssertNil(store.agentPlans[k0], "archived: its plan is forgotten")
+        XCTAssertEqual(store.agentPlans[k1], .declined, "still in the inbox: kept")
     }
 
     // MARK: Folders beside the inbox

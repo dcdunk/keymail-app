@@ -2,7 +2,7 @@ import Foundation
 import EmailCore
 
 /// Agentic layout (preview): the AI plans what to do with each email; the person approves, steers or declines.
-enum AgentPlanState: Equatable {
+enum AgentPlanState: Equatable, Codable {
     case loading
     case ready(AgentPlan)
     case failed(String)
@@ -17,6 +17,30 @@ extension AppStore {
     /// Runs on its own only once AI is allowed for this provider; before that the pane offers a button, so just
     /// moving through the inbox never pops the permission question over and over.
     var agentAIAllowed: Bool { UserDefaults.standard.bool(forKey: "aiConsent." + ai.id) }
+
+    /// Finished plans (and ones you declined) are kept on disk, so quitting and reopening doesn't plan them again.
+    static var savedAgentPlans: [String: AgentPlanState] { Disk.load("agent-plans.json", as: [String: AgentPlanState].self) ?? [:] }
+    func saveAgentPlans(_ old: [String: AgentPlanState]) {
+        func kept(_ p: [String: AgentPlanState]) -> [String: AgentPlanState] {
+            p.filter { if case .ready = $0.value { return true }; return $0.value == .declined }
+        }
+        let now = kept(agentPlans)
+        if now != kept(old) { Disk.save(now, "agent-plans.json") }
+    }
+
+    /// Plans the next few emails in the list while you read this one, so theirs are ready when you get there.
+    /// ponytail: next 3, each its own AI run in parallel; widen if people move faster than plans arrive.
+    func planAhead(after c: Conversation) {
+        guard agentAIAllowed, let i = visible.firstIndex(where: { $0.id == c.id }) else { return }
+        for next in visible.dropFirst(i + 1).prefix(3) { loadAgentPlan(next) }
+    }
+
+    /// After a sync: forget plans for emails that left the inbox or got a newer message.
+    func pruneAgentPlans() {
+        let live = Set(allConversations.filter(\.inInbox).map(instantKey))
+        guard !live.isEmpty else { return }
+        for k in agentPlans.keys where !live.contains(k) { agentPlans[k] = nil }
+    }
 
     func loadAgentPlan(_ c: Conversation, steer: String? = nil) {
         let key = instantKey(c)

@@ -2,9 +2,9 @@ import Foundation
 
 /// Agentic inbox (preview): what the AI suggests doing with one email, which the person approves, steers or declines.
 /// Only actions Keymail itself can carry out are allowed, and nothing runs until the person presses Approve.
-public struct AgentPlan: Equatable {
-    public enum Kind: String, CaseIterable { case reply, star, archive, remind, trash }
-    public struct Step: Equatable {
+public struct AgentPlan: Equatable, Codable {
+    public enum Kind: String, CaseIterable, Codable { case reply, star, archive, remind, trash }
+    public struct Step: Equatable, Codable {
         public var kind: Kind
         public var detail: String       // one line, e.g. "Tell Helena it's restored"
         public var body: String?        // reply: the email text

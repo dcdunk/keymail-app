@@ -57,7 +57,11 @@ struct AgentPane: View {
                 steerBox(state)
             }
             // A short pause, so holding J doesn't ask the AI about every email you pass.
-            .task { if store.agentAIAllowed, state == nil { try? await Task.sleep(nanoseconds: 400_000_000); if !Task.isCancelled { store.loadAgentPlan(c) } } }
+            .task {
+                guard store.agentAIAllowed else { return }
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                if !Task.isCancelled { store.loadAgentPlan(c); store.planAhead(after: c) }
+            }
         }
     }
 

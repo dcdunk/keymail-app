@@ -42,6 +42,7 @@ extension AppStore {
         applyInboxRules()
         saveCache()
         notifyArrivals(known: known)
+        if inboxLayout == "agent" { pruneAgentPlans() }
         Task { await writeReadyDrafts() }   // replies for new mail that needs one (Settings → AI); never blocks the sync
         Notifier.shared.updateBadge() // also covers launches where nothing changed in this sync
     }
