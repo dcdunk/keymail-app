@@ -131,6 +131,8 @@ extension AppStore {
             if !(toolScreen != nil && undoCleanup()) { undo() }
             return true
         }
+        // ⌘↵ approves the Agentic plan on screen
+        if cmd, code == 36, inboxLayout == "agent", toolScreen == nil, !calendarOpen, let c = selected, case .ready = agentPlan(c) { approveAgentPlan(); return true }
         if cmd, code == 36, toolScreen == nil, !calendarOpen, let c = selected, readyDraft(c) != nil { sendReadyDraft(); return true }   // ⌘↵ sends the ready draft (not from the calendar, where it's hidden)
         if cmd { return false }
         if toolScreen != nil, !(typingInControl) { return handleToolKey(code: code, ch: ch) }

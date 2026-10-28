@@ -152,7 +152,7 @@ extension AppStore {
         }
         // Settings people change often, so they work without reaching the switches.
         let d = UserDefaults.standard
-        for (id, name) in [("list", "list"), ("split", "split (list beside the email)"), ("stream", "stream, preview (email cards)"), ("film", "filmstrip, preview (flip one at a time)")] where id != inboxLayout {
+        for (id, name) in [("list", "list"), ("split", "split (list beside the email)"), ("stream", "stream, preview (email cards)"), ("film", "filmstrip, preview (flip one at a time)"), ("agent", "agentic, preview (AI plans, you approve)")] where id != inboxLayout {
             list.append(Command(title: "Layout: \(name)") { self.setInboxLayout(id) })
         }
         list.append(Command(title: splitImportance ? "Inbox: one inbox (turn off Important and Other)" : "Inbox: split into Important and Other") { self.setSplitImportance(!self.splitImportance) })

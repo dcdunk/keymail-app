@@ -171,20 +171,25 @@ extension AppStore {
         for c in todo { await writeReadyDraft(c) }
     }
 
+    /// Up to 5 of your sent emails from this account (to this sender when there are enough), for the AI to match your voice,
+    /// and how many you've sent them. This account only: a work email shouldn't be shown to the AI to answer a personal one.
+    func styleSamples(_ c: Conversation) -> (samples: [String], toThem: Int) {
+        let them = parseAddresses(c.latest.from).first?.email.lowercased() ?? ""
+        let sent = messages.values.filter { $0.labelIds.contains("SENT") && $0.account == c.account }.sorted { $0.date > $1.date }
+        let toThem = sent.filter { parseAddresses($0.to + "," + $0.cc).contains { $0.email.lowercased() == them } }
+        return ((toThem.count >= 3 ? toThem : sent).prefix(5).map { String(splitQuoted($0.plainText).body.prefix(1200)) }, toThem.count)
+    }
+
     func writeReadyDraft(_ c: Conversation) async {
         draftsWriting.insert(c.id); defer { draftsWriting.remove(c.id) }
         let who = parseAddresses(c.latest.from).first
         let them = who?.email.lowercased() ?? ""
-        // Style samples come from this account only: a work email shouldn't be shown to the AI to answer a personal one.
-        let sent = messages.values.filter { $0.labelIds.contains("SENT") && $0.account == c.account }.sorted { $0.date > $1.date }
-        let toThem = sent.filter { parseAddresses($0.to + "," + $0.cc).contains { $0.email.lowercased() == them } }
-        let samples = (toThem.count >= 3 ? toThem : sent).prefix(5).map { String(splitQuoted($0.plainText).body.prefix(1200)) }
+        let (samples, history) = styleSamples(c)
         let busy = calUpcoming.filter { !$0.allDay && $0.start > Date() }.prefix(25)
             .map { "\($0.start.formatted(date: .abbreviated, time: .shortened)) to \($0.end.formatted(date: .omitted, time: .shortened))" }
         var why: [String] = []
         if !samples.isEmpty { why.append("Your writing style") }
         if !busy.isEmpty { why.append("Your calendar") }
-        let history = toThem.count
         why.append(history == 0 ? "First email with \(who?.name.isEmpty == false ? who!.name : them)" : "\(history) earlier email\(history == 1 ? "" : "s") with \(who?.name.isEmpty == false ? who!.name : them)")
         do {
             let out = try await AI.run("""

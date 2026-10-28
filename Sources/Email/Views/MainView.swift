@@ -39,6 +39,7 @@ struct MainView: View {
                 if store.inboxLayout == "split" { SplitInbox() }
                 else if store.inboxLayout == "stream" { StreamInbox() }
                 else if store.inboxLayout == "film" { FilmstripInbox() }
+                else if store.inboxLayout == "agent" { AgentInbox() }
                 else if store.threadOpen, let c = store.selected { ThreadView(conversation: c) } else { ListView() }
             }
             // Sized to the space between the side panels, not the whole window: with both panels open the top bar

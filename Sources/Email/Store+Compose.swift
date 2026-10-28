@@ -63,7 +63,8 @@ extension AppStore {
         d.cc = parseAddresses(d.cc).filter { !mine.contains($0.email.lowercased()) }.map(\.formatted).joined(separator: ", ")
         d.from = replyFrom(target, account: c.account)
         // Settings → General → Reply inside the conversation: the reply sits under the thread you're reading.
-        let inline = UserDefaults.standard.bool(forKey: "replyInline") && (threadOpen || inboxLayout == "split" || inboxLayout == "film")
+        // Not in Agentic: its pane shows the plan, so a reply under the thread would be out of sight.
+        let inline = UserDefaults.standard.bool(forKey: "replyInline") && inboxLayout != "agent" && (threadOpen || inboxLayout == "split" || inboxLayout == "film")
         if inline { threadOpen = true }
         let m = ComposeModel(draft: d, context: c); m.inline = inline
         var dd = d

@@ -269,6 +269,7 @@ final class AppStore: ObservableObject {
     @Published var threadToggled: Set<String> = []   // message keys flipped from their default (latest open, older closed)
     @Published var quotedShown: Set<String> = []     // messages showing their earlier quoted history
     @Published var imagesShown: Set<String> = []     // messages whose remote images were loaded once
+    @Published var agentPlans: [String: AgentPlanState] = [:]   // Agentic layout: plan per email (instantKey)
     @Published var streamExpanded: Set<String> = []  // Stream layout: conversations showing the full email
     @Published var agentLog: [AgentLogEntry] = []
     var agentSocket: Int32?

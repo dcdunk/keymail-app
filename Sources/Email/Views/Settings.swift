@@ -243,10 +243,7 @@ struct AppearanceSettings: View {
                     .pickerStyle(.segmented).settingAnchor("Text size")
                 }
                 Section("Layout") {
-                    Picker(selection: Binding(get: { store.inboxLayout }, set: { store.setInboxLayout($0) })) {
-                        Text("List").tag("list"); Text("Split").tag("split"); Text("Stream (Preview)").tag("stream"); Text("Filmstrip (Preview)").tag("film")
-                    } label: { Text("Inbox layout"); Text("List opens each email full width. Split keeps the list beside it. Stream shows each email as a card you can expand, one after another. Filmstrip flips through one at a time. Stream and Filmstrip are previews: they're new and may still have rough edges.") }
-                    .pickerStyle(.segmented).settingAnchor("Inbox layout")
+                    LayoutPicker().settingAnchor("Inbox layout")
                 }
                 Section("Theme") {
                     Picker("Appearance", selection: Binding(get: { store.state.appearance }, set: { store.setAppearance($0) })) {
@@ -764,4 +761,121 @@ struct AccountDrop: DropDelegate {
     func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
     func performDrop(info: DropInfo) -> Bool { dragging = nil; return true }
     func dropExited(info: DropInfo) {}
+}
+
+/// Settings → Appearance → Inbox layout: a tile per layout with a small sketch of it, and what the chosen one does.
+struct LayoutPicker: View {
+    @EnvironmentObject var store: AppStore
+    static let layouts: [(id: String, name: String, preview: Bool, about: String)] = [
+        ("list", "List", false, "Opens each email full width. Esc goes back to the list."),
+        ("split", "Split", false, "Keeps the list beside the email you're reading, like Apple Mail."),
+        ("stream", "Stream", true, "Each email is a card, one after another. Space expands the full email."),
+        ("film", "Filmstrip", true, "One email at a time. ← and → flip between them."),
+        ("agent", "Agentic", true, "Your AI plans what to do with each email: reply, archive, remind. Nothing happens until you approve it (⌘↵)."),
+    ]
+    var body: some View {
+        let current = store.inboxLayout
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Inbox layout")
+            HStack(spacing: 8) {
+                ForEach(Self.layouts, id: \.id) { l in
+                    let on = l.id == current
+                    Button { store.setInboxLayout(l.id) } label: {
+                        VStack(spacing: 2) {
+                            LayoutSketch(kind: l.id, on: on).scaleEffect(0.66).frame(width: 64, height: 42).padding(.bottom, 4)
+                            Text(l.name).font(.scaled(.callout).weight(on ? .semibold : .regular)).lineLimit(1).minimumScaleFactor(0.8)
+                            // Same height on every tile, so the names line up.
+                            Text("Preview").font(.scaled(size: 9.5, weight: .semibold)).foregroundStyle(Theme.accent).opacity(l.preview ? 1 : 0)
+                        }
+                        .padding(.vertical, 8).padding(.horizontal, 4).frame(maxWidth: .infinity)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(on ? Theme.selection : Color.primary.opacity(0.03)))
+                        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(on ? Theme.accent : Color.primary.opacity(0.1), lineWidth: on ? 1.5 : 1))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain).accessibilityLabel(l.name).accessibilityAddTraits(on ? .isSelected : [])
+                }
+            }
+            if let l = Self.layouts.first(where: { $0.id == current }) {
+                Text(l.about + (l.preview ? " A preview: it's new and may still have rough edges." : ""))
+                    .settingsFooter().fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+/// A wireframe of each layout: grey bars for text, a highlighted row for the open email, accent for the action.
+struct LayoutSketch: View {
+    let kind: String
+    let on: Bool
+    var ink: Color { Color.primary.opacity(0.18) }
+    var faint: Color { Color.primary.opacity(0.09) }
+    var hi: Color { on ? Theme.accent : Color.primary.opacity(0.35) }
+
+    func bar(_ w: CGFloat, _ c: Color? = nil, h: CGFloat = 3) -> some View { Capsule().fill(c ?? ink).frame(width: w, height: h) }
+    func rows(_ n: Int, width: CGFloat, selected: Int? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(0..<n, id: \.self) { i in
+                HStack(spacing: 3) { Circle().fill(i == selected ? hi : faint).frame(width: 3, height: 3); bar(width * (i % 2 == 0 ? 0.8 : 0.6), i == selected ? hi.opacity(0.7) : nil) }
+            }
+        }
+    }
+    func lines(_ ws: [CGFloat]) -> some View { VStack(alignment: .leading, spacing: 3) { ForEach(ws.indices, id: \.self) { bar(ws[$0]) } } }
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.04))
+            RoundedRectangle(cornerRadius: 6).strokeBorder(Color.primary.opacity(0.1))
+            Group {
+                switch kind {
+                case "split":
+                    HStack(alignment: .top, spacing: 5) {
+                        rows(6, width: 26, selected: 1)
+                        Rectangle().fill(faint).frame(width: 1)
+                        VStack(alignment: .leading, spacing: 4) { bar(34, hi.opacity(0.7)); lines([44, 40, 44, 28]) }
+                    }
+                case "stream":
+                    VStack(spacing: 4) {
+                        ForEach(0..<3, id: \.self) { i in
+                            RoundedRectangle(cornerRadius: 3).fill(i == 0 ? hi.opacity(0.18) : faint)
+                                .overlay(alignment: .topLeading) { lines(i == 0 ? [40, 56, 50] : [36]).padding(4) }
+                                .frame(width: 76, height: i == 0 ? 24 : 11)
+                        }
+                    }
+                case "film":
+                    HStack(spacing: 4) {
+                        RoundedRectangle(cornerRadius: 3).fill(faint).frame(width: 10, height: 34)
+                        RoundedRectangle(cornerRadius: 3).fill(hi.opacity(0.18))
+                            .overlay(alignment: .topLeading) { VStack(alignment: .leading, spacing: 4) { bar(30, hi.opacity(0.7)); lines([46, 40, 46]) }.padding(5) }
+                            .frame(width: 58, height: 46)
+                        RoundedRectangle(cornerRadius: 3).fill(faint).frame(width: 10, height: 34)
+                    }
+                case "agent":
+                    HStack(alignment: .top, spacing: 5) {
+                        rows(6, width: 22, selected: 0)
+                        Rectangle().fill(faint).frame(width: 1)
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(spacing: 2) { Image(systemName: "sparkle").font(.system(size: 5)).foregroundStyle(hi); bar(26) }
+                            lines([46, 38])
+                            HStack(spacing: 3) { RoundedRectangle(cornerRadius: 1).fill(faint).frame(width: 5, height: 5); bar(28) }
+                            Capsule().fill(hi).frame(width: 48, height: 6).padding(.top, 1)
+                            Capsule().strokeBorder(faint).frame(width: 48, height: 6)
+                        }
+                    }
+                default:   // list
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(0..<6, id: \.self) { i in
+                            HStack(spacing: 4) {
+                                Circle().fill(i == 1 ? hi : faint).frame(width: 3, height: 3)
+                                bar(20, i == 1 ? hi.opacity(0.7) : nil); bar(i % 2 == 0 ? 44 : 34, faint)
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(8)
+        }
+        .frame(width: 96, height: 62)
+        .animation(.easeOut(duration: 0.15), value: on)
+    }
 }

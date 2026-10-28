@@ -521,6 +521,60 @@ final class CoreFlowsTests: XCTestCase {
         press("", code: 123); XCTAssertTrue(store.sidebarOpen, "list: ← still opens folders")
     }
 
+    // MARK: Agentic layout (preview)
+
+    func testAgenticKeysMoveAndApproveRunsThePlan() {
+        store.setInboxLayout("agent")
+        defer { store.setInboxLayout("list") }
+        let v = store.visible
+        store.selectedID = v[0].id
+        press("j", code: 38)
+        XCTAssertEqual(store.selectedID, v[1].id, "agentic: J moves to the next email")
+        XCTAssertFalse(store.allConversations.first { $0.id == v[1].id }!.isUnread, "and reads it")
+
+        let c = store.selected!
+        XCTAssertFalse(press("\r", code: 36, .command), "⌘↵ does nothing until there's a plan")
+        store.agentPlans[store.instantKey(c)] = .ready(AgentPlan(headline: "Confirm Thursday", summary: "", steps: [
+            .init(kind: .reply, detail: "Say yes", body: "Thursday works. See you then."),
+            .init(kind: .star, detail: ""), .init(kind: .archive, detail: ""),
+        ]))
+        XCTAssertTrue(press("\r", code: 36, .command), "⌘↵ approves the plan")
+        let sent = store.pendingSends.last?.draft
+        XCTAssertEqual(sent?.body.hasPrefix("Thursday works. See you then."), true, "the planned reply goes out (with Undo Send)")
+        XCTAssertFalse(sent?.inReplyTo.isEmpty ?? true, "as a reply in the same thread")
+        let after = store.allConversations.first { $0.id == c.id }!
+        XCTAssertTrue(after.isStarred, "star ran")
+        XCTAssertFalse(after.inInbox, "archive ran last")
+        store.undo()
+        XCTAssertTrue(store.pendingSends.isEmpty, "⌘Z still cancels the send")
+    }
+
+    func testAgenticDeclineAndEditReply() {
+        store.setInboxLayout("agent")
+        defer { store.setInboxLayout("list") }
+        let c = store.selected!, key = store.instantKey(c)
+        let plan = AgentPlan(headline: "Reply", summary: "", steps: [.init(kind: .reply, detail: "", body: "Sounds good."), .init(kind: .archive, detail: "")])
+        store.agentPlans[key] = .ready(plan)
+        store.editAgentReply()
+        XCTAssertEqual(store.composing?.draft.body.hasPrefix("Sounds good."), true, "Edit opens the reply to change")
+        XCTAssertEqual(store.composing?.inline, false, "in its own window: the pane shows the plan, not the thread")
+        XCTAssertEqual(store.agentPlan(c), .ready(AgentPlan(headline: "Reply", summary: "", steps: [.init(kind: .archive, detail: "")])),
+                       "and Approve then does only the rest")
+        store.composing = nil
+        store.declineAgentPlan()
+        XCTAssertEqual(store.agentPlan(c), .declined)
+        XCTAssertFalse(press("\r", code: 36, .command), "a declined plan can't be approved")
+        XCTAssertTrue(store.allConversations.first { $0.id == c.id }!.inInbox, "declining leaves the email alone")
+        store.openPalette("agentic")
+        XCTAssertNotEqual(store.filteredCommands.first?.title.hasPrefix("Layout: agentic"), true, "the palette hides the layout you're on")
+        store.paletteOpen = false
+        store.setInboxLayout("list")
+        store.openPalette("agentic")
+        XCTAssertEqual(store.filteredCommands.first?.title.hasPrefix("Layout: agentic"), true, "⌘K reaches the Agentic layout")
+        press("\r", code: 36)
+        XCTAssertEqual(store.inboxLayout, "agent")
+    }
+
     // MARK: Folders beside the inbox
 
     func testPinnedFoldersNeverCloseAndArrowsOnlyMoveTheKeyboard() {
