@@ -124,7 +124,7 @@ struct ThreadView: View {
             UnsubscribeBar(conversation: conversation)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 12) {
-                    let all = conversation.messages, single = all.count == 1
+                    let all = store.shownMessages(conversation), single = all.count == 1
                     // Inline reply (Settings → General): above the newest email when newest is on top, else below it.
                     // The ready draft sits where your reply would go: above the newest email or below it.
                     if newestFirst { inlineReply; readyDraft }

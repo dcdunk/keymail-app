@@ -3,11 +3,19 @@ import EmailCore
 
 /// Keyboard and ⌘K paths for everything in an open conversation that used to need a click.
 extension AppStore {
-    func isOpen(_ m: Message, in c: Conversation) -> Bool { (m.key == c.latest.key) != threadToggled.contains(m.key) }
+    func isOpen(_ m: Message, in c: Conversation) -> Bool { (m.key == (shownMessages(c).last ?? c.latest).key) != threadToggled.contains(m.key) }
+
+    /// The thread's emails, minus the autosaved copy of a reply you're writing here: the reply box already shows it,
+    /// and each autosave swaps that copy, which would collapse the email you're reading and move the thread.
+    func shownMessages(_ c: Conversation) -> [Message] {
+        guard composing?.context?.id == c.id else { return c.messages }
+        let kept = c.messages.filter { !$0.labelIds.contains("DRAFT") || $0.labelIds.contains("SENT") }
+        return kept.isEmpty ? c.messages : kept
+    }
 
     /// The conversation's messages in the order they're shown (Settings → Messages in a thread).
     func shownOrder(_ c: Conversation) -> [Message] {
-        UserDefaults.standard.bool(forKey: "threadNewestFirst") ? c.messages.reversed() : c.messages
+        UserDefaults.standard.bool(forKey: "threadNewestFirst") ? shownMessages(c).reversed() : shownMessages(c)
     }
 
     /// Space: open the next collapsed email, in reading order.

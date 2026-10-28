@@ -480,6 +480,22 @@ final class CoreFlowsTests: XCTestCase {
         XCTAssertEqual(store.composing?.draft.body.contains("Half-written reply"), true, "R opens the draft you started")
     }
 
+    func testThreadStaysPutWhileYourReplyAutosaves() {
+        let c = store.allConversations.first { $0.messages.count > 1 }!
+        store.selectedID = c.id; store.open(c); store.threadToggled = []
+        store.reply(all: false)
+        let reading = c.replyTarget
+        // The autosaved copy of the reply arrives with the next sync and becomes the thread's newest message.
+        let saved = Message(id: "d2", threadId: c.threadId, account: c.account, from: me, to: "sam@northwind.co", subject: "Re: x",
+                            date: Date().addingTimeInterval(120), labelIds: ["DRAFT"], text: "Reply in progress")
+        store.messages[saved.key] = saved
+        let now = store.allConversations.first { $0.id == c.id }!
+        XCTAssertFalse(store.shownMessages(now).contains { $0.key == saved.key }, "the reply box already shows it, so the copy stays out")
+        XCTAssertTrue(store.isOpen(reading, in: now), "the email you're reading stays open")
+        store.composing = nil
+        XCTAssertTrue(store.shownMessages(now).contains { $0.key == saved.key }, "after closing the reply, the saved draft shows again")
+    }
+
     // MARK: Split layout
 
     func testSplitLayoutKeysOpenWhatYouMoveTo() {
