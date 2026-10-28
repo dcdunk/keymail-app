@@ -86,7 +86,9 @@ final class MimeTests: XCTestCase {
     func testProxyRemoteImages() {
         XCTAssertEqual(proxyRemoteImages(#"<img alt="Claude Duet" src="https://claude.ai/a.png" width=182>"#),
                        #"<img alt="Claude Duet" src="kmimg-https://claude.ai/a.png" width=182>"#)
-        XCTAssertEqual(proxyRemoteImages("<IMG SRC=HTTP://x.com/a.gif>"), "<IMG SRC=kmimg-http://x.com/a.gif>")
+        XCTAssertEqual(proxyRemoteImages("<IMG SRC=HTTPS://x.com/a.gif>"), "<IMG SRC=kmimg-https://x.com/a.gif>")
+        // http images (Southwest's logo) stay with the web view: Keymail's own fetcher isn't allowed plain http.
+        XCTAssertEqual(proxyRemoteImages(#"<img src="http://x.com/logo.png">"#), #"<img src="http://x.com/logo.png">"#)
         XCTAssertEqual(proxyRemoteImages(#"<img srcset='https://a.co/1x.png 1x, https://a.co/2x.png 2x'>"#),
                        #"<img srcset='kmimg-https://a.co/1x.png 1x, kmimg-https://a.co/2x.png 2x'>"#)
         // Links, alt text, inline (cid/data) images and text outside image tags stay as they are.

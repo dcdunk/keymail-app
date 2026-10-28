@@ -404,7 +404,7 @@ struct EmailWebView: NSViewRepresentable {
         if blockRemote, let blocker = RemoteContent.blocker {
             config.userContentController.add(blocker)
         }
-        if !blockRemote { ["kmimg-https", "kmimg-http"].forEach { config.setURLSchemeHandler(ImageFetcher.shared, forURLScheme: $0) } }
+        if !blockRemote { config.setURLSchemeHandler(ImageFetcher.shared, forURLScheme: "kmimg-https") }
         config.userContentController.addUserScript(WKUserScript(source: Coordinator.darkScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         let v = PassThroughWebView(frame: .zero, configuration: config)
         v.navigationDelegate = context.coordinator

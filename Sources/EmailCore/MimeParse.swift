@@ -236,10 +236,11 @@ public func imapServer(for email: String) -> IMAPServer {
 
 /// Points <img> src/srcset at Keymail's own image fetcher ("kmimg-https://…"), the way Gmail proxies images.
 /// Some senders (claude.ai) mark images "same-origin only", which the email web view enforces, so they never showed.
+/// Plain http images are left to the web view: macOS blocks http for Keymail's own fetches but allows it in email content.
 public func proxyRemoteImages(_ html: String) -> String {
     guard let tag = try? NSRegularExpression(pattern: #"<img\b[^>]*>"#, options: .caseInsensitive),
           let attr = try? NSRegularExpression(pattern: #"\s(?:src|srcset)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)"#, options: .caseInsensitive),
-          let url = try? NSRegularExpression(pattern: #"\bhttps?://"#, options: .caseInsensitive) else { return html }
+          let url = try? NSRegularExpression(pattern: #"\bhttps://"#, options: .caseInsensitive) else { return html }
     func each(_ re: NSRegularExpression, _ s: String, _ f: (String) -> String) -> String {
         let ns = s as NSString
         var out = "", pos = 0
