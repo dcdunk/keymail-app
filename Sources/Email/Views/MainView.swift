@@ -131,16 +131,21 @@ struct Header: View {
                         .padding(.horizontal, 10).padding(.vertical, 6).background(Capsule().fill(Color.orange.opacity(0.12)))
                 }.buttonStyle(.plain).handCursor().help("Auto-reply is on for " + away.keys.map(store.label).joined(separator: ", ") + ". Change it in Settings → Gmail.")
             }
+            if store.showsTopBarButton("Compose") {
             Button { store.compose() } label: {
                 Image(systemName: "square.and.pencil").font(.scaled(size: 15, weight: .medium))
                     .frame(width: 34, height: 34).contentShape(Circle())
             }
             .buttonStyle(.plain).foregroundStyle(.primary).glass(Circle(), interactive: true)
             .help("New email (\(Hotkeys.label("c")))").coachAnchor("compose")
+            }
             // Search button: an entry point for mouse users, and something for the search tip to point at.
+            if store.showsTopBarButton("Search") {
             Button { store.searchOpen = true } label: { Image(systemName: "magnifyingglass").frame(width: 34, height: 34).contentShape(Circle()) }
                 .buttonStyle(.plain).foregroundStyle(.secondary).glass(Circle(), interactive: true)
                 .help("Search (/)").coachAnchor("search")
+            }
+            if store.showsTopBarButton("Fetch mail") {
             Button { Task { await store.tick() } } label: {
                 Group {
                     if store.syncing { ProgressView().controlSize(.small) } else { Image(systemName: "arrow.triangle.2.circlepath") }
@@ -148,14 +153,25 @@ struct Header: View {
             }
             .buttonStyle(.plain).foregroundStyle(.secondary).glass(Circle(), interactive: true)
             .disabled(store.syncing).help("Fetch mail (⌘R)")
+            }
+            if store.showsTopBarButton("Settings") {
             Button { store.openSettings() } label: { Image(systemName: "gearshape").frame(width: 34, height: 34).contentShape(Circle()) }
                 .buttonStyle(.plain).foregroundStyle(.secondary).glass(Circle(), interactive: true)
                 .help("Settings (⌘,)")
-            PackagesButton()
-            if store.calendarEnabled { ViewSwitchButton(toCalendar: true) }
+            }
+            if store.showsTopBarButton("Packages") { PackagesButton() }
+            if store.calendarEnabled && store.showsTopBarButton("Calendar") { ViewSwitchButton(toCalendar: true) }
             AccountCapsule().coachAnchor("palette")
         }
         .glassGroup(spacing: 10)
+        .contentShape(Rectangle())
+        .contextMenu {
+            Section("Show in top bar") {
+                ForEach(AppStore.topBarButtons, id: \.self) { b in
+                    Toggle(b, isOn: Binding(get: { store.showsTopBarButton(b) }, set: { _ in store.toggleTopBarButton(b) }))
+                }
+            }
+        }
         .padding(.horizontal, layout.margin).padding(.top, 34).padding(.bottom, 12)
     }
 }

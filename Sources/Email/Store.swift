@@ -248,6 +248,14 @@ final class AppStore: ObservableObject {
     var contextPinned: Bool { UserDefaults.standard.object(forKey: "contextPinned") as? Bool ?? true }
     var foldersVisible: Bool { foldersPinned || sidebarOpen }
     var contextVisible: Bool { contextPinned || contextOpen }
+    /// Top-bar buttons the person can hide (right-click the top bar, or ⌘K). Every one still has a key, so hiding loses nothing.
+    static let topBarButtons = ["Compose", "Search", "Fetch mail", "Settings", "Packages", "Calendar"]
+    var hiddenTopBarButtons: Set<String> { Set(UserDefaults.standard.stringArray(forKey: "hiddenTopBarButtons") ?? []) }
+    func showsTopBarButton(_ name: String) -> Bool { !hiddenTopBarButtons.contains(name) }
+    func toggleTopBarButton(_ name: String) {
+        var h = hiddenTopBarButtons; if h.contains(name) { h.remove(name) } else { h.insert(name) }
+        UserDefaults.standard.set(h.sorted(), forKey: "hiddenTopBarButtons"); objectWillChange.send()
+    }
     func setFoldersPinned(_ on: Bool) { UserDefaults.standard.set(on, forKey: "foldersPinned"); sidebarOpen = false; sidebarFocused = false; objectWillChange.send() }
     func setContextPinned(_ on: Bool) { UserDefaults.standard.set(on, forKey: "contextPinned"); contextOpen = false; objectWillChange.send() }
     @Published var splitSettingsOpen = false

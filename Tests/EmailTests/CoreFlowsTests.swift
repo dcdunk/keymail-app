@@ -32,6 +32,18 @@ final class CoreFlowsTests: XCTestCase {
         store.selectedID = store.visible.first?.id
     }
 
+    func testTopBarButtonsCanBeHiddenAndShownFromPalette() {
+        XCTAssertTrue(AppStore.topBarButtons.allSatisfy(store.showsTopBarButton))
+        func run(_ t: String) { store.commands.first { $0.title == t }!.run() }
+        run("Top bar: hide Search")
+        XCTAssertFalse(store.showsTopBarButton("Search"))
+        XCTAssertTrue(store.commands.contains { $0.title == "Top bar: show Search" })
+        run("Top bar: show Search")
+        XCTAssertTrue(store.showsTopBarButton("Search"))
+        run("Top bar: hide Packages")
+        XCTAssertFalse(store.showsTopBarButton("Packages"))
+    }
+
     // MARK: Keyboard
 
     @discardableResult

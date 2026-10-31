@@ -179,6 +179,7 @@ extension AppStore {
         for lib in splitLibrary where !state.splits.contains(where: { $0.name == lib.name }) {
             list.append(Command(title: "Turn on split: \(lib.name)") { self.addSplit(lib) })
         }
+        for b in Self.topBarButtons { list.append(Command(title: "Top bar: \(showsTopBarButton(b) ? "hide" : "show") \(b)") { self.toggleTopBarButton(b) }) }
         list.append(Command(title: foldersPinned ? "Folders sidebar: open and close by hand" : "Folders sidebar: always show") { self.setFoldersPinned(!self.foldersPinned) })
         list.append(Command(title: contextPinned ? "Context panel: open and close by hand" : "Context panel: always show") { self.setContextPinned(!self.contextPinned) })
         if !foldersPinned { list.append(Command(title: sidebarOpen ? "Hide folders" : "Show folders", key: "←") { self.sidebarOpen.toggle() }) }
