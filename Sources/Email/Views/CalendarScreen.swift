@@ -429,55 +429,80 @@ struct EventCard: View {
 
 // MARK: Month
 
+/// Weeks in one long column you scroll through smoothly, like the Calendar app: it settles with a month's first
+/// week at the top, and the header follows whichever month is on top.
 struct MonthGrid: View {
     @EnvironmentObject var store: AppStore
-    @State private var hovering = false
-    @State private var monitor: Any?
-    @State private var swipe: CGFloat = 0      // how far this trackpad swipe has gone; one swipe moves one month
+    @State private var top: Int?               // the week row at the top (rows count weeks from `base`)
+    @State private var scrolledTo: Date?       // the month the scrolling itself picked, so it isn't scrolled to again
+    @State private var reload: Task<Void, Never>?
+    static let span = 1040                     // 20 years each way
+
+    var cal: Calendar { var c = Calendar.current; c.firstWeekday = store.calMondayFirst ? 2 : 1; return c }
+    var base: Date { cal.dateInterval(of: .weekOfYear, for: Calendar.current.startOfDay(for: Date()))!.start }
+
     var body: some View {
-        // Its own six weeks, never store.calDays: while switching to week or day view this grid can draw one last
-        // time with the new, shorter list, and indexing six rows into it crashed.
-        let days = calendarDays(.month, around: store.calDate, mondayFirst: store.calMondayFirst), events = store.calShown
-        let month = Calendar.current.component(.month, from: store.calDate)
+        let cal = cal, base = base, events = store.calShown
+        let month = cal.dateComponents([.year, .month], from: store.calDate)
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                ForEach(days.prefix(7), id: \.self) { d in
-                    Text(d.formatted(.dateTime.weekday(.abbreviated))).font(.scaled(size: 12)).foregroundStyle(.secondary)
+                ForEach(0..<7, id: \.self) { i in
+                    Text(cal.date(byAdding: .day, value: i, to: base)!.formatted(.dateTime.weekday(.abbreviated))).font(.scaled(size: 12)).foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 8)
                 }
             }.padding(.bottom, 6)
-            VStack(spacing: 0) {
-                ForEach(0..<6, id: \.self) { r in
-                    HStack(spacing: 0) {
-                        ForEach(days[(r * 7)..<(r * 7 + 7)], id: \.self) { d in
-                            MonthCell(day: d, inMonth: Calendar.current.component(.month, from: d) == month,
-                                      events: events.filter { e in   // every day it covers: a Mon-Fri trip shows all week, not just Monday
-                                          let day = Calendar.current.startOfDay(for: d), next = Calendar.current.date(byAdding: .day, value: 1, to: day)!
-                                          return e.start < next && (e.end > day || Calendar.current.isDate(e.start, inSameDayAs: d))
-                                      }.sorted { $0.start < $1.start })
+            GeometryReader { geo in
+                let rowH = geo.size.height / 6
+                ScrollView(.vertical) {
+                    LazyVStack(spacing: 0) {
+                        ForEach(-Self.span..<Self.span, id: \.self) { r in
+                            let start = weekRowStart(r, base: base, calendar: cal)
+                            HStack(spacing: 0) {
+                                ForEach(0..<7, id: \.self) { i in
+                                    let d = cal.date(byAdding: .day, value: i, to: start)!
+                                    MonthCell(day: d, inMonth: cal.dateComponents([.year, .month], from: d) == month,
+                                              events: events.filter { e in   // every day it covers: a Mon-Fri trip shows all week, not just Monday
+                                                  let next = cal.date(byAdding: .day, value: 1, to: d)!
+                                                  return e.start < next && (e.end > d || cal.isDate(e.start, inSameDayAs: d))
+                                              }.sorted { $0.start < $1.start })
+                                }
+                            }
+                            .frame(height: rowH)
                         }
                     }
+                    .scrollTargetLayout()
                 }
+                .scrollIndicators(.never)
+                .scrollPosition(id: $top, anchor: .top)
+                .scrollTargetBehavior(MonthSnap(rowHeight: rowH, base: base, calendar: cal))
             }
         }
         .padding(.horizontal, 20).padding(.bottom, 16)
-        .contentShape(Rectangle())
-        .onHover { hovering = $0 }
-        .onAppear {
-            // Swipe up for the next month, down for the previous one (a mouse wheel moves a month per notch).
-            monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { e in
-                guard hovering else { return e }
-                if e.phase == .began { swipe = 0 }
-                if e.momentumPhase != [] { return nil }       // the coast after lifting your fingers isn't another swipe
-                swipe += e.scrollingDeltaY
-                if let n = monthSwipeStep(deltaY: swipe, precise: e.hasPreciseScrollingDeltas) {
-                    store.calStep(n); swipe = e.hasPreciseScrollingDeltas ? .infinity * (swipe < 0 ? -1 : 1) : 0
-                }
-                if e.phase == .ended || e.phase == .cancelled { swipe = 0 }
-                return nil
-            }
+        .onAppear { top = monthRow(for: store.calDate, base: base, calendar: cal) }
+        .onChange(of: top) { _, row in
+            guard let row else { return }
+            // The month on top is the one whose last day of that week falls in it (a week holding the 1st belongs to the new month).
+            let shown = cal.dateInterval(of: .month, for: cal.date(byAdding: .day, value: 6, to: weekRowStart(row, base: base, calendar: cal))!)!.start
+            guard !cal.isDate(shown, equalTo: store.calDate, toGranularity: .month) else { return }
+            scrolledTo = shown; store.calDate = shown; store.calSelected = nil
+            reload?.cancel()
+            reload = Task { try? await Task.sleep(for: .milliseconds(300)); if !Task.isCancelled { await store.loadCalendar() } }   // once you stop
         }
-        .onDisappear { if let monitor { NSEvent.removeMonitor(monitor) }; monitor = nil }
+        .onChange(of: store.calDate) { _, d in   // arrows, T, the mini month: glide there
+            if let s = scrolledTo, cal.isDate(s, equalTo: d, toGranularity: .month) { return }
+            scrolledTo = nil
+            withAnimation(.smooth) { top = monthRow(for: d, base: base, calendar: cal) }
+        }
+    }
+}
+
+/// Where a scroll comes to rest: the nearest week that starts a month.
+struct MonthSnap: ScrollTargetBehavior {
+    let rowHeight: CGFloat, base: Date, calendar: Calendar
+    func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
+        guard rowHeight > 0 else { return }
+        let row = Int((target.rect.minY / rowHeight).rounded()) - MonthGrid.span
+        target.rect.origin.y = CGFloat(nearestMonthRow(to: row, base: base, calendar: calendar) + MonthGrid.span) * rowHeight
     }
 }
 
@@ -487,7 +512,8 @@ struct MonthCell: View {
     var body: some View {
         let today = Calendar.current.isDateInToday(day)
         VStack(alignment: .leading, spacing: 2) {
-            Text(day.formatted(.dateTime.day())).font(.scaled(size: 12, weight: today ? .bold : .regular))
+            Text(Calendar.current.component(.day, from: day) == 1 ? day.formatted(.dateTime.month(.abbreviated).day()) : day.formatted(.dateTime.day()))
+                .font(.scaled(size: 12, weight: today ? .bold : .regular))
                 .foregroundStyle(today ? Color.white : inMonth ? Color.primary : Color.secondary.opacity(0.6))
                 .padding(.horizontal, today ? 6 : 2).padding(.vertical, 1)
                 .background { if today { Capsule().fill(Theme.accent) } }

@@ -101,11 +101,28 @@ public func dropMirroredCalendars(_ sources: [CalSource], _ events: [CalEvent], 
 }
 
 /// What someone typed into quick add: "Lunch with Priya fri 1pm at Tartine, 45 min".
-/// Month view scrolling: how many months a swipe or wheel turn moves (nil while it's still too small to count).
-/// Content follows your fingers, so scrolling up (negative delta) goes forward. Infinity marks a swipe that already moved.
-public func monthSwipeStep(deltaY: CGFloat, precise: Bool) -> Int? {
-    guard deltaY.isFinite, abs(deltaY) >= (precise ? 40 : 1) else { return nil }
-    return deltaY < 0 ? 1 : -1
+// MARK: Month view as one long column of weeks (row 0 is the week starting at `base`)
+
+public func weekRowStart(_ row: Int, base: Date, calendar: Calendar = .current) -> Date {
+    calendar.date(byAdding: .weekOfYear, value: row, to: base)!
+}
+
+/// The row of the week holding the 1st of `date`'s month: where that month starts.
+public func monthRow(for date: Date, base: Date, calendar: Calendar = .current) -> Int {
+    let first = calendar.dateInterval(of: .month, for: date)!.start
+    let week = calendar.dateInterval(of: .weekOfYear, for: first)!.start
+    return Int((week.timeIntervalSince(base) / (7 * 86400)).rounded())   // rounded: a clock change makes one week an hour short
+}
+
+/// The nearest row that starts a month (the closer one wins; a tie goes forward). Months start every 4 or 5 weeks.
+public func nearestMonthRow(to row: Int, base: Date, calendar: Calendar = .current) -> Int {
+    for d in 0...3 {
+        for r in [row + d, row - d] {
+            let last = calendar.date(byAdding: .day, value: 6, to: weekRowStart(r, base: base, calendar: calendar))!
+            if calendar.component(.day, from: last) <= 7 { return r }   // the week's last day is in the first 7: it holds a 1st
+        }
+    }
+    return row
 }
 
 /// Turning "All day" on covers the whole day the event starts on; turning it off makes it an hour at 9am that day.

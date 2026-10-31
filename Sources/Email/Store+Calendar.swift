@@ -45,7 +45,9 @@ extension AppStore {
     func loadCalendar() async {
         let days = calDays
         guard let first = days.first, let last = days.last else { return }
-        let from = first, to = Calendar.current.date(byAdding: .day, value: 1, to: last)!
+        // Month view scrolls freely, so the months either side are loaded too and are ready as they slide in.
+        let pad = calView == .month ? 35 : 0
+        let from = Calendar.current.date(byAdding: .day, value: -pad, to: first)!, to = Calendar.current.date(byAdding: .day, value: 1 + pad, to: last)!
         let now = Calendar.current.startOfDay(for: Date()), week = Calendar.current.date(byAdding: .day, value: 8, to: now)!
         let lo = min(from, now), hi = max(to, week)
         calLoadID += 1
