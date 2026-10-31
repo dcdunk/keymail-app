@@ -950,6 +950,36 @@ extension CoreFlowsTests {
         for i in demoCalendarEvents.indices where demoCalendarEvents[i].id == e.id { demoCalendarEvents[i] = e }
     }
 
+    func testAnEventCanBeMadeAllDayAndBack() async {
+        await openCalendarWithEvents()
+        let e = store.calShown.first { $0.title == "Deep Work" && !$0.allDay }!
+        let (s, end) = toggledAllDay(start: e.start, end: e.end, on: true)
+        XCTAssertEqual(s, Calendar.current.startOfDay(for: e.start)); XCTAssertEqual(end, Calendar.current.date(byAdding: .day, value: 1, to: s))
+        store.updateEvent(e, title: e.title, start: s, end: end, notes: e.notes, allDay: true)
+        XCTAssertEqual(store.calEvents.first { $0.id == e.id }?.allDay, true, "the card's All day box saves")
+        let (s2, end2) = toggledAllDay(start: s, end: end, on: false)
+        XCTAssertEqual(Calendar.current.component(.hour, from: s2), 9); XCTAssertEqual(end2.timeIntervalSince(s2), 3600)
+        store.updateEvent(e, title: e.title, start: s2, end: end2, notes: e.notes, allDay: false)
+        XCTAssertEqual(store.calEvents.first { $0.id == e.id }?.allDay, false, "and unticking it gives a timed event again")
+        XCTAssertTrue(EventDraft(title: "Trip", start: Date(), minutes: 30, notes: "", allDay: true).allDay, "new events can be all day")
+        for i in demoCalendarEvents.indices where demoCalendarEvents[i].id == e.id { demoCalendarEvents[i] = e }
+    }
+
+    func testSwipingTheMonthViewChangesMonth() async {
+        await openCalendarWithEvents()
+        XCTAssertEqual(monthSwipeStep(deltaY: -60, precise: true), 1, "swipe up: next month")
+        XCTAssertEqual(monthSwipeStep(deltaY: 60, precise: true), -1, "swipe down: previous month")
+        XCTAssertNil(monthSwipeStep(deltaY: -10, precise: true), "a nudge doesn't count")
+        XCTAssertNil(monthSwipeStep(deltaY: -.infinity, precise: true), "one swipe moves one month")
+        XCTAssertEqual(monthSwipeStep(deltaY: 1, precise: false), -1, "a mouse wheel notch counts")
+        store.calView = .month
+        let before = store.calDate
+        store.calStep(1)
+        XCTAssertEqual(Calendar.current.component(.month, from: store.calDate) % 12, (Calendar.current.component(.month, from: before) + 1) % 12)
+        store.calStep(-1)   // Oct 31 → Nov 30 → Oct 30, so compare months, not days
+        XCTAssertEqual(Calendar.current.dateComponents([.year, .month], from: store.calDate), Calendar.current.dateComponents([.year, .month], from: before))
+    }
+
     func testChangingACalendarsColor() async {
         await openCalendarWithEvents()
         let src = store.calSources.first!

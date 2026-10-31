@@ -563,6 +563,7 @@ struct EventDraft: Identifiable {
     var minutes: Int
     var notes: String
     var location = ""
+    var allDay = false               // the whole day of `start`; minutes is ignored
     var account = ""                 // the email's account; its Google Calendar is the default destination
     var people: [Address] = []       // everyone on the email except you, offered as guests
     var timeFromEmail = false        // the start time was found in the email text

@@ -211,6 +211,11 @@ extension AppStore {
         var ev: [String: Any] = ["summary": d.title,
                                  "start": ["dateTime": f.string(from: d.start), "timeZone": tz],
                                  "end": ["dateTime": f.string(from: d.start.addingTimeInterval(Double(d.minutes) * 60)), "timeZone": tz]]
+        if d.allDay {   // Google wants dates, and the end date is the day after
+            let day = { (x: Date) in ISO8601DateFormatter.string(from: x, timeZone: .current, formatOptions: [.withFullDate]) }
+            let start = Calendar.current.startOfDay(for: d.start)
+            ev["start"] = ["date": day(start)]; ev["end"] = ["date": day(Calendar.current.date(byAdding: .day, value: 1, to: start)!)]
+        }
         if !d.location.isEmpty { ev["location"] = d.location }
         if !d.notes.isEmpty { ev["description"] = d.notes }
         if !guests.isEmpty { ev["attendees"] = guests.map { ["email": $0] } }

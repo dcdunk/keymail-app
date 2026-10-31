@@ -88,16 +88,16 @@ struct OutlookCalendar {
     }
 
     /// `notes` nil leaves the description alone.
-    func update(_ e: CalEvent, title: String, start: Date, end: Date, notes: String?) async throws {
+    func update(_ e: CalEvent, title: String, start: Date, end: Date, allDay: Bool, notes: String?) async throws {
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"; f.timeZone = TimeZone(identifier: "UTC")
         // All-day events must start and end at midnight: the local calendar day, written as midnight UTC.
         let day = { (d: Date) -> String in
             let c = Calendar.current.dateComponents([.year, .month, .day], from: d)
             return String(format: "%04d-%02d-%02dT00:00:00", c.year ?? 0, c.month ?? 0, c.day ?? 0)
         }
-        var json: [String: Any] = ["subject": title,
-            "start": ["dateTime": e.allDay ? day(start) : f.string(from: start), "timeZone": "UTC"],
-            "end": ["dateTime": e.allDay ? day(end) : f.string(from: end), "timeZone": "UTC"]]
+        var json: [String: Any] = ["subject": title, "isAllDay": allDay,
+            "start": ["dateTime": allDay ? day(start) : f.string(from: start), "timeZone": "UTC"],
+            "end": ["dateTime": allDay ? day(end) : f.string(from: end), "timeZone": "UTC"]]
         if let notes { json["body"] = ["contentType": "text", "content": notes] }
         try await graph.call("/events/\(Self.eventId(e))", method: "PATCH", json: json)
     }

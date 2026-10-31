@@ -101,6 +101,21 @@ public func dropMirroredCalendars(_ sources: [CalSource], _ events: [CalEvent], 
 }
 
 /// What someone typed into quick add: "Lunch with Priya fri 1pm at Tartine, 45 min".
+/// Month view scrolling: how many months a swipe or wheel turn moves (nil while it's still too small to count).
+/// Content follows your fingers, so scrolling up (negative delta) goes forward. Infinity marks a swipe that already moved.
+public func monthSwipeStep(deltaY: CGFloat, precise: Bool) -> Int? {
+    guard deltaY.isFinite, abs(deltaY) >= (precise ? 40 : 1) else { return nil }
+    return deltaY < 0 ? 1 : -1
+}
+
+/// Turning "All day" on covers the whole day the event starts on; turning it off makes it an hour at 9am that day.
+public func toggledAllDay(start: Date, end: Date, on: Bool, calendar: Calendar = .current) -> (Date, Date) {
+    let day = calendar.startOfDay(for: start)
+    if on { return (day, calendar.date(byAdding: .day, value: 1, to: day)!) }
+    let nine = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: day)!
+    return (nine, nine.addingTimeInterval(3600))
+}
+
 public struct QuickEvent: Equatable, Sendable {
     public var title: String, start: Date, minutes: Int, location: String
     public init(title: String, start: Date, minutes: Int, location: String) {

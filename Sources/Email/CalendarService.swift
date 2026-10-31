@@ -86,11 +86,12 @@ final class CalendarService: ObservableObject {
 
     func remove(_ e: EKEvent) throws { try store.remove(e, span: .thisEvent) }
 
-    func create(title: String, start: Date, minutes: Int, notes: String, location: String, calendar: EKCalendar?) throws {
+    func create(title: String, start: Date, minutes: Int, allDay: Bool = false, notes: String, location: String, calendar: EKCalendar?) throws {
         let e = EKEvent(eventStore: store)
         e.title = title
-        e.startDate = start
-        e.endDate = start.addingTimeInterval(Double(minutes) * 60)
+        e.isAllDay = allDay
+        e.startDate = allDay ? Calendar.current.startOfDay(for: start) : start
+        e.endDate = allDay ? e.startDate : start.addingTimeInterval(Double(minutes) * 60)   // all day: EventKit counts the end day itself
         e.notes = notes.isEmpty ? nil : notes
         e.location = location.isEmpty ? nil : location
         e.calendar = calendar ?? store.defaultCalendarForNewEvents

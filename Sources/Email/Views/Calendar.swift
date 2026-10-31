@@ -119,13 +119,18 @@ struct EventSheet: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         DatePicker("", selection: $draft.start, displayedComponents: .date).labelsHidden().fixedSize()
-                        DatePicker("", selection: $draft.start, displayedComponents: .hourAndMinute).labelsHidden().fixedSize()
-                        Text("to \(end.formatted(date: Calendar.current.isDate(end, inSameDayAs: draft.start) ? .omitted : .abbreviated, time: .shortened))")
-                            .foregroundStyle(.secondary)
+                        if !draft.allDay {
+                            DatePicker("", selection: $draft.start, displayedComponents: .hourAndMinute).labelsHidden().fixedSize()
+                            Text("to \(end.formatted(date: Calendar.current.isDate(end, inSameDayAs: draft.start) ? .omitted : .abbreviated, time: .shortened))")
+                                .foregroundStyle(.secondary)
+                        }
+                        Toggle("All day", isOn: $draft.allDay).toggleStyle(.checkbox)
                     }
-                    Picker("", selection: $draft.minutes) {
-                        Text("15m").tag(15); Text("30m").tag(30); Text("45m").tag(45); Text("1h").tag(60); Text("90m").tag(90); Text("2h").tag(120)
-                    }.pickerStyle(.segmented).labelsHidden().frame(maxWidth: 320)
+                    if !draft.allDay {
+                        Picker("", selection: $draft.minutes) {
+                            Text("15m").tag(15); Text("30m").tag(30); Text("45m").tag(45); Text("1h").tag(60); Text("90m").tag(90); Text("2h").tag(120)
+                        }.pickerStyle(.segmented).labelsHidden().frame(maxWidth: 320)
+                    }
                     if draft.timeFromEmail {
                         Label("Time found in the email", systemImage: "sparkles").font(.scaled(.caption)).foregroundStyle(Theme.accent)
                     }
@@ -243,7 +248,7 @@ struct EventSheet: View {
             do {
                 let cal = macCalendars.first { "mac:" + $0.calendarIdentifier == destination }
                 let names = draft.people.map(\.formatted).joined(separator: ", ")
-                try store.calendar.create(title: draft.title, start: draft.start, minutes: draft.minutes,
+                try store.calendar.create(title: draft.title, start: draft.start, minutes: draft.minutes, allDay: draft.allDay,
                                           notes: draft.notes + (names.isEmpty ? "" : "\nWith: \(names)"), location: draft.location, calendar: cal)
                 store.banner = "Added \"\(draft.title)\" to \(cal?.title ?? "your calendar")."
                 dismiss()

@@ -431,6 +431,9 @@ struct EventCard: View {
 
 struct MonthGrid: View {
     @EnvironmentObject var store: AppStore
+    @State private var hovering = false
+    @State private var monitor: Any?
+    @State private var swipe: CGFloat = 0      // how far this trackpad swipe has gone; one swipe moves one month
     var body: some View {
         // Its own six weeks, never store.calDays: while switching to week or day view this grid can draw one last
         // time with the new, shorter list, and indexing six rows into it crashed.
@@ -458,6 +461,23 @@ struct MonthGrid: View {
             }
         }
         .padding(.horizontal, 20).padding(.bottom, 16)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .onAppear {
+            // Swipe up for the next month, down for the previous one (a mouse wheel moves a month per notch).
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { e in
+                guard hovering else { return e }
+                if e.phase == .began { swipe = 0 }
+                if e.momentumPhase != [] { return nil }       // the coast after lifting your fingers isn't another swipe
+                swipe += e.scrollingDeltaY
+                if let n = monthSwipeStep(deltaY: swipe, precise: e.hasPreciseScrollingDeltas) {
+                    store.calStep(n); swipe = e.hasPreciseScrollingDeltas ? .infinity * (swipe < 0 ? -1 : 1) : 0
+                }
+                if e.phase == .ended || e.phase == .cancelled { swipe = 0 }
+                return nil
+            }
+        }
+        .onDisappear { if let monitor { NSEvent.removeMonitor(monitor) }; monitor = nil }
     }
 }
 
@@ -858,6 +878,7 @@ struct EventEditor: View {
     @State private var start: Date
     @State private var end: Date
     @State private var notes: String
+    @State private var allDay: Bool
     @FocusState private var titleFocused: Bool
 
     // Filled in before the view exists: setting them on appear counted as "you moved the start" and dragged the end along.
@@ -865,6 +886,7 @@ struct EventEditor: View {
         self.event = event
         _title = State(initialValue: event.title); _start = State(initialValue: event.start)
         _end = State(initialValue: event.end); _notes = State(initialValue: event.notes)
+        _allDay = State(initialValue: event.allDay)
     }
 
     var body: some View {
@@ -875,10 +897,16 @@ struct EventEditor: View {
                 .focused($titleFocused).onSubmit(save).onExitCommand { store.calEditing = nil }
             HStack(spacing: 8) {
                 Image(systemName: "clock").font(.scaled(size: 13)).foregroundStyle(.secondary).frame(width: 16)
-                DatePicker("", selection: $start, displayedComponents: event.allDay ? [.date] : [.date, .hourAndMinute]).labelsHidden()
+                DatePicker("", selection: $start, displayedComponents: allDay ? [.date] : [.date, .hourAndMinute]).labelsHidden()
                     .onChange(of: start) { old, new in end = end.addingTimeInterval(new.timeIntervalSince(old)) }   // keeps the length
+                Toggle("All day", isOn: $allDay).toggleStyle(.checkbox)
+                    .onChange(of: allDay) { _, on in
+                        // The start's onChange will shift the end by however far the start moves; pre-undo that.
+                        let (s, e) = toggledAllDay(start: start, end: end, on: on)
+                        end = e.addingTimeInterval(-s.timeIntervalSince(start)); start = s
+                    }
             }
-            if !event.allDay {
+            if !allDay {
                 HStack(spacing: 8) {
                     Text("to").font(.scaled(.callout)).foregroundStyle(.secondary).frame(width: 16)
                     DatePicker("", selection: $end, in: start.addingTimeInterval(300)..., displayedComponents: [.hourAndMinute]).labelsHidden()
@@ -900,7 +928,7 @@ struct EventEditor: View {
     }
 
     func save() {
-        store.updateEvent(event, title: title, start: start, end: end, notes: notes)
+        store.updateEvent(event, title: title, start: start, end: end, notes: notes, allDay: allDay)
         store.calEditing = nil
     }
 }

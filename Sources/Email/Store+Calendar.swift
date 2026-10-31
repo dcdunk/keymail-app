@@ -256,10 +256,12 @@ extension AppStore {
     }
 
     /// Saves edits made in the event card (title, time, notes) to wherever the event lives.
-    func updateEvent(_ e: CalEvent, title: String, start: Date, end: Date, notes: String) {
+    /// All-day events run from the start of their first day to the start of the day after their last (end is exclusive).
+    func updateEvent(_ e: CalEvent, title: String, start: Date, end: Date, notes: String, allDay: Bool? = nil) {
         let title = title.trimmingCharacters(in: .whitespaces).isEmpty ? e.title : title
+        let allDay = allDay ?? e.allDay
         guard e.editable, end > start else { banner = "The end has to be after the start."; return }
-        func apply(_ x: inout CalEvent) { x.title = title; x.start = start; x.end = end; x.notes = notes }
+        func apply(_ x: inout CalEvent) { x.title = title; x.start = start; x.end = end; x.notes = notes; x.allDay = allDay }
         for i in calEvents.indices where calEvents[i].id == e.id { apply(&calEvents[i]) }
         if AppFlavor.isTesting || AppFlavor.isDemo {
             for i in demoCalendarEvents.indices where demoCalendarEvents[i].id == e.id { apply(&demoCalendarEvents[i]) }
@@ -272,7 +274,7 @@ extension AppStore {
                     let f = ISO8601DateFormatter(), tz = TimeZone.current.identifier
                     var json: [String: Any] = ["summary": title]
                     // All-day events keep dates, not times (a dateTime turned them into midnight-to-midnight meetings).
-                    if e.allDay {
+                    if allDay {
                         let day = { (d: Date) in ISO8601DateFormatter.string(from: d, timeZone: .current, formatOptions: [.withFullDate]) }
                         json["start"] = ["date": day(start)]; json["end"] = ["date": day(end)]
                     } else {
@@ -284,9 +286,13 @@ extension AppStore {
                     // Only send the description if you changed it: Keymail only has Outlook's short plain-text preview,
                     // and sending it back replaced the full agenda and Teams link for every attendee.
                     try await OutlookCalendar(account: outlookAccount(e.calendarId), auth: microsoft)
-                        .update(e, title: title, start: start, end: end, notes: notes == e.notes ? nil : notes)
+                        .update(e, title: title, start: start, end: end, allDay: allDay, notes: notes == e.notes ? nil : notes)
                 } else {
-                    try calendar.update(e.id) { $0.title = title; $0.startDate = start; $0.endDate = end; $0.notes = notes.isEmpty ? nil : notes }
+                    try calendar.update(e.id) {
+                        $0.title = title; $0.isAllDay = allDay; $0.startDate = start
+                        $0.endDate = allDay ? end.addingTimeInterval(-1) : end   // EventKit's all-day end is inside the last day
+                        $0.notes = notes.isEmpty ? nil : notes
+                    }
                 }
                 banner = "Saved \"\(title)\"."
             } catch let err as HTTPError where err.needsMorePermission { banner = "Keymail needs your OK to change this calendar. Settings → Calendar." }
