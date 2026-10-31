@@ -429,8 +429,8 @@ struct EventCard: View {
 
 // MARK: Month
 
-/// Weeks in one long column you scroll through smoothly, like the Calendar app: it settles with a month's first
-/// week at the top, and the header follows whichever month is on top.
+/// Weeks in one long column you scroll through smoothly, like the Calendar app: it stops wherever you stop, lined up
+/// on a week, and the header follows whichever month is on top. The arrows and T glide to a month's first week.
 struct MonthGrid: View {
     @EnvironmentObject var store: AppStore
     @State private var top: Int?               // the week row at the top (rows count weeks from `base`)
@@ -474,7 +474,7 @@ struct MonthGrid: View {
                 }
                 .scrollIndicators(.never)
                 .scrollPosition(id: $top, anchor: .top)
-                .scrollTargetBehavior(MonthSnap(rowHeight: rowH, base: base, calendar: cal))
+                .scrollTargetBehavior(WeekSnap(rowHeight: rowH))
             }
         }
         .padding(.horizontal, 20).padding(.bottom, 16)
@@ -496,13 +496,13 @@ struct MonthGrid: View {
     }
 }
 
-/// Where a scroll comes to rest: the nearest week that starts a month.
-struct MonthSnap: ScrollTargetBehavior {
-    let rowHeight: CGFloat, base: Date, calendar: Calendar
+/// Where a scroll comes to rest: the nearest week, so a short swipe stays put instead of springing back.
+/// (Snapping to whole months pulled anything under half a month back to where it started.)
+struct WeekSnap: ScrollTargetBehavior {
+    let rowHeight: CGFloat
     func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
         guard rowHeight > 0 else { return }
-        let row = Int((target.rect.minY / rowHeight).rounded()) - MonthGrid.span
-        target.rect.origin.y = CGFloat(nearestMonthRow(to: row, base: base, calendar: calendar) + MonthGrid.span) * rowHeight
+        target.rect.origin.y = (target.rect.minY / rowHeight).rounded() * rowHeight
     }
 }
 

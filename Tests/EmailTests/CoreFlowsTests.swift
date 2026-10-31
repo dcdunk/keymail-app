@@ -965,16 +965,13 @@ extension CoreFlowsTests {
         for i in demoCalendarEvents.indices where demoCalendarEvents[i].id == e.id { demoCalendarEvents[i] = e }
     }
 
-    func testMonthViewScrollsAndSettlesOnAMonth() async {
+    func testMonthViewScrollsToEachMonth() async {
         await openCalendarWithEvents()
         var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "America/Los_Angeles")!; cal.firstWeekday = 1
         let base = cal.date(from: DateComponents(year: 2026, month: 10, day: 25))!            // a Sunday
         let nov = monthRow(for: cal.date(from: DateComponents(year: 2026, month: 11, day: 18))!, base: base, calendar: cal)
         XCTAssertEqual(nov, 1, "November starts in the week of Nov 1 (row 1), across the clock change")
         XCTAssertEqual(monthRow(for: cal.date(from: DateComponents(year: 2026, month: 12, day: 5))!, base: base, calendar: cal), 5, "December: week of Nov 29")
-        XCTAssertEqual(nearestMonthRow(to: 2, base: base, calendar: cal), 1, "a scroll that stops just past a month's start settles back on it")
-        XCTAssertEqual(nearestMonthRow(to: 4, base: base, calendar: cal), 5, "and one near the next month settles on that")
-        XCTAssertEqual(nearestMonthRow(to: 5, base: base, calendar: cal), 5)
         store.calView = .month
         let before = store.calDate
         store.calStep(1)

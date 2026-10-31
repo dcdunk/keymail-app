@@ -114,17 +114,6 @@ public func monthRow(for date: Date, base: Date, calendar: Calendar = .current) 
     return Int((week.timeIntervalSince(base) / (7 * 86400)).rounded())   // rounded: a clock change makes one week an hour short
 }
 
-/// The nearest row that starts a month (the closer one wins; a tie goes forward). Months start every 4 or 5 weeks.
-public func nearestMonthRow(to row: Int, base: Date, calendar: Calendar = .current) -> Int {
-    for d in 0...3 {
-        for r in [row + d, row - d] {
-            let last = calendar.date(byAdding: .day, value: 6, to: weekRowStart(r, base: base, calendar: calendar))!
-            if calendar.component(.day, from: last) <= 7 { return r }   // the week's last day is in the first 7: it holds a 1st
-        }
-    }
-    return row
-}
-
 /// Turning "All day" on covers the whole day the event starts on; turning it off makes it an hour at 9am that day.
 public func toggledAllDay(start: Date, end: Date, on: Bool, calendar: Calendar = .current) -> (Date, Date) {
     let day = calendar.startOfDay(for: start)
