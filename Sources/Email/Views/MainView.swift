@@ -151,6 +151,7 @@ struct Header: View {
             Button { store.openSettings() } label: { Image(systemName: "gearshape").frame(width: 34, height: 34).contentShape(Circle()) }
                 .buttonStyle(.plain).foregroundStyle(.secondary).glass(Circle(), interactive: true)
                 .help("Settings (⌘,)")
+            PackagesButton()
             if store.calendarEnabled { ViewSwitchButton(toCalendar: true) }
             AccountCapsule().coachAnchor("palette")
         }
@@ -178,6 +179,28 @@ struct AccountCapsule: View {
         }
         .buttonStyle(.plain).handCursor().fixedSize()
     }
+}
+
+/// Packages (G P), with how many arrive today.
+struct PackagesButton: View {
+    @EnvironmentObject var store: AppStore
+    var body: some View {
+        let today = Self.arrivingToday(store)
+        Button { store.openTool(.packages) } label: {
+            Image(systemName: "shippingbox").font(.scaled(size: 14)).frame(width: 34, height: 34).contentShape(Circle())
+        }
+        .buttonStyle(.plain).foregroundStyle(.secondary).glass(Circle(), interactive: true)
+        .overlay(alignment: .topTrailing) {
+            if today > 0 {
+                Text("\(today)").font(.scaled(size: 9.5, weight: .bold)).foregroundStyle(.white)
+                    .padding(.horizontal, 4).frame(minWidth: 16, minHeight: 16).background(Capsule().fill(Theme.accent))
+                    .offset(x: 9, y: -8).zIndex(1).allowsHitTesting(false)
+            }
+        }
+        .help(today > 0 ? "Packages (G P): \(today) arriving today" : "Packages (G P)")
+        .accessibilityLabel("Packages")
+    }
+    @MainActor static func arrivingToday(_ store: AppStore) -> Int { store.allPackages.filter { !store.arrived($0) && $0.arrivesToday() }.count }
 }
 
 /// Mail ⇄ Calendar. Sits in the same spot in both top bars, so one click flips back and forth.

@@ -64,6 +64,30 @@ extension AppStore {
                 minutesAgo: 4300, labels: ["INBOX", "IMPORTANT"]),
             msg("old", maya, "Offsite photos", "Uploaded the offsite photos to the shared folder. A few good ones of the team dinner.",
                 minutesAgo: 9000, labels: []),
+        ] + demoShipments(msg)
+    }
+
+    /// Shipping emails for Packages (G P), already out of the inbox like most people's are. Dates are written out
+    /// relative to today so the screen always has something arriving today, something late and something delivered.
+    func demoShipments(_ msg: (String, String, String, String, Double, [String], String?, String) -> Message) -> [Message] {
+        let f = DateFormatter(); f.dateFormat = "MM/dd/yyyy"
+        func on(_ days: Int) -> String { f.string(from: Calendar.current.date(byAdding: .day, value: days, to: Date())!) }
+        func ship(_ thread: String, _ from: String, _ subject: String, _ body: String, hoursAgo: Double) -> Message {
+            msg(thread, from, subject, body, hoursAgo * 60, ["CATEGORY_UPDATES"], nil, "")
+        }
+        return [
+            ship("pkg-nike", "Nike <nike@official.nike.com>", "Your order has shipped",
+                 "Order #C01234567890\nUPS tracking number: 1Z999AA10123456784\n\nPegasus Trail 5 × 1\nEstimated delivery: \(on(0))", hoursAgo: 30),
+            ship("pkg-amzn", "\"Amazon.com\" <shipment-tracking@amazon.com>", "Out for delivery: \"USB-C Charging Cable, 2 m\"",
+                 "Your package is out for delivery\nArriving today\nOrder #\n113-4455667-1122334", hoursAgo: 2),
+            ship("pkg-etsy", "Etsy <transaction@etsy.com>", "Your Etsy order shipped!",
+                 "Order #3456789012\nUSPS tracking: 9400 1112 0206 2345 6789 01\n\nCeramic mug set × 1\nEstimated delivery: \(on(3))", hoursAgo: 20),
+            ship("pkg-apple", "Apple Store <shipping_notification@orders.apple.com>", "Your order is on its way",
+                 "Order Number: W1234567890\nFedEx tracking number: 771234567890\n\nAirPods Pro × 1\nExpected delivery: \(on(-2))", hoursAgo: 120),
+            ship("pkg-ikea", "IKEA <noreply@order.ikea.com>", "Thank you for your order",
+                 "Order number: 1234567890\n\nMALM dresser, white × 1\nWe'll email you when it ships.", hoursAgo: 26),
+            ship("pkg-target", "Target <orders@oe.target.com>", "Your order has been delivered",
+                 "Order #902001234567\n\nThrow pillows, set of 2 × 1\nDelivered to your front door.", hoursAgo: 72),
         ]
     }
 

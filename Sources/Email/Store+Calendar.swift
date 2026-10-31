@@ -403,6 +403,7 @@ extension AppStore {
                 closeCalendar(); goFolder(dest); return true
             }
             if ch == "c" { return true }
+            if ch == "p" { openTool(.packages); return true }
         }
         let e = calSelectedEvent
         if let e, e.unanswered, let r = ["y": RSVP.accepted, "?": .tentative, "n": .declined][ch] { answerEvent(e, r); return true }

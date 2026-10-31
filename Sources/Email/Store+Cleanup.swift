@@ -3,7 +3,7 @@ import SwiftUI
 import EmailCore
 
 /// Screens opened from ⌘K that take the inbox's place.
-enum ToolScreen { case cleanup, insights }
+enum ToolScreen { case cleanup, insights, packages }
 
 enum CleanupFilter: String, CaseIterable {
     case most = "Most mail", never = "Never read", newsletters = "Newsletters", kept = "Kept"
@@ -23,7 +23,7 @@ extension AppStore {
 
     func openTool(_ t: ToolScreen) {
         closeCalendar(); threadOpen = false; paletteOpen = false
-        cleanupIndex = 0; cleanupSelected = []; cleanupDone = [:]
+        cleanupIndex = 0; cleanupSelected = []; cleanupDone = [:]; packageIndex = 0
         toolScreen = t
     }
     func closeTool() { toolScreen = nil; cleanupSelected = [] }
@@ -94,15 +94,17 @@ extension AppStore {
         return true
     }
 
-    /// The keyboard on Clean up and Insights. J/K move, X selects, U unsubscribes, E archives, S keeps, Esc goes back.
+    /// The keyboard on Clean up, Insights and Packages. J/K move, X selects, U unsubscribes, E archives, S keeps, Esc goes back.
     func handleToolKey(code: UInt16, ch: String) -> Bool {
         if code == 53 { closeTool(); return true }
         if let g = pendingG, Date().timeIntervalSince(g) < 1.5 {   // G I back to the inbox, G C to the calendar
             pendingG = nil
             if ch == "i" { closeTool(); return true }
             if ch == "c", calendarEnabled { openCalendar(); return true }
+            if ch == "p" { openTool(.packages); return true }
         }
         if ch == "g" { pendingG = Date(); return true }
+        if toolScreen == .packages { return handlePackagesKey(code: code, ch: ch) }
         guard toolScreen == .cleanup else { return false }
         let list = cleanupSenders
         let cur = list.indices.contains(cleanupIndex) ? list[cleanupIndex].email : nil

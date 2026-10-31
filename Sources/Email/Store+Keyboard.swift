@@ -179,6 +179,7 @@ extension AppStore {
             let dest = ["i": "Inbox", "s": "Starred", "t": "Sent", "e": "Done", "h": "Reminders", "d": "Drafts"][ch]
             if let dest { goFolder(dest); return true }
             if ch == "c", calendarEnabled { openCalendar(); return true }
+            if ch == "p" { openTool(.packages); return true }
         }
         switch (code, Hotkeys.resolve(ch)) {
         case (53, _):

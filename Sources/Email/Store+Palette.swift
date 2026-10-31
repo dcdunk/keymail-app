@@ -39,6 +39,17 @@ extension AppStore {
             }
             return list
         }
+        if toolScreen == .packages {
+            list = [Command(title: "Go to Inbox", key: "Esc") { self.closeTool() }]
+            for f in PackageFilter.allCases { list.append(Command(title: "Packages: \(f.rawValue)") { self.packageFilter = f; self.packageIndex = 0 }) }
+            if let p = currentPackage {
+                if p.trackURL != nil { list.append(Command(title: "Track on \(p.carrier?.name ?? p.store)", key: "T") { self.trackPackage(p) }) }
+                if p.tracking != nil { list.append(Command(title: "Copy tracking number", key: "C") { self.copyTracking(p) }) }
+                list.append(Command(title: "Open email", key: "↵") { self.openPackageEmail(p) })
+                list.append(Command(title: state.packagesReceived[p.id] != nil ? "Move back to On the way" : "Mark received", key: "E") { self.toggleReceived(p) })
+            }
+            return list
+        }
         if let t = toolScreen {
             list = [Command(title: "Go to Inbox", key: "Esc") { self.closeTool() },
                     Command(title: t == .cleanup ? "Insights" : "Clean up senders") { self.openTool(t == .cleanup ? .insights : .cleanup) }]
@@ -51,6 +62,7 @@ extension AppStore {
         }
         list.append(Command(title: "Clean up senders") { self.openTool(.cleanup) })
         list.append(Command(title: "Insights") { self.openTool(.insights) })
+        list.append(Command(title: "Packages", key: "G P") { self.openTool(.packages) })
         if calendarEnabled { list.append(Command(title: "Go to Calendar", key: "G C") { self.openCalendar() }) }
         if let c = selected, readyDraft(c) != nil {
             list += [Command(title: "Send ready draft", key: "⌘↵") { self.sendReadyDraft() },

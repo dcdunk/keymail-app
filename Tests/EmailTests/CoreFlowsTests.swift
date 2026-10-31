@@ -11,6 +11,7 @@ import EmailCore
 ///  3. ⌘K puts the cursor straight into the palette's text box.
 ///  4. The calendar: G C / G I and the top-bar button switch views, and every calendar key works.
 ///  5. Clean up senders and Insights open from ⌘K, and their keys work; ready drafts send, edit and go away.
+///  6. Packages opens from ⌘K and G P (from the inbox, the calendar and the other tools), and every Packages key works.
 /// Runs against an isolated store (temp folder, throwaway Keymail key; see AppFlavor.isTesting), never real mail.
 @MainActor
 final class CoreFlowsTests: XCTestCase {
@@ -1012,6 +1013,69 @@ extension CoreFlowsTests {
         XCTAssertTrue(store.state.cleanupKept.contains(sender), "S keeps a sender")
         XCTAssertFalse(store.cleanupSenders.contains { $0.email == sender }, "kept senders leave the list")
         press("\t", code: 48); XCTAssertEqual(store.cleanupFilter, .never, "Tab switches the filter")
+    }
+
+    // MARK: Packages
+
+    func testPackagesOpenFromThePaletteAndGPAndEscGoesBack() {
+        runCommand("Packages"); XCTAssertEqual(store.toolScreen, .packages, "⌘K → Packages")
+        press("\u{1b}", code: 53); XCTAssertNil(store.toolScreen, "Esc goes back to the inbox")
+        press("g", code: 5); press("p", code: 35); XCTAssertEqual(store.toolScreen, .packages, "G P from the inbox")
+        press("c", code: 8); XCTAssertNil(store.composing, "inbox keys don't leak into Packages")
+        press("g", code: 5); press("i", code: 34); XCTAssertNil(store.toolScreen, "G I goes back to the inbox")
+        store.openTool(.cleanup)
+        press("g", code: 5); press("p", code: 35); XCTAssertEqual(store.toolScreen, .packages, "G P from Clean up")
+        press("g", code: 5); press("c", code: 8); XCTAssertTrue(store.calendarOpen, "G C to the calendar")
+        press("g", code: 5); press("p", code: 35)
+        XCTAssertFalse(store.calendarOpen); XCTAssertEqual(store.toolScreen, .packages, "G P from the calendar")
+    }
+
+    func testTopBarPackagesButtonOpensPackagesAndCountsTodaysDeliveries() {
+        XCTAssertEqual(PackagesButton.arrivingToday(store), 2, "the badge counts the two sample packages due today")
+        store.openTool(.packages)       // what the top-bar parcel button runs
+        XCTAssertEqual(store.toolScreen, .packages)
+    }
+
+    func testPackagesListTheSampleShipmentsInTheRightSections() {
+        store.openTool(.packages)
+        let titles = store.packageSections.map(\.title)
+        XCTAssertEqual(titles, ["Arriving today", "Running late", "On the way"], "On the way tab: today, late, the rest")
+        let today = store.packageSections[0].packages.map(\.title)
+        XCTAssertTrue(today.contains("Pegasus Trail 5"), "UPS package due today")
+        XCTAssertTrue(today.contains("USB-C Charging Cable, 2 m"), "Amazon package out for delivery")
+        XCTAssertEqual(store.packageSections[1].packages.first?.carrier, .fedex, "the FedEx package past its date is late")
+        XCTAssertTrue(store.packageSections[2].packages.contains { $0.stage == .ordered }, "ordered but not shipped is on the way")
+        press("\t", code: 48); XCTAssertEqual(store.packageFilter, .delivered, "Tab: Delivered")
+        XCTAssertEqual(store.shownPackages.map(\.title), ["Throw pillows, set of 2"])
+        press("\t", code: 48); XCTAssertEqual(store.packageFilter, .all, "Tab: All")
+        press("\t", code: 48); XCTAssertEqual(store.packageFilter, .active, "Tab wraps around")
+    }
+
+    func testPackagesKeysMoveTrackCopyMarkReceivedAndOpenTheEmail() throws {
+        store.openTool(.packages)
+        let list = store.shownPackages
+        XCTAssertGreaterThan(list.count, 2)
+        press("j", code: 38); XCTAssertEqual(store.currentPackage?.id, list[1].id, "J moves down")
+        press("", code: 125); XCTAssertEqual(store.currentPackage?.id, list[2].id, "↓ moves down")
+        press("k", code: 40); XCTAssertEqual(store.currentPackage?.id, list[1].id, "K moves up")
+        store.packageIndex = try XCTUnwrap(list.firstIndex { $0.carrier == .ups })
+        press("t", code: 17); XCTAssertEqual(store.banner, "Opening UPS tracking in your browser.", "T opens the carrier's page")
+        press("c", code: 8); XCTAssertEqual(store.banner, "Copied the UPS tracking number.", "C copies the tracking number")
+        XCTAssertTrue(store.commands.contains { $0.title == "Track on UPS" }, "⌘K offers Track")
+        XCTAssertTrue(store.commands.contains { $0.title == "Copy tracking number" })
+        let p = try XCTUnwrap(store.currentPackage)
+        press("e", code: 14)
+        XCTAssertNotNil(store.state.packagesReceived[p.id], "E marks it received")
+        XCTAssertFalse(store.shownPackages.contains { $0.id == p.id }, "and it leaves On the way")
+        store.packageFilter = .delivered
+        store.packageIndex = try XCTUnwrap(store.shownPackages.firstIndex { $0.id == p.id }, "it shows under Delivered")
+        press("e", code: 14); XCTAssertNil(store.state.packagesReceived[p.id], "E again undoes it")
+        store.packageFilter = .active
+        store.packageIndex = try XCTUnwrap(store.shownPackages.firstIndex { $0.id == p.id })
+        press("\r", code: 36)
+        XCTAssertNil(store.toolScreen, "Return leaves Packages")
+        XCTAssertTrue(store.threadOpen, "and opens the shipping email")
+        XCTAssertTrue(store.selected?.messages.contains { $0.key == p.latest.messageKey } == true, "the package's own email")
     }
 
     func testReadyDraftSendsEditsAndGoesAway() throws {

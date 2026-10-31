@@ -1,7 +1,7 @@
 import SwiftUI
 import EmailCore
 
-/// Clean up senders and Insights (⌘K). They take the inbox's place, like the calendar does.
+/// Clean up senders, Insights and Packages (⌘K). They take the inbox's place, like the calendar does.
 struct ToolScreenView: View {
     @EnvironmentObject var store: AppStore
     @Environment(\.layout) private var layout
@@ -12,25 +12,31 @@ struct ToolScreenView: View {
             HStack(spacing: 8) {
                 circle("chevron.left", "Back to inbox (Esc)") { store.closeTool() }
                 HStack(spacing: 8) {
-                    Text(screen == .cleanup ? "Clean up" : "Insights").font(.scaled(size: 15, weight: .semibold))
-                    Text(screen == .cleanup ? "\(store.cleanupSenders.count) senders" : "last \(store.insightsDays) days")
+                    Text(["Clean up", "Insights", "Packages"][[ToolScreen.cleanup, .insights, .packages].firstIndex(of: screen)!])
+                        .font(.scaled(size: 15, weight: .semibold))
+                    Text(screen == .cleanup ? "\(store.cleanupSenders.count) senders"
+                         : screen == .packages ? "\(store.packagesOnTheWay) on the way" : "last \(store.insightsDays) days")
                         .font(.scaled(size: 13)).foregroundStyle(.secondary)
                 }
                 .lineLimit(1).fixedSize().padding(.horizontal, 16).padding(.vertical, 8).glass(Capsule())
                 Spacer(minLength: 8)
                 if screen == .cleanup {
                     segmented(CleanupFilter.allCases.map { f in (f.rawValue, f == store.cleanupFilter, { store.cleanupFilter = f; store.cleanupIndex = 0 }) })
+                } else if screen == .packages {
+                    segmented(PackageFilter.allCases.map { f in (f.rawValue, f == store.packageFilter, { store.packageFilter = f; store.packageIndex = 0 }) })
                 } else {
                     segmented([7, 30, 90].map { d in ("\(d) days", d == store.insightsDays, { store.insightsDays = d }) })
                 }
-                circle(screen == .cleanup ? "chart.bar" : "person.2.slash", screen == .cleanup ? "Insights" : "Clean up senders") {
-                    store.openTool(screen == .cleanup ? .insights : .cleanup)
+                if screen != .packages {
+                    circle(screen == .cleanup ? "chart.bar" : "person.2.slash", screen == .cleanup ? "Insights" : "Clean up senders") {
+                        store.openTool(screen == .cleanup ? .insights : .cleanup)
+                    }
                 }
                 AccountCapsule()
             }
             .glassGroup(spacing: 10)
             .padding(.horizontal, layout.margin).padding(.top, 34).padding(.bottom, 12)
-            if screen == .cleanup { CleanupList() } else { InsightsView() }
+            if screen == .cleanup { CleanupList() } else if screen == .packages { PackagesView() } else { InsightsView() }
         }
     }
 
