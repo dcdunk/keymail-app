@@ -31,6 +31,8 @@ struct SettingsPanel: View {
         .init(id: "accounts", title: "Accounts", icon: "person.crop.circle", group: "Accounts", keywords: "add remove google icloud microsoft outlook hotmail alias send as nickname default from"),
         .init(id: "calendar", title: "Calendar", icon: "calendar", group: "Accounts", keywords: "calendar events invites week start meeting google icloud mac default",
               items: ["Calendars", "Show the calendar", "Week starts on", "Days in a week", "Default view", "New events go to", "Calendar colors", "Show my day beside invites"]),
+        .init(id: "packages", title: "Packages", icon: "shippingbox", group: "Accounts", keywords: "packages tracking karrio server live status carrier ups fedex usps dhl delivery shipping",
+              items: ["Tracking server"]),
         .init(id: "gmail", title: "Gmail", icon: "envelope.badge", group: "Accounts", keywords: "out of office vacation auto reply labels signature sync"),
         .init(id: "appearance", title: "Appearance", icon: "textformat.size", group: "Personalize", keywords: "draft compose buttons icons links appearance text font size bigger larger zoom dark light email content opacity glass window card",
               items: ["Inbox layout", "Text size", "Appearance", "Email content", "Draft buttons", "Email buttons", "Show shortcut keys", "Window opacity", "Email card opacity"]),
@@ -187,6 +189,7 @@ struct SettingsPanel: View {
         case "accounts": AccountsSettings()
         case "gmail": GmailSettings()
         case "calendar": CalendarSettings()
+        case "packages": PackagesSettings()
         case "ai": AIProviderSettings()
         case "agents": AgentSettings()
         case "splits": SplitSettingsView(embedded: true)

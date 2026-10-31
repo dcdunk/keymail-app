@@ -146,4 +146,53 @@ final class PackagesTests: XCTestCase {
         XCTAssertFalse(packages(from: [event(ordered)!])[0].probablyDelivered(now: day(2026, 10, 29), calendar: cal),
                        "never guessed for an order that hasn't shipped")
     }
+
+    // MARK: Live status from karrio
+
+    let karrioDelivered = """
+    {"messages": [], "tracking": {"carrier_name": "ups", "tracking_number": "1Z999AA10123456784", "status": "delivered", "delivered": true,
+      "estimated_delivery": "2026-10-31",
+      "events": [{"date": "2026-10-31", "time": "02:14 PM", "description": "Delivered", "location": "SAN DIEGO, CA, US", "status": "delivered"},
+                 {"timestamp": "2026-10-31T08:02:00.000Z", "description": "Out For Delivery Today", "location": "San Diego, CA"},
+                 {"date": "2026-10-30", "description": "  ", "location": null}]}}
+    """
+
+    func testReadsKarriosTrackingAnswer() throws {
+        let l = try XCTUnwrap(parseKarrioTracking(Data(karrioDelivered.utf8), now: thu))
+        XCTAssertTrue(l.delivered); XCTAssertEqual(l.stage, .delivered)
+        XCTAssertEqual(l.events.count, 2, "blank events are dropped")
+        XCTAssertEqual(l.events.first?.text, "Delivered", "newest first")
+        XCTAssertEqual(l.events.first?.place, "SAN DIEGO, CA, US")
+        XCTAssertNotNil(l.eta)
+        XCTAssertNil(parseKarrioTracking(Data("{\"detail\": \"Invalid token.\"}".utf8)), "an error isn't a tracking answer")
+        XCTAssertNil(parseKarrioTracking(Data("not json".utf8)))
+    }
+
+    func testCarrierStatusMapsToStepsAndProblems() {
+        func live(_ s: String) -> LiveTracking { LiveTracking(status: s, delivered: false, eta: nil, events: [], checked: thu) }
+        XCTAssertEqual(live("out_for_delivery").stage, .outForDelivery)
+        XCTAssertEqual(live("in_transit").stage, .shipped)
+        XCTAssertNil(live("pending").stage, "a printed label says nothing yet")
+        XCTAssertEqual(live("delivery_delayed").problem, "Delayed")
+        XCTAssertEqual(live("delivery_failed").problem, "Delivery attempt failed")
+        XCTAssertNil(live("in_transit").problem)
+    }
+
+    func testLiveStatusOverridesTheEmailsAndStopsTheGuessing() throws {
+        let shipped = m("k1", "Shop <orders@shop.example>", "Your order has shipped", "Order #77701\nUPS tracking number: 1Z999AA10123456784\nArriving Monday", at: day(2026, 10, 20))
+        var p = packages(from: [event(shipped)!])[0]
+        XCTAssertTrue(p.probablyDelivered(now: day(2026, 10, 31), calendar: cal), "emails alone: long past due")
+        p.apply(LiveTracking(status: "delivery_delayed", delivered: false, eta: day(2026, 11, 2), events: [], checked: day(2026, 10, 31)))
+        XCTAssertFalse(p.probablyDelivered(now: day(2026, 10, 31), calendar: cal), "the carrier says it's still coming")
+        XCTAssertEqual(p.eta, cal.startOfDay(for: day(2026, 11, 2)), "the carrier's date wins")
+        p.apply(try XCTUnwrap(parseKarrioTracking(Data(karrioDelivered.utf8))))
+        XCTAssertEqual(p.stage, .delivered)
+    }
+
+    func testKarrioPathsUseKarriosCarrierNames() {
+        XCTAssertEqual(karrioTrackingPath(.ups, "1Z999AA10123456784"), "/v1/proxy/tracking/ups/1Z999AA10123456784")
+        XCTAssertEqual(karrioTrackingPath(.dhl, "JD014600003456789012"), "/v1/proxy/tracking/dhl_universal/JD014600003456789012")
+        XCTAssertNil(karrioTrackingPath(.amazon, "TBA305177442900"), "Amazon has no public tracking API")
+        XCTAssertEqual(karrioTrackingPath(.usps, "94/../x"), "/v1/proxy/tracking/usps/94%2F%2E%2E%2Fx", "a number can't change the path")
+    }
 }

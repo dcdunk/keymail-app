@@ -55,7 +55,8 @@ public struct Package: Identifiable, Equatable, Sendable {
     public var order: String?
     public var item: String?
     public var eta: Date?
-    public var updated: Date { events.last?.date ?? .distantPast }
+    public var live: LiveTracking?    // from your tracking server, when you have one
+    public var updated: Date { max(events.last?.date ?? .distantPast, live?.events.first?.date ?? .distantPast) }
     public var latest: ShipEvent { events[events.count - 1] }
     /// What the list shows as its name: the item, or the order number when the email never names it.
     public var title: String { item ?? order.map { "Order \($0)" } ?? "Package from \(store)" }
@@ -74,6 +75,7 @@ public struct Package: Identifiable, Equatable, Sendable {
     /// Due means the expected day, the out-for-delivery day, or a week after shipping when no date was given.
     public func probablyDelivered(now: Date = Date(), calendar cal: Calendar = .current) -> Bool {
         guard stage == .shipped || stage == .outForDelivery else { return false }
+        if let live, !live.delivered { return false }   // the carrier says where it is: no guessing
         let due = stage == .outForDelivery ? updated : eta ?? updated.addingTimeInterval(7 * 86400)
         return cal.startOfDay(for: now) > cal.startOfDay(for: due).addingTimeInterval(3 * 86400)
     }
@@ -240,5 +242,75 @@ public func packages(from events: [ShipEvent]) -> [Package] {
                        carrier: tracked?.carrier ?? evs.last { $0.carrier != nil }?.carrier,
                        tracking: tracked?.tracking, order: evs.last { $0.order != nil }?.order,
                        item: evs.first { $0.item != nil }?.item, eta: evs.last { $0.eta != nil }?.eta)
+    }
+}
+
+// MARK: Live status from your own tracking server (karrio)
+// Optional, and only for you: a karrio server you run (on a home server, over Tailscale) holds your carrier keys.
+// Keymail sends it a carrier and tracking number and gets the carrier's status back. Amazon has no public API.
+
+public struct LiveTracking: Codable, Equatable, Sendable {
+    public struct Event: Codable, Equatable, Sendable {
+        public var date: Date?, text: String, place: String?
+        public init(date: Date?, text: String, place: String?) { self.date = date; self.text = text; self.place = place }
+    }
+    public var status: String          // karrio's status: in_transit, out_for_delivery, delivered, delivery_delayed...
+    public var delivered: Bool
+    public var eta: Date?
+    public var events: [Event]         // newest first
+    public var checked: Date
+
+    /// The step it maps to; nil when the carrier knows nothing yet (a label printed, nothing scanned).
+    public var stage: ShipStage? {
+        if delivered || status == "delivered" { return .delivered }
+        if status == "out_for_delivery" { return .outForDelivery }
+        return ["pending", "unknown", "cancelled", ""].contains(status) ? nil : .shipped
+    }
+    /// Something you'd want to know beyond the step.
+    public var problem: String? {
+        ["delivery_delayed": "Delayed", "on_hold": "On hold", "delivery_failed": "Delivery attempt failed",
+         "return_to_sender": "Returning to sender", "ready_for_pickup": "Ready for pickup", "cancelled": "Cancelled"][status]
+    }
+}
+
+extension Carrier {
+    /// karrio's name for the carrier. DHL's JD… numbers are DHL eCommerce, which karrio reads through DHL's unified API.
+    public var karrioName: String? { ["ups": "ups", "fedex": "fedex", "usps": "usps", "dhl": "dhl_universal"][rawValue] }
+}
+
+public func karrioTrackingPath(_ carrier: Carrier, _ number: String) -> String? {
+    guard let name = carrier.karrioName, let n = number.addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
+    return "/v1/proxy/tracking/\(name)/\(n)"
+}
+
+/// Reads karrio's answer (`{"tracking": {...}}`, or the tracker itself). nil when it isn't one.
+public func parseKarrioTracking(_ data: Data, now: Date = Date()) -> LiveTracking? {
+    guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+    let t = root["tracking"] as? [String: Any] ?? root
+    guard t["tracking_number"] != nil || t["status"] != nil else { return nil }
+    let iso = ISO8601DateFormatter(), isoFrac = ISO8601DateFormatter(); isoFrac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    let day = DateFormatter(); day.locale = Locale(identifier: "en_US_POSIX"); day.dateFormat = "yyyy-MM-dd"
+    let dayTime = DateFormatter(); dayTime.locale = day.locale; dayTime.dateFormat = "yyyy-MM-dd hh:mm a"
+    func date(_ s: Any?) -> Date? {
+        guard let s = s as? String, !s.isEmpty else { return nil }
+        return isoFrac.date(from: s) ?? iso.date(from: s) ?? day.date(from: String(s.prefix(10)))
+    }
+    let events = (t["events"] as? [[String: Any]] ?? []).compactMap { e -> LiveTracking.Event? in
+        guard let text = (e["description"] as? String)?.trimmingCharacters(in: .whitespaces), !text.isEmpty else { return nil }
+        let when = date(e["timestamp"]) ?? (e["date"] as? String).flatMap { d in (e["time"] as? String).flatMap { dayTime.date(from: d + " " + $0) } ?? day.date(from: d) }
+        let place = (e["location"] as? String).flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
+        return LiveTracking.Event(date: when, text: text, place: place)
+    }.sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
+    let info = t["info"] as? [String: Any]
+    return LiveTracking(status: t["status"] as? String ?? "unknown", delivered: t["delivered"] as? Bool ?? false,
+                        eta: date(t["estimated_delivery"]) ?? date(info?["expected_delivery"]), events: events, checked: now)
+}
+
+extension Package {
+    /// The carrier's word wins over the emails: its step when further along, its delivery date when it gives one.
+    public mutating func apply(_ l: LiveTracking) {
+        live = l
+        if let s = l.stage, s > stage { stage = s }
+        if let eta = l.eta { self.eta = Calendar.current.startOfDay(for: eta) }
     }
 }

@@ -25,6 +25,7 @@ extension AppStore {
         closeCalendar(); threadOpen = false; paletteOpen = false
         cleanupIndex = 0; cleanupSelected = []; cleanupDone = [:]; packageIndex = 0
         toolScreen = t
+        if t == .packages { Task { await refreshLiveTracking() } }
     }
     func closeTool() { toolScreen = nil; cleanupSelected = [] }
 

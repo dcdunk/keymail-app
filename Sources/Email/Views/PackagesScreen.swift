@@ -59,12 +59,13 @@ struct PackagesView: View {
 
 /// Green when delivered, orange when late, the app's blue otherwise.
 func packageColor(_ p: Package) -> Color {
-    p.stage == .delivered ? .green : p.probablyDelivered() ? .secondary : p.isLate() ? .orange : Theme.accent
+    p.stage == .delivered ? .green : p.probablyDelivered() ? .secondary : p.isLate() || p.live?.problem != nil ? .orange : Theme.accent
 }
 
 @MainActor func packageStatus(_ p: Package, store: AppStore) -> String {
     if p.stage == .delivered { return store.state.packagesReceived[p.id] != nil ? "Received" : "Delivered" }
     if p.probablyDelivered() { return "Probably delivered" }
+    if let problem = p.live?.problem { return problem }
     return p.isLate() ? "Running late" : p.stage.label
 }
 
@@ -193,6 +194,19 @@ struct PackageDetail: View {
                         .padding(.bottom, 8)
                     ForEach([ShipStage.ordered, .shipped, .outForDelivery, .delivered], id: \.self) { s in step(s, color: color, received: received) }
                 }
+                if let live = p.live, !live.events.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("From \(p.carrier?.name ?? "the carrier")").textCase(.uppercase).tracking(0.6)
+                            .font(.scaled(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                        ForEach(Array(live.events.prefix(6).enumerated()), id: \.offset) { _, e in
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(e.text).font(.scaled(size: 12.5)).fixedSize(horizontal: false, vertical: true)
+                                Text([e.date.map { $0.formatted(date: .abbreviated, time: .shortened) }, e.place].compactMap { $0 }.joined(separator: " · "))
+                                    .font(.scaled(size: 11.5)).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
                 Divider()
                 Text(freshness).font(.scaled(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
@@ -204,6 +218,7 @@ struct PackageDetail: View {
     var headline: String {
         if p.stage == .delivered { return store.state.packagesReceived[p.id] != nil ? "Received" : "Delivered" }
         if p.probablyDelivered() { return "Probably delivered" }
+        if let problem = p.live?.problem { return problem }
         if p.isLate() { return "Running late" }
         if p.arrivesToday() { return "Arriving today" }
         return p.stage == .ordered ? "Ordered" : "On the way"
@@ -220,6 +235,9 @@ struct PackageDetail: View {
     }
 
     var freshness: String {
+        if let live = p.live, let c = p.carrier {
+            return "Live from \(c.name) through your tracking server, checked \(live.checked.formatted(date: .omitted, time: .shortened))."
+        }
         var s = "From \(p.store)'s emails. Last update \(p.updated.formatted(date: .abbreviated, time: .shortened))."
         if p.stage < .delivered, let c = p.carrier, p.tracking != nil { s += " For live status, open \(c.name)'s page." }
         return s

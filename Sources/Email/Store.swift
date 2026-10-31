@@ -71,6 +71,7 @@ struct SavedState: Codable {
     var readyDrafts: [String: ReadyDraft] = [:] // conversation id → reply written ahead of time
     var cleanupKept: [String] = []             // senders Clean up no longer lists ("Keep")
     var packagesReceived: [String: Date] = [:] // package id → when you marked it received (no "delivered" email came)
+    var packageLive: [String: LiveTracking] = [:] // tracking number → what your tracking server last said
 
     init() {}
     /// Tolerates missing keys so adding a setting never wipes your accounts and splits.
@@ -102,7 +103,7 @@ struct SavedState: Codable {
         microsoft = v(.microsoft, base.microsoft)
         eventLinks = v(.eventLinks, base.eventLinks)
         readyDrafts = v(.readyDrafts, base.readyDrafts); cleanupKept = v(.cleanupKept, base.cleanupKept)
-        packagesReceived = v(.packagesReceived, base.packagesReceived)
+        packagesReceived = v(.packagesReceived, base.packagesReceived); packageLive = v(.packageLive, base.packageLive)
         // "Needs reply" first shipped without "also in the inbox", which hid drafted emails from Important/Other.
         for i in splits.indices where splits[i].query == "is:drafted" { splits[i].alsoInMain = true }
         // Accounts connected during the sign-in preview join the inbox now that mail reading exists.
@@ -309,6 +310,10 @@ final class AppStore: ObservableObject {
     @Published var packageIndex = 0
     var packageCache: [Package]?                     // cleared with the other caches when mail changes
     var shipCache: [String: ShipEvent?] = [:]        // message key + labels → what it says about a delivery
+    var liveChecking = false                         // a tracking-server check is running
+    @Published var trackingServerNote: String?       // the last check's outcome, for Settings → Packages
+    /// How Keymail calls your tracking server. Tests swap in a fake; nothing else does.
+    var liveFetch: (URLRequest) async throws -> (Data, URLResponse) = { try await URLSession.shared.data(for: $0) }
     @Published var draftsWriting: Set<String> = []  // conversation ids whose ready draft is being written
     @Published var calDate = Date()                  // the day the view is built around
     @Published var calEvents: [CalEvent] = []        // what the current view shows
