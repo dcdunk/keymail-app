@@ -436,6 +436,8 @@ struct MonthGrid: View {
     @State private var top: Int?               // the week row at the top (rows count weeks from `base`)
     @State private var scrolledTo: Date?       // the month the scrolling itself picked, so it isn't scrolled to again
     @State private var reload: Task<Void, Never>?
+    @State private var scrolling = false       // big month names show on the weeks while you scroll, then fade
+    @State private var settle: Task<Void, Never>?
     static let span = 1040                     // 20 years each way
 
     var cal: Calendar { var c = Calendar.current; c.firstWeekday = store.calMondayFirst ? 2 : 1; return c }
@@ -468,6 +470,16 @@ struct MonthGrid: View {
                                 }
                             }
                             .frame(height: rowH)
+                            .overlay(alignment: .leading) {
+                                // The week holding a 1st gets that month's name, like the Calendar app.
+                                let last = cal.date(byAdding: .day, value: 6, to: start)!
+                                if cal.component(.day, from: last) <= 7 {
+                                    Text(last.formatted(.dateTime.month(.wide).year())).font(.scaled(size: 26, weight: .bold))
+                                        .shadow(color: .black.opacity(0.35), radius: 6)
+                                        .padding(.leading, 8).allowsHitTesting(false)
+                                        .opacity(scrolling ? 1 : 0)
+                                }
+                            }
                         }
                     }
                     .scrollTargetLayout()
@@ -481,6 +493,12 @@ struct MonthGrid: View {
         .onAppear { top = monthRow(for: store.calDate, base: base, calendar: cal) }
         .onChange(of: top) { _, row in
             guard let row else { return }
+            if !scrolling { withAnimation(.easeOut(duration: 0.15)) { scrolling = true } }
+            settle?.cancel()
+            settle = Task {
+                try? await Task.sleep(for: .milliseconds(700))
+                if !Task.isCancelled { withAnimation(.easeInOut(duration: 0.6)) { scrolling = false } }
+            }
             // The month on top is the one whose last day of that week falls in it (a week holding the 1st belongs to the new month).
             let shown = cal.dateInterval(of: .month, for: cal.date(byAdding: .day, value: 6, to: weekRowStart(row, base: base, calendar: cal))!)!.start
             guard !cal.isDate(shown, equalTo: store.calDate, toGranularity: .month) else { return }
