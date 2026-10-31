@@ -448,6 +448,9 @@ struct EmailWebView: NSViewRepresentable {
         \(darkCSS)
         body { padding: \(padding); font: 15px -apple-system, Helvetica, sans-serif; line-height: 1.45; overflow-wrap: anywhere; }
         img { max-width: 100%; }
+        /* In a table cell a percentage max-width lets a neighbouring width="100%" cell squeeze the picture to nothing
+           (a sender's logo banner vanished). Cap those by the window instead: 40px covers the widest page padding. */
+        td img { max-width: calc(100vw - 40px); }
         /* Many templates set html/body to height:100%, which pins the measured height to the view's starting size
            and cuts the email off. Higher specificity than a sender's own !important rule on plain html/body. */
         html:root, html:root > body { height: auto !important; min-height: 0 !important; max-height: none !important; }
