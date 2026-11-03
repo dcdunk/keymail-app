@@ -72,6 +72,10 @@ struct SavedState: Codable {
     var cleanupKept: [String] = []             // senders Clean up no longer lists ("Keep")
     var packagesReceived: [String: Date] = [:] // package id → when you marked it received (no "delivered" email came)
     var packageLive: [String: LiveTracking] = [:] // tracking number → what your tracking server last said
+    var packagesAdded: [String: Date] = [:]       // packages you added yourself: id → when
+    var packageFindings: [String: PackageFinding] = [:] // package id → what AI found in its emails
+    var packageAIRead: Set<String> = []           // message keys AI has read, so each goes once
+    var packageEdits: [String: PackageEdit] = [:] // package id → what you changed (also holds what you typed for your own)
 
     init() {}
     /// Tolerates missing keys so adding a setting never wipes your accounts and splits.
@@ -104,6 +108,8 @@ struct SavedState: Codable {
         eventLinks = v(.eventLinks, base.eventLinks)
         readyDrafts = v(.readyDrafts, base.readyDrafts); cleanupKept = v(.cleanupKept, base.cleanupKept)
         packagesReceived = v(.packagesReceived, base.packagesReceived); packageLive = v(.packageLive, base.packageLive)
+        packagesAdded = v(.packagesAdded, base.packagesAdded); packageEdits = v(.packageEdits, base.packageEdits)
+        packageFindings = v(.packageFindings, base.packageFindings); packageAIRead = v(.packageAIRead, base.packageAIRead)
         // "Needs reply" first shipped without "also in the inbox", which hid drafted emails from Important/Other.
         for i in splits.indices where splits[i].query == "is:drafted" { splits[i].alsoInMain = true }
         // Accounts connected during the sign-in preview join the inbox now that mail reading exists.
@@ -308,12 +314,15 @@ final class AppStore: ObservableObject {
     @Published var insightsDays = 30
     @Published var packageFilter = PackageFilter.active
     @Published var packageIndex = 0
+    @Published var packageForm: PackageForm?         // the add / edit card
+    @Published var packagesRefreshing = false
     var packageCache: [Package]?                     // cleared with the other caches when mail changes
     var shipCache: [String: ShipEvent?] = [:]        // message key + labels → what it says about a delivery
     var liveChecking = false                         // a tracking-server check is running
     @Published var trackingServerNote: String?       // the last check's outcome, for Settings → Packages
     /// How Keymail calls your tracking server. Tests swap in a fake; nothing else does.
     var liveFetch: (URLRequest) async throws -> (Data, URLResponse) = { try await URLSession.shared.data(for: $0) }
+    var packageAIRun: ((String) async throws -> String)?   // tests only; otherwise your AI provider
     @Published var draftsWriting: Set<String> = []  // conversation ids whose ready draft is being written
     @Published var calDate = Date()                  // the day the view is built around
     @Published var calEvents: [CalEvent] = []        // what the current view shows

@@ -12,7 +12,7 @@ struct PackagesView: View {
             HStack(alignment: .top, spacing: 12) {
                 if shown.isEmpty {
                     Text(store.packageFilter == .delivered ? "Nothing delivered in the last 14 days."
-                         : "No packages on the way. They show up here when a store or carrier emails that something shipped.")
+                         : "No packages on the way. They show up here when a store or carrier emails that something shipped. Press N to add one yourself.")
                         .multilineTextAlignment(.center).foregroundStyle(.secondary).padding(40)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -45,9 +45,12 @@ struct PackagesView: View {
             HStack(spacing: 14) {
                 HStack(spacing: 4) { KeyHint("J"); KeyHint("K"); Text("move") }
                 HStack(spacing: 4) { KeyHint("↵"); Text("open email") }
-                HStack(spacing: 4) { KeyHint("T"); Text("track on carrier site") }
-                HStack(spacing: 4) { KeyHint("C"); Text("copy tracking number") }
+                HStack(spacing: 4) { KeyHint("T"); Text("track") }
+                HStack(spacing: 4) { KeyHint("C"); Text("copy number") }
                 HStack(spacing: 4) { KeyHint("E"); Text("mark received") }
+                HStack(spacing: 4) { KeyHint("I"); Text("edit") }
+                HStack(spacing: 4) { KeyHint("N"); Text("add") }
+                HStack(spacing: 4) { KeyHint("R"); Text("refresh") }
                 HStack(spacing: 4) { KeyHint("Tab"); Text("next tab") }
                 Spacer()
             }
@@ -59,19 +62,19 @@ struct PackagesView: View {
 
 /// Green when delivered, orange when late, the app's blue otherwise.
 func packageColor(_ p: Package) -> Color {
-    p.stage == .delivered ? .green : p.probablyDelivered() ? .secondary : p.isLate() || p.live?.problem != nil ? .orange : Theme.accent
+    p.stage == .delivered ? .green : p.probablyDelivered() ? .secondary : p.isLate() || p.issue != nil ? .orange : Theme.accent
 }
 
 @MainActor func packageStatus(_ p: Package, store: AppStore) -> String {
     if p.stage == .delivered { return store.state.packagesReceived[p.id] != nil ? "Received" : "Delivered" }
     if p.probablyDelivered() { return "Probably delivered" }
-    if let problem = p.live?.problem { return problem }
+    if let issue = p.issue { return issue }
     return p.isLate() ? "Running late" : p.stage.label
 }
 
 /// Next to the store's name when no carrier is known.
 func noCarrierNote(_ p: Package) -> String {
-    p.stage == .ordered ? "not shipped yet" : p.isAmazon ? "tracked on Amazon" : "no tracking number"
+    p.tracking != nil ? "other carrier" : p.stage == .ordered ? "not shipped yet" : p.isAmazon ? "tracked on Amazon" : "no tracking number"
 }
 
 /// "Today", "Tomorrow", "Mon, Nov 3".
@@ -91,12 +94,11 @@ struct PackageRow: View {
     var body: some View {
         let color = packageColor(p)
         HStack(spacing: 14) {
-            Avatar(address: Address(name: p.store, email: p.storeEmail), size: 34)
+            Avatar(address: packageAvatar(p), size: 34)
             VStack(alignment: .leading, spacing: 2) {
                 Text(p.title).font(.scaled(size: 14, weight: .semibold)).lineLimit(1)
                 HStack(spacing: 5) {
-                    Text(p.store).lineLimit(1)
-                    Text("·")
+                    if !p.store.isEmpty { Text(p.store).lineLimit(1); Text("·") }
                     if let c = p.carrier { CarrierLogo(carrier: c, height: 15); Text(c.name) } else { Text(noCarrierNote(p)) }
                 }
                 .font(.scaled(.caption)).foregroundStyle(.secondary)
@@ -128,12 +130,13 @@ struct PackageRow: View {
                 HStack(spacing: 2) {
                     if p.trackURL != nil { quick("arrow.up.right.square", "Track (T)") { store.trackPackage(p) } }
                     if p.tracking != nil { quick("doc.on.doc", "Copy tracking number (C)") { store.copyTracking(p) } }
-                    quick("envelope", "Open email (↵)") { store.openPackageEmail(p) }
+                    if !p.isManual { quick("envelope", "Open email (↵)") { store.openPackageEmail(p) } }
+                    quick("pencil", "Edit (I)") { store.editPackage(p) }
                     if p.stage < .delivered { quick("checkmark", "Mark received (E)") { store.toggleReceived(p) } }
                 }
                 .opacity(hovering ? 1 : 0)
             }
-            .frame(width: 120, alignment: .trailing)
+            .frame(width: 146, alignment: .trailing)
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
         .opacity(p.stage == .delivered && !current ? 0.7 : 1)
@@ -158,21 +161,24 @@ struct PackageDetail: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(spacing: 10) {
-                    Avatar(address: Address(name: p.store, email: p.storeEmail), size: 40)
+                    Avatar(address: packageAvatar(p), size: 40)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(p.title).font(.scaled(size: 14, weight: .semibold)).lineLimit(2)
-                        Text("Ordered from \(p.store)").font(.scaled(.caption)).foregroundStyle(.secondary)
+                        Text(p.store.isEmpty ? "Added by you" : "Ordered from \(p.store)").font(.scaled(.caption)).foregroundStyle(.secondary)
                     }
+                    Spacer(minLength: 4)
+                    Button { store.editPackage(p) } label: { Image(systemName: "pencil").frame(width: 26, height: 26).contentShape(Rectangle()) }
+                        .buttonStyle(ToolStyle()).help("Edit (I)").accessibilityLabel("Edit")
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(headline).font(.scaled(size: 21, weight: .bold)).foregroundStyle(color)
                     Text(subline).font(.scaled(size: 13)).foregroundStyle(.secondary)
                 }
-                if let c = p.carrier, let t = p.tracking {
+                if let t = p.tracking {
                     HStack(spacing: 10) {
-                        CarrierLogo(carrier: c, height: 22)
+                        if let c = p.carrier { CarrierLogo(carrier: c, height: 22) }
                         VStack(alignment: .leading, spacing: 1) {
-                            Text("\(c.name) tracking").font(.scaled(size: 11)).foregroundStyle(.secondary)
+                            Text("\(p.carrier?.name ?? "Other carrier") tracking").font(.scaled(size: 11)).foregroundStyle(.secondary)
                             Text(t).font(.system(size: 12, design: .monospaced)).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
                         }
                         Spacer(minLength: 4)
@@ -180,8 +186,9 @@ struct PackageDetail: View {
                     }
                     .padding(.horizontal, 10).padding(.vertical, 8)
                     .background(RoundedRectangle(cornerRadius: 9).fill(Color.primary.opacity(0.05)))
-                } else if p.tracking == nil {
-                    Text(p.stage == .ordered ? "The tracking number shows here once \(p.store) emails that it shipped."
+                } else {
+                    Text(p.isManual ? "No tracking number yet. Press I to add one."
+                         : p.stage == .ordered ? "The tracking number shows here once \(p.store) emails that it shipped."
                          : p.isAmazon ? "Amazon's emails don't include a tracking number. Track it on Amazon instead."
                          : "\(p.store)'s emails don't include a tracking number.")
                         .font(.scaled(size: 12)).foregroundStyle(.secondary)
@@ -218,7 +225,7 @@ struct PackageDetail: View {
     var headline: String {
         if p.stage == .delivered { return store.state.packagesReceived[p.id] != nil ? "Received" : "Delivered" }
         if p.probablyDelivered() { return "Probably delivered" }
-        if let problem = p.live?.problem { return problem }
+        if let issue = p.issue { return issue }
         if p.isLate() { return "Running late" }
         if p.arrivesToday() { return "Arriving today" }
         return p.stage == .ordered ? "Ordered" : "On the way"
@@ -231,14 +238,18 @@ struct PackageDetail: View {
         if p.stage == .outForDelivery { return "Out for delivery" }
         if p.arrivesToday() { return "Shipped, due today" }
         if let eta = p.eta { return "Expected \(arrivalDay(eta))" }
-        return p.stage == .ordered ? "Not shipped yet" : "No delivery date in the emails yet"
+        return p.stage == .ordered ? "Not shipped yet" : p.isManual ? "No delivery date yet" : "No delivery date in the emails yet"
     }
 
     var freshness: String {
         if let live = p.live, let c = p.carrier {
             return "Live from \(c.name) through your tracking server, checked \(live.checked.formatted(date: .omitted, time: .shortened))."
         }
+        let read = p.aiRead.map { " \(store.ai.name) read its emails through \($0.formatted(date: .abbreviated, time: .omitted))." } ?? ""
+        if p.isManual { return "Added by you on \(p.events[0].date.formatted(date: .abbreviated, time: .omitted))." + read }
         var s = "From \(p.store)'s emails. Last update \(p.updated.formatted(date: .abbreviated, time: .shortened))."
+        s += read
+        if store.packageEdit(p) != nil { s += " Edited by you." }
         if p.stage < .delivered, let c = p.carrier, p.tracking != nil { s += " For live status, open \(c.name)'s page." }
         return s
     }
@@ -260,10 +271,10 @@ struct PackageDetail: View {
                 Text(s.label).font(.scaled(size: 12.5, weight: done ? .semibold : .regular)).foregroundStyle(done ? .primary : .secondary)
                 HStack(spacing: 4) {
                     if done, let when { Text(when) }
-                    if done, let e {
+                    if done, let e, !e.messageKey.isEmpty {
                         Text("·")
                         Button("from email") { openEvent(e) }.buttonStyle(.plain).foregroundStyle(Theme.accent)
-                    } else if isNext, s == .delivered, !p.isLate() { Text("Waiting for the delivered email") }
+                    } else if isNext, s == .delivered, !p.isLate(), !p.isManual { Text("Waiting for the delivered email") }
                 }
                 .font(.scaled(size: 11.5)).foregroundStyle(.secondary)
             }
@@ -291,8 +302,10 @@ private struct FlowButtons: View {
                 .buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
             }
             HStack(spacing: 6) {
-                Button { store.openPackageEmail(p) } label: { Text("Open email").frame(maxWidth: .infinity) }
-                    .buttonStyle(.bordered).buttonBorderShape(.capsule)
+                if !p.isManual {
+                    Button { store.openPackageEmail(p) } label: { Text("Open email").frame(maxWidth: .infinity) }
+                        .buttonStyle(.bordered).buttonBorderShape(.capsule)
+                }
                 if p.stage < .delivered || received {
                     Button { store.toggleReceived(p) } label: { Text(received ? "Not received" : "Mark received").frame(maxWidth: .infinity) }
                         .buttonStyle(.bordered).buttonBorderShape(.capsule)
@@ -300,6 +313,86 @@ private struct FlowButtons: View {
             }
         }
         .controlSize(.large)
+    }
+}
+
+/// Yours may have no store: the first letter of its name, then.
+func packageAvatar(_ p: Package) -> Address { Address(name: p.store.isEmpty ? p.title : p.store, email: p.storeEmail) }
+
+/// Add a package, or change one. Only what you change is kept, so the rest keeps following the emails.
+struct PackageSheet: View {
+    @EnvironmentObject var store: AppStore
+    @Environment(\.closeCard) private var dismiss
+    @State var form: PackageForm
+    @FocusState private var nameFocused: Bool
+    @State private var confirmDelete = false
+
+    var current: Package? { form.id.flatMap { id in store.allPackages.first { $0.id == id } } }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(form.id == nil ? "New package" : "Edit package").font(.scaled(.caption).weight(.semibold)).foregroundStyle(.secondary).textCase(.uppercase)
+                TextField("What is it?", text: $form.name).textFieldStyle(.plain).font(.scaled(size: 20, weight: .semibold)).focused($nameFocused)
+            }
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
+                GridRow { label("Store"); TextField("Optional", text: $form.store).textFieldStyle(.roundedBorder) }
+                GridRow {
+                    label("Tracking")
+                    TextField("Tracking number", text: $form.tracking).textFieldStyle(.roundedBorder).font(.system(size: 12, design: .monospaced))
+                        .onChange(of: form.tracking) { _, t in if form.carrier == nil { form.carrier = guessCarrier(t) } }
+                }
+                GridRow {
+                    label("Carrier")
+                    Picker("", selection: $form.carrier) {
+                        Text("Other").tag(Carrier?.none)
+                        ForEach(Carrier.allCases, id: \.self) { Text($0.name).tag(Carrier?.some($0)) }
+                    }
+                    .labelsHidden().fixedSize()
+                }
+                GridRow { label("Order"); TextField("Optional", text: $form.order).textFieldStyle(.roundedBorder) }
+                GridRow {
+                    label("Expected")
+                    HStack(spacing: 10) {
+                        Toggle("Set a date", isOn: $form.hasDate).toggleStyle(.checkbox)
+                        if form.hasDate { DatePicker("", selection: $form.date, displayedComponents: .date).labelsHidden().fixedSize() }
+                    }
+                }
+                GridRow {
+                    label("Status")
+                    Picker("", selection: $form.stage) {
+                        ForEach([ShipStage.ordered, .shipped, .outForDelivery, .delivered], id: \.self) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented).labelsHidden()
+                }
+            }
+            if let p = current, !p.isManual {
+                Text("Your changes stay when new emails arrive. A newer email or carrier scan can still move the status forward.")
+                    .font(.scaled(.caption)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 8) {
+                if let p = current {
+                    if p.isManual {
+                        Button("Delete", role: .destructive) { confirmDelete = true }
+                    } else if store.packageEdit(p) != nil {
+                        Button("Undo my edits") { store.undoPackageEdits(p) }
+                    }
+                }
+                Spacer()
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(form.id == nil ? "Add package" : "Save") { store.savePackage(form) }
+                    .keyboardShortcut(.defaultAction).disabled(!form.canSave)
+            }
+        }
+        .padding(20).frame(width: 480)
+        .onAppear { nameFocused = true }
+        .confirmationDialog("Delete this package?", isPresented: $confirmDelete) {
+            Button("Delete", role: .destructive) { if let id = form.id { store.deletePackage(id) } }
+        }
+    }
+
+    func label(_ s: String) -> some View {
+        Text(s).font(.scaled(size: 12.5)).foregroundStyle(.secondary).gridColumnAlignment(.trailing)
     }
 }
 

@@ -8,7 +8,7 @@ extension AppStore {
 
     // MARK: Menus and cards
 
-    var modalOpen: Bool { editingSnippet != nil || splitSettingsOpen || eventDraft != nil || claudeTask != nil || agentApproval != nil || summary != nil || linkPrompt != nil }
+    var modalOpen: Bool { editingSnippet != nil || splitSettingsOpen || eventDraft != nil || packageForm != nil || claudeTask != nil || agentApproval != nil || summary != nil || linkPrompt != nil }
 
     /// A draft in its own window only blocks inbox keys while that window is in front; an inline reply always does.
     /// A text box or a date/time picker has the keyboard: its keys are its own (arrows in a time field changed the
@@ -111,7 +111,7 @@ extension AppStore {
         if summary != nil { if code == 53 { summary = nil; return true }; return false }
         if splitSettingsOpen { if code == 53 { splitSettingsOpen = false; return true }; return false }
         if composing != nil, code == 51, !cmd, let removeChip = chipBackspace, removeChip() { return true }
-        if composeHasKeyboard || editingSnippet != nil || eventDraft != nil || claudeTask != nil || agentApproval != nil || state.accounts.isEmpty { return false }
+        if composeHasKeyboard || editingSnippet != nil || eventDraft != nil || packageForm != nil || claudeTask != nil || agentApproval != nil || state.accounts.isEmpty { return false }
         if cmd && ch == "k" { paletteOpen ? (paletteOpen = false) : openPalette(); return true }
         if paletteOpen {
             switch code {
@@ -126,7 +126,11 @@ extension AppStore {
             if n == 0 { switchAccount(nil); return true }
             if n <= state.accounts.count { switchAccount(state.accounts[n - 1]); return true }
         }
-        if cmd, ch == "r" { Task { await tick() }; if calendarOpen { reloadCalendar() }; return true }
+        if cmd, ch == "r" {
+            if toolScreen == .packages { Task { await refreshPackages() } } else { Task { await tick() } }
+            if calendarOpen { reloadCalendar() }
+            return true
+        }
         if cmd, ch == "z", !e.modifierFlags.contains(.shift), !(typingInControl) {
             if !(toolScreen != nil && undoCleanup()) { undo() }
             return true

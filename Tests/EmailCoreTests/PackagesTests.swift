@@ -195,4 +195,133 @@ final class PackagesTests: XCTestCase {
         XCTAssertNil(karrioTrackingPath(.amazon, "TBA305177442900"), "Amazon has no public tracking API")
         XCTAssertEqual(karrioTrackingPath(.usps, "94/../x"), "/v1/proxy/tracking/usps/94%2F%2E%2E%2Fx", "a number can't change the path")
     }
+
+    // MARK: Packages you added, and your edits
+
+    func event(_ key: String, _ date: Date, _ stage: ShipStage, tracking: String? = nil, order: String? = "A123", item: String? = nil, eta: Date? = nil) -> ShipEvent {
+        ShipEvent(messageKey: key, date: date, stage: stage, store: "Acme", storeEmail: "shop@acme.com", domain: "acme.com", carrier: tracking == nil ? nil : .ups,
+                  tracking: tracking, order: order, item: item, eta: eta, fromCarrier: false)
+    }
+
+    func testAnEditChangesOnlyWhatYouChangedAndFollowsTheEmails() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let ordered = try XCTUnwrap(packages(from: [event("a", now - 100, .ordered)]).first)
+        var f = PackageForm(ordered); f.name = "Desk"
+        let e = f.edit(from: PackageForm(ordered), over: nil, now: now)
+        XCTAssertEqual(e.name, "Desk"); XCTAssertNil(e.tracking); XCTAssertNil(e.stage); XCTAssertNil(e.eta)
+        // The shipped email brings a tracking number: the package's id changes, the edit must still find it.
+        var shipped = try XCTUnwrap(packages(from: [event("a", now - 100, .ordered), event("b", now + 100, .shipped, tracking: "1Z999AA10123456784")]).first)
+        XCTAssertNotEqual(shipped.id, ordered.id)
+        XCTAssertTrue(shipped.editKeys.contains(ordered.id), "the old id still finds your edit")
+        shipped.apply(e)
+        XCTAssertEqual(shipped.title, "Desk"); XCTAssertEqual(shipped.tracking, "1Z999AA10123456784", "what the email brought stays"); XCTAssertEqual(shipped.stage, .shipped)
+    }
+
+    func testStatusYouSetHoldsUntilANewerEmail() throws {
+        let t = Date(timeIntervalSince1970: 1_800_000_000)
+        let delivered = try XCTUnwrap(packages(from: [event("a", t, .delivered)]).first)
+        var f = PackageForm(delivered); f.stage = .shipped
+        let e = f.edit(from: PackageForm(delivered), over: nil, now: t + 10)
+        var p = delivered; p.apply(e)
+        XCTAssertEqual(p.stage, .shipped, "you can correct a wrong status")
+        var later = try XCTUnwrap(packages(from: [event("a", t, .delivered), event("b", t + 20, .delivered)]).first); later.apply(e)
+        XCTAssertEqual(later.stage, .delivered, "a newer email moves it forward")
+        // Saving again later doesn't drag the status back behind that email.
+        var g = PackageForm(later); g.name = "Lamp"
+        var again = later; again.apply(g.edit(from: PackageForm(later), over: e, now: t + 30))
+        XCTAssertEqual(again.stage, .delivered); XCTAssertEqual(again.title, "Lamp")
+    }
+
+    func testClearingAndDatesInAnEdit() throws {
+        let t = Date(timeIntervalSince1970: 1_800_000_000), cal = Calendar.current
+        let p = try XCTUnwrap(packages(from: [event("a", t, .shipped, tracking: "1Z999AA10123456784", item: "Desk", eta: cal.startOfDay(for: t))]).first)
+        var f = PackageForm(p); f.tracking = ""; f.carrier = nil; f.name = ""; f.hasDate = false
+        var q = p; q.apply(f.edit(from: PackageForm(p), over: nil, now: t))
+        XCTAssertNil(q.tracking); XCTAssertNil(q.carrier); XCTAssertNil(q.item); XCTAssertNil(q.eta)
+        var g = PackageForm(p); g.date = t + 2 * 86400; g.tracking = " 1z999aa1 0123456784 "
+        let e = g.edit(from: PackageForm(p), over: nil, now: t)
+        XCTAssertEqual(e.eta, cal.startOfDay(for: t + 2 * 86400))
+        XCTAssertNil(e.tracking, "the same number, typed differently, isn't a change")
+    }
+
+    func testManualPackages() {
+        var m = Package.manual(id: "manual-1", added: Date(timeIntervalSince1970: 0))
+        XCTAssertTrue(m.isManual); XCTAssertEqual(m.title, "Package")
+        var e = PackageEdit(); e.tracking = "1Z999AA10123456784"; e.carrier = "ups"; e.stage = .shipped
+        m.apply(e)
+        XCTAssertEqual(m.title, "UPS package"); XCTAssertNotNil(m.trackURL); XCTAssertEqual(m.stage, .shipped)
+        XCTAssertFalse(m.probablyDelivered(), "only you say when yours arrived")
+        XCTAssertTrue(m.isRecent(), "yours never age off the list")
+    }
+
+    func testGuessCarrier() {
+        XCTAssertEqual(guessCarrier("1Z999AA10123456784"), .ups)
+        XCTAssertEqual(guessCarrier("9400 1112 0206 2345 6789 01"), .usps)
+        XCTAssertEqual(guessCarrier("TBA123456789012"), .amazon)
+        XCTAssertEqual(guessCarrier("771234567890"), .fedex)
+        XCTAssertEqual(guessCarrier("1234567890"), .dhl)
+        XCTAssertNil(guessCarrier("hello")); XCTAssertNil(guessCarrier(""))
+    }
+
+    func testAPackageFormNeedsANameOrNumber() {
+        var f = PackageForm.new()
+        XCTAssertFalse(f.canSave); f.name = "  "; XCTAssertFalse(f.canSave)
+        f.tracking = "1Z999AA10123456784"; XCTAssertTrue(f.canSave)
+    }
+
+    // MARK: AI findings
+
+    func message(_ text: String, date: Date = Date()) -> Message {
+        var m = Message(id: "m1", threadId: "t1", account: "you@gmail.com", from: "Acme <shop@acme.com>", to: "you@gmail.com", subject: "Shipped: Desk", date: date, labelIds: [])
+        m.text = text
+        return m
+    }
+
+    func testAIAnswersAreCheckedNotTrusted() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let p = try XCTUnwrap(packages(from: [event("a", now - 100, .ordered)]).first)
+        let work: [(package: Package, emails: [Message])] = [(p, [message("Your tracking number is 1Z999AA10123456784", date: now)])]
+        func read(_ s: String) -> PackageFinding? { parsePackageFindings(s, work: work, now: now)[p.id] }
+
+        let good = try XCTUnwrap(read(#"Here you go: [{"id":"p1","status":"shipped","tracking":"1z999aa1 0123456784","problem":"held","item":"Desk"}]"#))
+        XCTAssertEqual(good.stage, .shipped); XCTAssertEqual(good.tracking, "1Z999AA10123456784"); XCTAssertEqual(good.carrier, "ups")
+        XCTAssertEqual(good.problem, "On hold"); XCTAssertEqual(good.item, "Desk"); XCTAssertEqual(good.asOf, now)
+
+        let bad = try XCTUnwrap(read(#"[{"id":"p1","status":"teleported","tracking":"1Z111AA10123456789","problem":"Call 555-0100 now","item":"See http://evil.example","expected":"1999-01-01"}]"#))
+        XCTAssertNil(bad.stage, "not a status"); XCTAssertNil(bad.tracking, "not in the emails"); XCTAssertNil(bad.problem, "free text never shows")
+        XCTAssertNil(bad.item, "no links"); XCTAssertNil(bad.eta, "absurd date")
+        XCTAssertNil(read(#"[{"id":"p9","status":"shipped"}]"#), "an unknown package")
+        XCTAssertNil(read("nope")); XCTAssertNil(read(#"{"id":"p1"}"#))
+    }
+
+    func testAFindingFillsGapsAndMovesForwardOnly() throws {
+        let t = Date(timeIntervalSince1970: 1_800_000_000)
+        var p = try XCTUnwrap(packages(from: [event("a", t, .outForDelivery)]).first)
+        var f = PackageFinding(asOf: t + 10); f.stage = .shipped; f.item = "Desk"; f.problem = "Delayed"
+        p.apply(f, edit: nil)
+        XCTAssertEqual(p.stage, .outForDelivery, "never backwards"); XCTAssertEqual(p.title, "Desk"); XCTAssertEqual(p.issue, "Delayed")
+        XCTAssertEqual(p.updated, t + 10); XCTAssertFalse(p.probablyDelivered(now: t + 90 * 86400), "a problem isn't a delivery")
+        f.stage = .delivered
+        p.apply(f, edit: nil)
+        XCTAssertEqual(p.stage, .delivered); XCTAssertNil(p.issue, "delivered: no longer a problem")
+    }
+
+    func testAFindingNewerThanYourStatusMovesItOlderDoesNot() throws {
+        let t = Date(timeIntervalSince1970: 1_800_000_000)
+        let base = try XCTUnwrap(packages(from: [event("a", t, .ordered)]).first)
+        var e = PackageEdit(edited: t + 50); e.stage = .shipped
+        var f = PackageFinding(asOf: t + 10); f.stage = .delivered
+        var p = base; p.apply(e); p.apply(f, edit: e)
+        XCTAssertEqual(p.stage, .shipped, "you set this after that email")
+        f.asOf = t + 100
+        p = base; p.apply(e); p.apply(f, edit: e)
+        XCTAssertEqual(p.stage, .delivered, "a newer email moves it forward")
+    }
+
+    func testANewReadingReplacesTheProblemAndKeepsTheRest() {
+        let t = Date(timeIntervalSince1970: 1_800_000_000)
+        var a = PackageFinding(asOf: t); a.problem = "Delayed"; a.tracking = "1Z999AA10123456784"; a.stage = .shipped
+        let b = a.updated(by: PackageFinding(asOf: t + 10))
+        XCTAssertNil(b.problem, "the delay is over"); XCTAssertEqual(b.tracking, a.tracking); XCTAssertEqual(b.stage, .shipped); XCTAssertEqual(b.asOf, t + 10)
+    }
 }

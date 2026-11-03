@@ -32,6 +32,10 @@ struct ToolScreenView: View {
                         store.openTool(screen == .cleanup ? .insights : .cleanup)
                     }
                 }
+                if screen == .packages {
+                    circle("arrow.clockwise", "Refresh tracking (R)", busy: store.packagesRefreshing) { Task { await store.refreshPackages() } }
+                    circle("plus", "Add a package (N)") { store.newPackage() }
+                }
                 AccountCapsule()
             }
             .glassGroup(spacing: 10)
@@ -55,10 +59,14 @@ struct ToolScreenView: View {
         .padding(2).glass(Capsule())
     }
 
-    func circle(_ symbol: String, _ help: String, _ action: @escaping () -> Void) -> some View {
+    func circle(_ symbol: String, _ help: String, busy: Bool = false, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: symbol).font(.scaled(size: 14)).frame(width: 34, height: 34).contentShape(Circle())
+            Group {
+                if busy { ProgressView().controlSize(.small) } else { Image(systemName: symbol).font(.scaled(size: 14)) }
+            }
+            .frame(width: 34, height: 34).contentShape(Circle())
         }
+        .disabled(busy)
         .buttonStyle(.plain).foregroundStyle(.secondary).glass(Circle(), interactive: true)
         .help(help).accessibilityLabel(String(help.prefix { $0 != "(" }).trimmingCharacters(in: .whitespaces))
     }

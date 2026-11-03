@@ -81,4 +81,53 @@ final class LiveTrackingTests: XCTestCase {
         for _ in 0..<50 where asked.isEmpty { try await Task.sleep(for: .milliseconds(20)) }
         XCTAssertFalse(asked.isEmpty, "opening Packages asks for fresh status")
     }
+
+    // MARK: Refresh and packages you added
+
+    func testRefreshAsksAgainEvenWhenTheLastAnswerIsFresh() async throws {
+        connect(body: #"{"tracking": {"tracking_number": "x", "status": "in_transit", "delivered": false, "events": []}}"#)
+        await store.refreshLiveTracking()
+        let n = asked.count
+        XCTAssertGreaterThan(n, 0)
+        await store.refreshLiveTracking()
+        XCTAssertEqual(asked.count, n, "a sync leaves fresh answers alone")
+        await store.refreshPackages()
+        XCTAssertEqual(asked.count, 2 * n, "Refresh asks now")
+        XCTAssertTrue(store.banner?.hasPrefix("Checked \(n) packages") == true, store.banner ?? "no banner")
+    }
+
+    func testRefreshSaysWhenTheServerRefusesAPackage() async {
+        connect(answer: 400, body: "{}")
+        await store.refreshPackages()
+        XCTAssertTrue(store.banner?.contains("answered 400") == true, store.banner ?? "no banner")
+    }
+
+    func testAManualPackageIsTrackedThroughTheServerAndItsDateStays() async throws {
+        connect(body: #"{"tracking": {"tracking_number": "x", "status": "in_transit", "delivered": false, "estimated_delivery": "2030-01-05", "events": []}}"#)
+        var f = PackageForm.new()
+        f.name = "Desk"; f.tracking = "1Z111AA10123456789"; f.carrier = .ups; f.hasDate = true; f.date = Date(timeIntervalSince1970: 1_900_000_000)
+        store.savePackage(f)
+        await store.refreshLiveTracking(force: true)
+        XCTAssertTrue(asked.contains { $0.url!.path == "/v1/proxy/tracking/ups/1Z111AA10123456789" }, "only the carrier and number")
+        let p = try XCTUnwrap(store.allPackages.first { $0.title == "Desk" })
+        XCTAssertEqual(p.eta, Calendar.current.startOfDay(for: f.date), "the date you typed beats the carrier's")
+    }
+
+    func testAManualPackageJoinsItsShippingEmailWhenItArrives() throws {
+        var f = PackageForm.new()
+        f.name = "My shoes"; f.tracking = "1z999aa10123456784"   // the sample UPS email's number
+        let before = store.allPackages.count
+        store.savePackage(f)
+        XCTAssertEqual(store.allPackages.count, before, "no second row")
+        XCTAssertEqual(store.allPackages.first { $0.tracking == "1Z999AA10123456784" }?.title, "My shoes")
+    }
+
+    func testAddedPackagesAndEditsSurviveARestart() throws {
+        var f = PackageForm.new(); f.name = "Desk"
+        store.savePackage(f)
+        let data = try JSONEncoder().encode(store.state)
+        let back = try JSONDecoder().decode(SavedState.self, from: data)
+        XCTAssertEqual(back.packagesAdded, store.state.packagesAdded); XCTAssertEqual(back.packageEdits, store.state.packageEdits)
+        XCTAssertFalse(back.packagesAdded.isEmpty)
+    }
 }

@@ -198,6 +198,8 @@ struct ModalLayer: View {
                         .environment(\.closeCard, CloseCard { store.splitSettingsOpen = false })
                 } else if let ev = store.eventDraft {
                     card { EventSheet(draft: ev) }.environment(\.closeCard, CloseCard { store.eventDraft = nil })
+                } else if let f = store.packageForm {
+                    card { PackageSheet(form: f) }.environment(\.closeCard, CloseCard { store.packageForm = nil })
                 } else if let ap = store.agentApproval {
                     card { AgentApprovalCard(approval: ap) }
                 } else if let t = store.claudeTask {

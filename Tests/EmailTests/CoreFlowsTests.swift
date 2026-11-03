@@ -11,7 +11,8 @@ import EmailCore
 ///  3. ⌘K puts the cursor straight into the palette's text box.
 ///  4. The calendar: G C / G I and the top-bar button switch views, and every calendar key works.
 ///  5. Clean up senders and Insights open from ⌘K, and their keys work; ready drafts send, edit and go away.
-///  6. Packages opens from ⌘K and G P (from the inbox, the calendar and the other tools), and every Packages key works.
+///  6. Packages opens from ⌘K and G P (from the inbox, the calendar and the other tools), and every Packages key works,
+///     including refreshing, adding and editing a package.
 /// Runs against an isolated store (temp folder, throwaway Keymail key; see AppFlavor.isTesting), never real mail.
 @MainActor
 final class CoreFlowsTests: XCTestCase {
@@ -1118,6 +1119,61 @@ extension CoreFlowsTests {
         XCTAssertNil(store.toolScreen, "Return leaves Packages")
         XCTAssertTrue(store.threadOpen, "and opens the shipping email")
         XCTAssertTrue(store.selected?.messages.contains { $0.key == p.latest.messageKey } == true, "the package's own email")
+    }
+
+    func testPackagesAddEditAndRefreshFromKeysAndPalette() async throws {
+        store.openTool(.packages)
+        press("n", code: 45)
+        XCTAssertEqual(store.packageForm?.id, nil); XCTAssertNotNil(store.packageForm, "N opens the add form")
+        let at = store.packageIndex
+        press("j", code: 38); XCTAssertEqual(store.packageIndex, at, "list keys don't leak through the form")
+        XCTAssertEqual(store.toolScreen, .packages)
+        store.packageForm = nil
+
+        runCommand("Add a package"); XCTAssertNotNil(store.packageForm, "⌘K → Add a package")
+        var f = try XCTUnwrap(store.packageForm)
+        XCTAssertFalse(f.canSave, "nothing typed yet")
+        f.name = "Standing desk"; f.store = "Fully"
+        store.savePackage(f)
+        XCTAssertNil(store.packageForm)
+        let mine = try XCTUnwrap(store.currentPackage); XCTAssertEqual(mine.title, "Standing desk", "selected after adding")
+        XCTAssertTrue(mine.isManual)
+        XCTAssertFalse(store.commands.contains { $0.title == "Open email" }, "yours has no email to open")
+
+        press("\r", code: 36); XCTAssertEqual(store.packageForm?.id, mine.id, "↵ edits it, since there's no email")
+        store.packageForm = nil
+        press("i", code: 34); XCTAssertEqual(store.packageForm?.id, mine.id, "I edits")
+        store.packageForm = nil
+        runCommand("Edit package"); XCTAssertEqual(store.packageForm?.id, mine.id, "⌘K → Edit package")
+        store.deletePackage(mine.id); XCTAssertNil(store.packageForm)
+        XCTAssertFalse(store.allPackages.contains { $0.id == mine.id })
+
+        store.banner = nil
+        press("r", code: 15)
+        for _ in 0..<50 where store.banner == nil { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertEqual(store.banner, "Checked your email.", "R refreshes")
+        store.banner = nil
+        runCommand("Refresh tracking")
+        for _ in 0..<50 where store.banner == nil { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertNotNil(store.banner, "⌘K → Refresh tracking")
+    }
+
+    func testAddAPackageFromTheInboxPalette() {
+        runCommand("Add a package")
+        XCTAssertEqual(store.toolScreen, .packages); XCTAssertNotNil(store.packageForm)
+    }
+
+    func testEditingAnEmailPackageKeepsItsEmailAndUndoGoesBack() throws {
+        store.openTool(.packages)
+        let p = try XCTUnwrap(store.shownPackages.first { $0.carrier == .ups })
+        var f = PackageForm(p)
+        f.name = "Running shoes"
+        store.savePackage(f)
+        let q = try XCTUnwrap(store.allPackages.first { $0.id == p.id })
+        XCTAssertEqual(q.title, "Running shoes"); XCTAssertEqual(q.tracking, p.tracking); XCTAssertEqual(q.eta, p.eta, "only what you changed")
+        XCTAssertEqual(store.currentPackage?.id, p.id, "still selected")
+        store.undoPackageEdits(q)
+        XCTAssertEqual(store.allPackages.first { $0.id == p.id }?.title, p.title)
     }
 
     func testReadyDraftSendsEditsAndGoesAway() throws {

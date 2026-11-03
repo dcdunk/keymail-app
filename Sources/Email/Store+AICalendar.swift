@@ -18,7 +18,7 @@ extension AppStore {
         if UserDefaults.standard.bool(forKey: key) { return true }
         let alert = NSAlert()
         alert.messageText = "Send email text to \(p.maker)?"
-        alert.informativeText = "To do this, Keymail passes the email you're working on to \(p.name) on this Mac, which sends it to \(p.maker) under your own account and their privacy terms. Keymail only sends what you ask about, when you ask. If you turn on drafts written ahead of time (Settings → AI), Keymail also sends new emails that need your reply, a few of your sent emails from that account as style examples, and your busy times.\n\nYou can switch providers or stop using AI features any time in Settings → AI."
+        alert.informativeText = "To do this, Keymail passes the email you're working on to \(p.name) on this Mac, which sends it to \(p.maker) under your own account and their privacy terms. Keymail only sends what you ask about, when you ask. If you turn on drafts written ahead of time (Settings → AI), Keymail also sends new emails that need your reply, a few of your sent emails from that account as style examples, and your busy times. If you turn on reading shipping emails (Settings → Packages), Keymail also sends emails about packages on the way when you refresh them.\n\nYou can switch providers or stop using AI features any time in Settings → AI."
         alert.addButton(withTitle: "Allow")
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return false }
