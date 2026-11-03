@@ -18,6 +18,7 @@ import EmailCore
     private let session: URLSession = {
         let c = URLSessionConfiguration.ephemeral   // no cookies sent or kept
         c.timeoutIntervalForRequest = 8
+        c.timeoutIntervalForResource = 20   // the per-request limit resets on every byte; a site can't drip forever
         return URLSession(configuration: c)
     }()
 

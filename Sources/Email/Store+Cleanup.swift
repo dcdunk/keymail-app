@@ -137,10 +137,11 @@ extension AppStore {
             req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
             req.httpBody = Data("List-Unsubscribe=One-Click".utf8)
             Task {
-                let ok = ((try? await URLSession.shared.data(for: req))?.1 as? HTTPURLResponse).map { $0.statusCode < 400 } ?? false
+                let ok = ((try? await GoogleNet.session.data(for: req))?.1 as? HTTPURLResponse).map { $0.statusCode < 400 } ?? false   // no cookies, nothing on disk
                 if !ok { banner = "Unsubscribe failed. Opening the link instead."; NSWorkspace.shared.open(url) }
             }
-        case .open(let url): NSWorkspace.shared.open(url)
+        case .open(let url):
+            if let why = linkWarning(href: url.absoluteString, shown: "") { linkPrompt = LinkPrompt(url: url, reason: why) } else { NSWorkspace.shared.open(url) }
         case .none: break
         }
         return true

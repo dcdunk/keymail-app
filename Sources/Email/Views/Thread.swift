@@ -245,7 +245,7 @@ struct MessageCard: View {
                         .controlSize(.small).buttonBorderShape(.capsule).help("Open this draft in compose")
                 }
                 PhishingPill(senderReasons: senderWarnings(message, known: store.knownContacts),
-                             links: message.html.map(suspiciousLinks) ?? [])
+                             links: message.html.map { EmailFacts.of($0).links } ?? [])
                 Text(message.date.formatted(date: .abbreviated, time: .shortened)).font(.scaled(.callout)).foregroundStyle(.secondary)
                 if !message.labelIds.contains("DRAFT") {
                     // Answer this email, not only the newest one in the thread (issue #7).
@@ -326,7 +326,8 @@ struct MessageCard: View {
 
     @ViewBuilder var bodyView: some View {
         if let html = message.html {
-            if !loadRemoteImages && !loadImagesOnce && hasRemoteContent(html) {
+            let facts = EmailFacts.of(html), images = store.inlineData[message.key] ?? [:]
+            if !loadRemoteImages && !loadImagesOnce && facts.hasRemote {
                 HStack(spacing: 8) {
                     Image(systemName: "photo.badge.exclamationmark").foregroundStyle(.secondary)
                     Text("Remote images are blocked to protect your privacy.").font(.scaled(.callout)).foregroundStyle(.secondary)
@@ -336,18 +337,18 @@ struct MessageCard: View {
             // HTML emails are designed for a light page, so they sit on a white "paper" card, like Apple Mail does.
             // Settings → General: hide the earlier conversation each reply carries (••• shows it). Forwards stay whole.
             let fwd = message.subject.lowercased().hasPrefix("fw")
-            let parts = showQuotedHistory || fwd ? (body: html, quoted: nil) : splitQuotedHTML(html)
+            let whole = showQuotedHistory || fwd
             // Keyed the way the click arrives (WebKit lowercases the host and adds a trailing "/"), so a link whose text
             // shows one site and goes to another always asks first. Both web views get it, the earlier history too.
-            let flagged = Dictionary(suspiciousLinks(html).map { (normalizedLink($0.href), $0.reason) }, uniquingKeysWith: { a, _ in a })
-            EmailWebView(html: inlineImages(parts.body, store.inlineData[message.key] ?? [:]), cardOpacity: cardOpacity,
+            let flagged = facts.flagged
+            EmailWebView(html: facts.inlined(whole ? .whole : .body, images), cardOpacity: cardOpacity,
                          dark: contentDark, blockRemote: !loadRemoteImages && !loadImagesOnce, suspicious: flagged)
                 .id(loadImagesOnce) // the blocker is set when the web view is made, so a new one loads the images
                 .clipShape(RoundedRectangle(cornerRadius: 10))
-            if let q = parts.quoted {
+            if !whole, facts.split.quoted != nil {
                 quotedToggle
                 if showQuoted {
-                    EmailWebView(html: inlineImages(q, store.inlineData[message.key] ?? [:]), cardOpacity: cardOpacity,
+                    EmailWebView(html: facts.inlined(.quoted, images), cardOpacity: cardOpacity,
                                  dark: contentDark, blockRemote: !loadRemoteImages && !loadImagesOnce, suspicious: flagged)
                         .clipShape(RoundedRectangle(cornerRadius: 10)).opacity(0.8)
                 }
@@ -385,6 +386,45 @@ struct MessageCard: View {
     }
 }
 
+/// What one email's HTML says about itself, worked out once. Thread views redraw on every change in the store (a banner, a
+/// hover, a sync), and these are regexes over HTML that can run to megabytes, all on the main thread.
+@MainActor final class EmailFacts {
+    enum Part { case whole, body, quoted }
+    let html: String
+    let links: [SuspiciousLink]
+    let flagged: [String: String]
+    let hasRemote: Bool
+    let split: (body: String, quoted: String?)
+    private var inlinedParts: [Part: (images: Int, html: String)] = [:]
+
+    private init(_ html: String) {
+        self.html = html
+        links = suspiciousLinks(html)
+        flagged = Dictionary(links.map { (normalizedLink($0.href), $0.reason) }, uniquingKeysWith: { a, _ in a })
+        hasRemote = hasRemoteContent(html)
+        split = splitQuotedHTML(html)
+    }
+
+    /// The part with its cid: images filled in. Images only ever get added, so their count says when to redo it.
+    func inlined(_ part: Part, _ images: [String: String]) -> String {
+        let source = part == .whole ? html : part == .body ? split.body : split.quoted ?? ""
+        if images.isEmpty { return source }
+        if let hit = inlinedParts[part], hit.images == images.count { return hit.html }
+        let out = inlineImages(source, images)
+        inlinedParts[part] = (images.count, out)
+        return out
+    }
+
+    // ponytail: at most 50 emails remembered, which NSCache may drop at any time; only costs a recompute.
+    private static let cache: NSCache<NSString, EmailFacts> = { let c = NSCache<NSString, EmailFacts>(); c.countLimit = 50; return c }()
+    static func of(_ html: String) -> EmailFacts {
+        if let hit = cache.object(forKey: html as NSString) { return hit }
+        let made = EmailFacts(html)
+        cache.setObject(made, forKey: html as NSString)
+        return made
+    }
+}
+
 /// One email's HTML in its own web view: its CSS can't leak into the app, JavaScript is off,
 /// it sizes itself to the content, and scrolling passes through to the thread.
 struct EmailWebView: NSViewRepresentable {
@@ -417,10 +457,15 @@ struct EmailWebView: NSViewRepresentable {
     }
     func updateNSView(_ v: PassThroughWebView, context: Context) {
         context.coordinator.suspicious = suspicious
+        // SwiftUI calls this on every redraw of the thread, and any change in the store redraws it. An unchanged email
+        // stops here, before the regexes below run over all of its HTML.
+        let input = Coordinator.Input(html: html, padding: padding, opacity: cardOpacity, dark: dark, themed: themed, blockRemote: blockRemote)
+        guard context.coordinator.input != input else { return }
+        context.coordinator.input = input
         // U+FFFC is a placeholder some senders (Apple, for its logo) leave in the text; the Mac draws it as an "OBJ" box.
         var html = html.replacingOccurrences(of: "\u{FFFC}", with: "")
         if !blockRemote { html = proxyRemoteImages(html) }
-        let page = themed ? Self.wrapThemed(html) : Self.wrap(html, padding: padding, opacity: cardOpacity, dark: dark)
+        let page = themed ? Self.wrapThemed(html) : Self.wrap(html, padding: padding, opacity: cardOpacity, dark: dark, blockRemote: blockRemote)
         // Emails that ship their own dark design only show it when the page is in dark appearance.
         if !themed { v.appearance = NSAppearance(named: dark && emailHasOwnDarkMode(html) ? .darkAqua : .aqua) }
         guard context.coordinator.last != page else { return }
@@ -432,7 +477,7 @@ struct EmailWebView: NSViewRepresentable {
     }
 
     /// Minimal reset only; never override the sender's layout (forcing image heights broke sprites and banners).
-    static func wrap(_ html: String, padding: String = "16px 20px", opacity: Double = 1, dark: Bool = false) -> String {
+    static func wrap(_ html: String, padding: String = "16px 20px", opacity: Double = 1, dark: Bool = false, blockRemote: Bool = false) -> String {
         // Dark: an email with its own dark design gets it (the web view runs in dark appearance); then darkScript
         // recolors whatever is still light, element by element (images untouched).
         // Many senders' dark designs only cover part of the email (Apple's darkens the header and footer, not the body),
@@ -442,7 +487,7 @@ struct EmailWebView: NSViewRepresentable {
         let darkCSS = (recolor ? "img.lm-plate { background-color: #fff; border-radius: 3px; }" : "") + (native ? " :root { color-scheme: light dark; }" : "")
         let bg = dark ? "30,30,32" : "255,255,255"
         return """
-        <!doctype html><html\(recolor ? " class=\"lm-dark\"" : "")><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+        <!doctype html><html\(recolor ? " class=\"lm-dark\"" : "")><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">\(blockRemote ? "<meta http-equiv=\"Content-Security-Policy\" content=\"\(emailBlockRemotePolicy)\">" : "")
         <style>
         html, body { margin: 0; padding: 0; background: rgba(\(bg),\(String(format: "%.2f", opacity))); color: \(dark ? "#e8e8ea" : "#1d1d1f"); }
         \(darkCSS)
@@ -528,6 +573,8 @@ struct EmailWebView: NSViewRepresentable {
         if(c&&c!=='transparent'&&!/rgba\\([^)]*,\\s*0\\)$/.test(c)){if(!q.hasAttribute('data-lm-bg'))return;break}}
         i.classList.add('lm-plate')});0
         """
+        struct Input: Equatable { let html, padding: String, opacity: Double, dark, themed, blockRemote: Bool }
+        var input: Input?
         var last = ""
         var suspicious: [String: String] = [:]
         var onHeight: (CGFloat) -> Void = { _ in }
@@ -551,9 +598,13 @@ struct EmailWebView: NSViewRepresentable {
         }
         func webView(_ w: WKWebView, decidePolicyFor a: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             // Only our own initial page load renders inside the view; every click goes through openChecked.
-            guard let url = a.request.url, a.navigationType != .other || a.targetFrame == nil else { decisionHandler(.allow); return }
-            decisionHandler(.cancel)
-            openChecked(url)
+            switch emailNavigation(url: a.request.url, startedByPage: a.navigationType == .other, hasTargetFrame: a.targetFrame != nil) {
+            case .render: decisionHandler(.allow)
+            case .block: decisionHandler(.cancel)
+            case .open:
+                decisionHandler(.cancel)
+                if let url = a.request.url { openChecked(url) }
+            }
         }
 
         /// Web links open directly unless flagged; flagged links, and anything that isn't http(s) or mailto,
@@ -579,7 +630,15 @@ struct EmailWebView: NSViewRepresentable {
 /// so a sender's "same-origin only" header can't hide them. Same request the web view would make, minus cookies.
 final class ImageFetcher: NSObject, WKURLSchemeHandler {
     static let shared = ImageFetcher()
-    private var stopped = Set<ObjectIdentifier>()
+    private var live = Set<ObjectIdentifier>()
+    /// Memory only: URLSession.shared would write every sender's image and its tracking address to an unencrypted cache on disk.
+    private let session: URLSession = {
+        let c = URLSessionConfiguration.ephemeral
+        c.httpShouldSetCookies = false
+        c.timeoutIntervalForRequest = 20
+        c.timeoutIntervalForResource = 60
+        return URLSession(configuration: c)
+    }()
     func webView(_ webView: WKWebView, start task: WKURLSchemeTask) {
         guard let s = task.request.url?.absoluteString, s.hasPrefix("kmimg-"), let url = URL(string: String(s.dropFirst(6))) else {
             return task.didFailWithError(URLError(.badURL))
@@ -589,9 +648,10 @@ final class ImageFetcher: NSObject, WKURLSchemeHandler {
         req.setValue("image/webp,image/avif,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
         req.httpShouldHandleCookies = false
         let id = ObjectIdentifier(task)
-        URLSession.shared.dataTask(with: req) { data, response, error in
+        live.insert(id)
+        session.dataTask(with: req) { data, response, error in
             DispatchQueue.main.async {
-                guard self.stopped.remove(id) == nil else { return }   // the email closed; answering now would crash
+                guard self.live.remove(id) != nil else { return }   // the email closed; answering now would crash
                 guard let data, let http = response as? HTTPURLResponse, error == nil else {
                     return task.didFailWithError(error ?? URLError(.badServerResponse))
                 }
@@ -603,7 +663,7 @@ final class ImageFetcher: NSObject, WKURLSchemeHandler {
             }
         }.resume()
     }
-    func webView(_ webView: WKWebView, stop task: WKURLSchemeTask) { stopped.insert(ObjectIdentifier(task)) }
+    func webView(_ webView: WKWebView, stop task: WKURLSchemeTask) { live.remove(ObjectIdentifier(task)) }
 }
 
 final class PassThroughWebView: WKWebView {

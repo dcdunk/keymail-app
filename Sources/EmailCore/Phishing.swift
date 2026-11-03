@@ -85,8 +85,12 @@ public func linkWarning(href: String, shown: String) -> String? {
     if scheme == "mailto" { return nil }
     guard scheme == "http" || scheme == "https" else { return "This link opens something on your Mac (\(scheme):), not a web page." }
     guard let host = url.host?.lowercased() else { return "This link has no website in it." }
-    if host.range(of: #"^\d{1,3}(\.\d{1,3}){3}$"#, options: .regularExpression) != nil { return "This link goes to a bare IP address (\(host)), not a named website." }
-    if host.contains("xn--") { return "This link uses a disguised international domain (\(host))." }
+    // https://paypal.com@evil.com goes to evil.com; everything before the @ is decoration.
+    if url.user != nil || url.password != nil { return "This link is written to look like another site, but it goes to \(host)." }
+    // Dotted, whole-number (2130706433), hex and IPv6 forms are all just addresses.
+    if host.contains(":") || host.range(of: #"^(\d{1,3}(\.\d{1,3}){3}|\d+|0x[0-9a-f]+)$"#, options: .regularExpression) != nil { return "This link goes to a bare IP address (\(host)), not a named website." }
+    if !host.contains(".") { return "This link goes to \(host), which isn't a public website." }
+    if host.contains("xn--") || !host.allSatisfy(\.isASCII) { return "This link uses a disguised international domain (\(host))." }
     if let real = lookalikeBrand(host) { return "\(registrableDomain(host)) imitates \(real)." }
     // Visible text that is itself a web address must match where the link goes.
     let text = shown.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
@@ -140,7 +144,7 @@ public func senderWarnings(_ m: Message, known: Set<String>) -> [String] {
         if let real = lookalikeBrand(domain) {
             out.append(real.contains(".") ? "\(domain) looks like \(real) but isn't." : "The sender uses \(real).")
         } else {
-            for (brand, domains) in brandDomains where name.range(of: "\\b\(brand)\\b", options: .regularExpression) != nil {
+            for (brand, domains) in brandDomains where name.contains(brand) && name.range(of: "\\b\(brand)\\b", options: .regularExpression) != nil {
                 if !domains.contains(domain) { out.append("The name says \(brand.capitalized), but the email came from \(domain)."); break }
             }
         }
@@ -150,6 +154,37 @@ public func senderWarnings(_ m: Message, known: Set<String>) -> [String] {
         out.append("Replies would go to \(registrableDomain(rtd)), not \(domain).")
     }
     return out
+}
+
+/// What a navigation inside an email's web view may do.
+public enum EmailNavigation: Equatable { case render, open, block }
+
+/// Only Keymail's own page renders inside an email. Clicks go through the link checks. Anything the email starts by
+/// itself (<meta http-equiv="refresh">, <iframe>) is dropped: left alone, a refresh could replace the email with a
+/// sender's fake sign-in page, drawn inside Keymail with no address bar to give it away.
+public func emailNavigation(url: URL?, startedByPage: Bool, hasTargetFrame: Bool) -> EmailNavigation {
+    guard startedByPage, hasTargetFrame else { return .open }
+    return url?.scheme?.lowercased() == "about" ? .render : .block
+}
+
+/// Fails closed: with this in place remote content stays blocked even if WebKit's block list hasn't finished compiling
+/// at launch or failed to compile. Styles stay, since emails depend on them; everything else must be inside the email.
+public let emailBlockRemotePolicy = "default-src 'none'; img-src data:; media-src data:; font-src data:; style-src 'unsafe-inline'; base-uri 'none'"
+
+/// A name that's safe to save a sender's attachment under. Removes path separators, control characters and the invisible
+/// direction marks that make "invoice\u{202E}fdp.app" read as "invoice.ppa.pdf"-style lies in Finder, and leading dots
+/// that would hide the file. Long names keep their extension.
+public func safeFilename(_ name: String) -> String {
+    let kept = name.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }
+    var s = String(String.UnicodeScalarView(kept))
+    for c in ["/", ":", "\\"] { s = s.replacingOccurrences(of: c, with: "-") }
+    s = s.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ".")))
+    if s.isEmpty { return "attachment" }
+    guard s.utf8.count > 200 else { return s }
+    let ext = (s as NSString).pathExtension, suffix = ext.isEmpty || ext.utf8.count > 20 ? "" : "." + ext
+    var stem = suffix.isEmpty ? s : (s as NSString).deletingPathExtension
+    while stem.utf8.count + suffix.utf8.count > 200 { stem.removeLast() }
+    return stem + suffix
 }
 
 /// One spelling per link: lowercase scheme and host, no trailing "/" on a bare host. The same link written in the email

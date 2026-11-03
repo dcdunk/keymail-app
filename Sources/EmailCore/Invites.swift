@@ -82,9 +82,9 @@ private let windowsZones = ["Pacific Standard Time": "America/Los_Angeles", "Mou
 public func findConference(in texts: [String]) -> Conference? {
     let patterns: [(Conference.Kind, String)] = [
         (.meet, #"https://meet\.google\.com/[a-z]{3}-[a-z]{4}-[a-z]{3}"#),
-        (.zoom, #"https://[\w.-]*zoom\.us/(j|my|w)/[^\s"<>\\]+"#),
+        (.zoom, #"https://(?:[\w-]+\.)*zoom\.us/(j|my|w)/[^\s"<>\\]+"#),
         (.teams, #"https://teams\.(microsoft|live)\.com/(l/meetup-join|meet)/[^\s"<>\\]+"#),
-        (.webex, #"https://[\w.-]*webex\.com/[^\s"<>\\]+"#),
+        (.webex, #"https://(?:[\w-]+\.)*webex\.com/[^\s"<>\\]+"#),
     ]
     for (kind, p) in patterns {
         for t in texts {

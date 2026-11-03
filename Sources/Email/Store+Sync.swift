@@ -141,7 +141,7 @@ extension AppStore {
     func log(_ line: String) {
         let url = Disk.dir.appendingPathComponent("sync.log")
         let entry = "\(Date().formatted(.iso8601)) \(line)\n"
-        if let h = try? FileHandle(forWritingTo: url) { h.seekToEndOfFile(); h.write(Data(entry.utf8)); try? h.close() }
+        if let h = try? FileHandle(forWritingTo: url) { _ = try? h.seekToEnd(); try? h.write(contentsOf: Data(entry.utf8)); try? h.close() }   // the throwing calls: a full disk mustn't crash the app
         else { try? Data(entry.utf8).write(to: url) }
     }
 

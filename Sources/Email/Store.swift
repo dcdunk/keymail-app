@@ -175,7 +175,7 @@ struct Command: Identifiable {
 @MainActor
 final class AppStore: ObservableObject {
     @Published var state: SavedState = Disk.load("state.json", as: SavedState.self) ?? SavedState() {
-        didSet { invalidate(); Disk.save(state, "state.json") }
+        didSet { invalidate(); scheduleStateSave() }
     }
     @Published var messages: [String: Message] = [:] { didSet { invalidate() } }
     @Published var labelNames: [String: String] = [:] { didSet { invalidate() } }
@@ -190,6 +190,27 @@ final class AppStore: ObservableObject {
         // Dock badge follows reads, archives and new mail; many changes in a row cost one update.
         badgeTask?.cancel()
         badgeTask = Task { try? await Task.sleep(for: .milliseconds(300)); if !Task.isCancelled { Notifier.shared.updateBadge() } }
+    }
+    /// Saving is JSON, encryption and a file write, and state can hold a scheduled email's attachments. It used to run on
+    /// the main thread for every single change. Now a burst of changes costs one write, on a serial queue, so writes
+    /// stay in order and the newest always lands last.
+    private static let stateDisk = DispatchQueue(label: "keymail.state-save", qos: .userInitiated)
+    private var stateSavePending = false
+    private func scheduleStateSave() {
+        guard !stateSavePending else { return }
+        stateSavePending = true
+        DispatchQueue.main.async { [weak self] in self?.startStateSave() }
+    }
+    private func startStateSave() {
+        guard stateSavePending else { return }
+        stateSavePending = false
+        let snapshot = state
+        Self.stateDisk.async { Disk.save(snapshot, "state.json") }
+    }
+    /// Waits until the newest state is on disk. Keymail calls this as it quits.
+    func flushState() {
+        startStateSave()
+        Self.stateDisk.sync {}
     }
     var badgeTask: Task<Void, Never>?
     var cacheDirty = false
@@ -321,7 +342,7 @@ final class AppStore: ObservableObject {
     var liveChecking = false                         // a tracking-server check is running
     @Published var trackingServerNote: String?       // the last check's outcome, for Settings → Packages
     /// How Keymail calls your tracking server. Tests swap in a fake; nothing else does.
-    var liveFetch: (URLRequest) async throws -> (Data, URLResponse) = { try await URLSession.shared.data(for: $0) }
+    var liveFetch: (URLRequest) async throws -> (Data, URLResponse) = { try await GoogleNet.session.data(for: $0) }
     var packageAIRun: ((String) async throws -> String)?   // tests only; otherwise your AI provider
     @Published var draftsWriting: Set<String> = []  // conversation ids whose ready draft is being written
     @Published var calDate = Date()                  // the day the view is built around
@@ -447,15 +468,21 @@ final class AppStore: ObservableObject {
         guard cacheDirty else { return }
         pruneCache()
         cacheDirty = false
-        // Syncs often reassign mail without changing it; skip the write when the content is identical.
-        var h = Hasher(); h.combine(messages); h.combine(labelNames)
-        let fingerprint = h.finalize()
-        guard fingerprint != lastSavedFingerprint else { return }
-        lastSavedFingerprint = fingerprint
-        let snapshot = Cache(messages: Array(messages.values), labelNames: labelNames)
-        let previous = cacheWrite
+        let messages = messages, labelNames = labelNames, previous = cacheWrite
         // One write at a time, in order, so an older snapshot can never land on top of a newer one.
-        cacheWrite = Task.detached(priority: .utility) { await previous?.value; Disk.save(snapshot, "cache2.json") }
+        cacheWrite = Task.detached(priority: .utility) { [weak self] in
+            await previous?.value
+            // Syncs often reassign mail without changing it; skip the write when the content is identical.
+            // Hashed here, not on the main thread: this reads the full text of up to thousands of emails.
+            var h = Hasher(); h.combine(messages); h.combine(labelNames)
+            let fingerprint = h.finalize()
+            let changed = await MainActor.run { () -> Bool in
+                guard let self else { return true }
+                defer { self.lastSavedFingerprint = fingerprint }
+                return self.lastSavedFingerprint != fingerprint
+            }
+            if changed { Disk.save(Cache(messages: Array(messages.values), labelNames: labelNames), "cache2.json") }
+        }
     }
 
     /// Keeps inbox, snoozed and follow-up threads whole, plus each account's newest 5,000 messages from 90 days.

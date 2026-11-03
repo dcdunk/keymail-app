@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         return .terminateLater
     }
+    func applicationWillTerminate(_ notification: Notification) { AppStore.current?.flushState() }
 }
 
 @main

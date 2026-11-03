@@ -56,48 +56,45 @@ enum AI {
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
+    private static let foundLock = NSLock()
+    nonisolated(unsafe) private static var found: [String: String] = [:]
+
     static func binary(_ name: String) -> String? {
         if let hit = knownBinary(name) { return hit }
-        // Apps launched from Finder don't get your shell PATH, so ask a login shell.
-        let p = Process(); let out = Pipe()
-        p.executableURL = URL(fileURLWithPath: "/bin/zsh"); p.arguments = ["-lc", "command -v \(name)"]; p.standardOutput = out
-        try? p.run(); p.waitUntilExit()
-        let path = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-        return path.isEmpty ? nil : path
+        if let hit = foundLock.withLock({ found[name] }), FileManager.default.isExecutableFile(atPath: hit) { return hit }
+        // Apps launched from Finder don't get your shell PATH, so ask a login shell. Its startup files can be slow or stuck;
+        // the answer is remembered, and it gets 10 seconds.
+        guard let r = try? runProcessBlocking("/bin/zsh", ["-lc", "command -v \(name)"], timeout: 10), r.status == 0 else { return nil }
+        let path = String(decoding: r.stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard path.hasPrefix("/") else { return nil }
+        foundLock.withLock { found[name] = path }
+        return path
     }
+
+    /// Long enough for a big thread on a slow model; a stuck tool shouldn't leave "thinking…" up forever.
+    nonisolated(unsafe) static var timeout: TimeInterval = 300
 
     static func run(_ prompt: String, with provider: AIProvider, model: String? = nil) async throws -> String {
         guard let bin = binary(provider.binary) else {
             throw AppError("\(provider.name) isn't installed. Install it, then: \(provider.signInHint)")
         }
         let model = model.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
-        return try await Task.detached {
-            let p = Process(), input = Pipe(), out = Pipe(), err = Pipe()
-            p.executableURL = URL(fileURLWithPath: bin)
-            p.arguments = provider.args(model)
-            // An empty scratch folder, so nothing in it is worth reading.
-            let dir = FileManager.default.temporaryDirectory.appendingPathComponent("email-ai")
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            p.currentDirectoryURL = dir
-            var env = ProcessInfo.processInfo.environment
-            env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:" + (env["PATH"] ?? "")
-            env["NO_COLOR"] = "1"
-            p.environment = env
-            p.standardInput = input; p.standardOutput = out; p.standardError = err
-            try p.run()
-            input.fileHandleForWriting.write(Data(prompt.utf8)); try? input.fileHandleForWriting.close()
-            let data = out.fileHandleForReading.readDataToEndOfFile()
-            let errData = err.fileHandleForReading.readDataToEndOfFile()
-            p.waitUntilExit()
-            let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard p.terminationStatus == 0, !text.isEmpty else {
-                let msg = String(decoding: errData + data, as: UTF8.self)
-                // Surface the tool's own error line, which says what's wrong (login, model, plan).
-                let line = msg.components(separatedBy: .newlines).last { $0.contains("rror") || $0.lowercased().contains("login") || $0.lowercased().contains("not supported") }
-                    ?? msg.components(separatedBy: .newlines).last { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? "no output"
-                throw AppError("\(provider.name) failed: \(line.trimmingCharacters(in: .whitespaces).prefix(220))")
-            }
-            return text
-        }.value
+        // An empty scratch folder, so nothing in it is worth reading.
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("email-ai")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        var env = ProcessInfo.processInfo.environment
+        env["PATH"] = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:" + (env["PATH"] ?? "")
+        env["NO_COLOR"] = "1"
+        let r = try await runProcess(bin, provider.args(model), input: Data(prompt.utf8), environment: env, directory: dir, timeout: timeout)
+        if r.timedOut { throw AppError("\(provider.name) took too long and was stopped. Try again.") }
+        let text = String(decoding: r.stdout, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard r.status == 0, !text.isEmpty else {
+            let msg = String(decoding: r.stderr + r.stdout, as: UTF8.self)
+            // Surface the tool's own error line, which says what's wrong (login, model, plan).
+            let line = msg.components(separatedBy: .newlines).last { $0.contains("rror") || $0.lowercased().contains("login") || $0.lowercased().contains("not supported") }
+                ?? msg.components(separatedBy: .newlines).last { !$0.trimmingCharacters(in: .whitespaces).isEmpty } ?? "no output"
+            throw AppError("\(provider.name) failed: \(line.trimmingCharacters(in: .whitespaces).prefix(220))")
+        }
+        return text
     }
 }

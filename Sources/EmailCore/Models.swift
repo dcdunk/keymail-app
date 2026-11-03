@@ -38,9 +38,24 @@ public struct Message: Codable, Identifiable, Hashable {
     /// Best-effort plain text of the body, for quoting and for the AI prompt.
     public var plainText: String {
         let out: String
-        if let text, !text.isEmpty { out = text } else if let html { out = plainFromHTML(html) } else { out = snippet }
+        if let text, !text.isEmpty { out = text } else if let html { out = cachedPlainText(html) } else { out = snippet }
         return out.replacingOccurrences(of: "\u{FFFC}", with: "")   // an object placeholder (an "OBJ" box), never real text
     }
+}
+
+/// Word search reads the text of every email on each search, and turning HTML into text is the slow part.
+/// Keyed by the HTML itself, so edited content can never get stale text. NSCache evicts under memory pressure.
+private let plainTextCache: NSCache<NSString, NSString> = {
+    let c = NSCache<NSString, NSString>()
+    c.totalCostLimit = 64_000_000
+    return c
+}()
+private func cachedPlainText(_ html: String) -> String {
+    let key = html as NSString
+    if let hit = plainTextCache.object(forKey: key) { return hit as String }
+    let text = plainFromHTML(html)
+    plainTextCache.setObject(text as NSString, forKey: key, cost: text.utf8.count)
+    return text
 }
 
 /// Strips tags, scripts and styles; keeps line breaks.
@@ -118,9 +133,11 @@ public struct Conversation: Identifiable, Hashable {
     /// The newest email you can answer: your own unsent draft in the thread doesn't count.
     public var replyTarget: Message { messages.last { !$0.labelIds.contains("DRAFT") } ?? latest }
     public var labels: Set<String> { Set(messages.flatMap(\.labelIds)) }
-    public var isUnread: Bool { labels.contains("UNREAD") }
-    public var isStarred: Bool { labels.contains("STARRED") }
-    public var inInbox: Bool { labels.contains("INBOX") }
+    // Lists check these for every thread on every redraw; no need to build a Set of all its labels each time.
+    private func hasLabel(_ l: String) -> Bool { messages.contains { $0.labelIds.contains(l) } }
+    public var isUnread: Bool { hasLabel("UNREAD") }
+    public var isStarred: Bool { hasLabel("STARRED") }
+    public var inInbox: Bool { hasLabel("INBOX") }
     public var sortDate: Date { max(latest.date, bumped ?? .distantPast) }
 }
 

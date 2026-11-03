@@ -24,10 +24,41 @@ public enum AgentSocket {
         defer { close(fd) }
         let ok = withUnsafePointer(to: &addr) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) } }
         guard ok == 0 else { return nil }
-        let out = body + Data([0x0A])
-        _ = out.withUnsafeBytes { write(fd, $0.baseAddress, out.count) }
-        guard let line = readLine(fd) else { return nil }
+        noSigPipe(fd)
+        guard writeAll(fd, body + Data([0x0A])), let line = readReply(fd) else { return nil }
         return try? JSONSerialization.jsonObject(with: line) as? [String: Any]
+    }
+
+    /// A peer that hung up is an error from write(), not a signal that ends the process.
+    private static func noSigPipe(_ fd: Int32) {
+        var on: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
+    }
+
+    /// write() may take only part of a big reply, so keep going until it's all out. false when the peer is gone.
+    @discardableResult static func writeAll(_ fd: Int32, _ data: Data) -> Bool {
+        data.withUnsafeBytes { buf in
+            var sent = 0
+            while sent < buf.count {
+                let n = write(fd, buf.baseAddress! + sent, buf.count - sent)
+                if n > 0 { sent += n } else if n < 0, errno == EINTR { continue } else { return false }
+            }
+            return true
+        }
+    }
+
+    /// One reply line, in big reads: the client asks once per connection, so nothing past the newline is lost.
+    /// Byte-at-a-time meant one system call per character of every email an agent read.
+    static func readReply(_ fd: Int32) -> Data? {
+        var data = Data(), chunk = [UInt8](repeating: 0, count: 65_536)
+        while data.count <= 20_000_000 {
+            let n = read(fd, &chunk, chunk.count)
+            if n < 0, errno == EINTR { continue }
+            if n <= 0 { return data.isEmpty ? nil : data }
+            if let nl = chunk[0..<n].firstIndex(of: 0x0A) { data.append(contentsOf: chunk[0..<nl]); return data }
+            data.append(contentsOf: chunk[0..<n])
+        }
+        return nil
     }
 
     /// Reads up to the next newline (or end of stream).
@@ -53,13 +84,13 @@ public enum AgentSocket {
             while true {
                 let client = accept(fd, nil, nil)
                 if client < 0 { if errno == EINTR { continue }; return } // closed by stop()
+                noSigPipe(client)
                 Thread.detachNewThread {
                     defer { close(client) }
                     while let line = readLine(client) {
                         let req = (try? JSONSerialization.jsonObject(with: line) as? [String: Any]) ?? [:]
                         guard let reply = try? JSONSerialization.data(withJSONObject: handle(req)) else { return }
-                        let out = reply + Data([0x0A])
-                        _ = out.withUnsafeBytes { write(client, $0.baseAddress, out.count) }
+                        guard writeAll(client, reply + Data([0x0A])) else { return }
                     }
                 }
             }

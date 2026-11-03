@@ -88,6 +88,8 @@ final class IMAPConnection {
     private func readResponse() async throws -> IMAPResponse {
         var r = IMAPResponse(line: try await readLine(), literals: [])
         while let m = r.line.range(of: "\\{(\\d+)\\}$", options: .regularExpression), let n = Int(r.line[m].dropFirst().dropLast()) {
+            // Far past any provider's size limit. A bad server's made-up length mustn't fill the Mac's memory.
+            guard n <= 200_000_000 else { throw AppError("The mail server sent an impossibly large email.") }
             r.literals.append(try await readBytes(n))
             r.line = String(r.line[..<m.lowerBound]) + "{}" + (try await readLine())
         }
@@ -369,21 +371,12 @@ struct ICloud {
         defer { try? FileManager.default.removeItem(at: cfg) }
         let sender = parseAddresses(draft.from).first?.email ?? account
         let smtp = server.smtpURL, name = server.name
-        try await Task.detached {
-            let p = Process(), input = Pipe(), err = Pipe()
-            p.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
-            // --max-time: a stalled mail server can't hold up sending (and scheduled sends, which run inside sync) forever.
-            p.arguments = ["--silent", "--show-error", "--max-time", "180", "--url", smtp, "--ssl-reqd",
-                           "--mail-from", sender] + rcpts.flatMap { ["--mail-rcpt", $0] } + ["--upload-file", "-", "-K", cfg.path]
-            p.standardInput = input; p.standardError = err; p.standardOutput = Pipe()
-            try p.run()
-            // The throwing write: if curl quits early (password refused, offline) a large email can't kill Keymail.
-            try? input.fileHandleForWriting.write(contentsOf: raw); try? input.fileHandleForWriting.close()
-            p.waitUntilExit()
-            guard p.terminationStatus == 0 else {
-                throw AppError("\(name) couldn't send: \(String(decoding: err.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).prefix(200))")
-            }
-        }.value
+        // --max-time in the arguments: a stalled mail server can't hold up sending (and scheduled sends, which run inside sync) forever.
+        let r = try await runProcess("/usr/bin/curl", smtpCurlArguments(url: smtp, sender: sender, recipients: rcpts, configFile: cfg.path),
+                                     input: raw, timeout: 200)
+        guard r.status == 0 else {
+            throw AppError("\(name) couldn't send: \(String(decoding: r.stderr, as: UTF8.self).prefix(200))")
+        }
         do {
             try await session { c in
                 let sent = try await folder(c, "\\Sent", fallback: "Sent Messages")

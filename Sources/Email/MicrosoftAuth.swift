@@ -51,7 +51,7 @@ final class MicrosoftAuth {
         let verifier = (0..<2).map { _ in UUID().uuidString }.joined().replacingOccurrences(of: "-", with: "")
         let state = UUID().uuidString
         var redirect = ""
-        let params = try await receiveOAuthRedirect { port in
+        let params = try await receiveOAuthRedirect(state: state) { port in
             redirect = "http://127.0.0.1:\(port)"
             var c = URLComponents(string: Self.authority + "/authorize")!
             c.queryItems = [.init(name: "client_id", value: Self.clientId), .init(name: "response_type", value: "code"),

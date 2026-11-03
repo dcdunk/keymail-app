@@ -6,12 +6,23 @@ let personalMailDomains: Set<String> = [
     "yahoo.com", "ymail.com", "aol.com", "proton.me", "protonmail.com", "fastmail.com", "hey.com", "gmx.com", "zoho.com",
 ]
 
+/// A plain public website name. A sender writes their own From line, so this keeps logo fetches away from this Mac's
+/// network (x@192.168.1.1, x@printer.local) and keeps odd characters out of the file name the logo is saved under.
+func isPublicHostname(_ host: String) -> Bool {
+    let labels = host.split(separator: ".", omittingEmptySubsequences: false)
+    let plain = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789-")
+    guard labels.count >= 2, let tld = labels.last, tld.count >= 2, tld.allSatisfy({ $0.isASCII && $0.isLetter }),
+          !["local", "localhost", "internal", "lan", "home", "intranet", "test", "invalid"].contains(String(tld)) else { return false }
+    return labels.allSatisfy { !$0.isEmpty && $0.unicodeScalars.allSatisfy(plain.contains) }
+}
+
 /// The company site to take a sender's logo from: health@aws.com → aws.com, receipts@email.trinet.com → trinet.com.
 /// nil for personal mailboxes (gmail.com and friends) and anything that isn't a domain.
 public func logoDomain(for email: String) -> String? {
     guard let at = email.lastIndex(of: "@") else { return nil }
-    let labels = email[email.index(after: at)...].lowercased().split(separator: ".").map(String.init)
-    guard labels.count >= 2, labels.allSatisfy({ !$0.isEmpty }) else { return nil }
+    let host = email[email.index(after: at)...].lowercased()
+    guard isPublicHostname(host) else { return nil }
+    let labels = host.split(separator: ".").map(String.init)
     // ponytail: two-part suffixes guessed by length (co.uk, com.au), not the full public suffix list.
     let keep = labels.count >= 3 && labels[labels.count - 2].count <= 3 && labels.last!.count == 2 ? 3 : 2
     let domain = labels.suffix(keep).joined(separator: ".")
@@ -64,7 +75,7 @@ public func logoSites(for domain: String, senderName: String? = nil) -> [String]
         sites = ["com", "io", "co"].map { "\(company).\($0)" } + sites
     }
     var seen = Set<String>()
-    return sites.filter { seen.insert($0).inserted }
+    return sites.filter { isPublicHostname($0) && seen.insert($0).inserted }
 }
 
 /// "The Sonar Team" → "sonar", "xSuit" → "xsuit", "Salesforce Billing" → "salesforce". nil for addresses and blanks.

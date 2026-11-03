@@ -212,7 +212,9 @@ public func unsubscribeAction(header: String, oneClickPost: Bool) -> Unsubscribe
     let urls = header.components(separatedBy: ",").compactMap { part -> URL? in
         URL(string: part.trimmingCharacters(in: CharacterSet(charactersIn: " <>\t\r\n")))
     }
-    if let https = urls.first(where: { $0.scheme == "https" }) { return oneClickPost ? .oneClick(https) : .open(https) }
+    // A one-click POST happens without a page to look at, so a link that looks wrong (a look-alike site, an address on
+    // your own network) never gets one: it opens instead, through the same warning as any other link.
+    if let https = urls.first(where: { $0.scheme == "https" }) { return oneClickPost && linkWarning(href: https.absoluteString, shown: "") == nil ? .oneClick(https) : .open(https) }
     if let mail = urls.first(where: { $0.scheme == "mailto" }) { return .open(mail) }
     return .none
 }

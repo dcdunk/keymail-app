@@ -28,7 +28,7 @@ extension AppStore {
 
     /// Saves to Downloads (never overwriting) and opens it.
     func safeName(_ name: String) -> String {
-        name.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
+        safeFilename(name)
     }
 
     /// Gmail attachment IDs run ~500 characters; macOS file names max out at 255. Hash to a short, stable folder name.

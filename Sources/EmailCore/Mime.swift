@@ -260,6 +260,12 @@ public func queryItems(fromRequest req: String) -> [String: String] {
     return out
 }
 
+/// True for the provider's real answer to this sign-in. The listener is on a local port any web page can reach, so a
+/// stray request carrying "?error=…" must not end the sign-in; only the secret `state` we sent out proves it's the answer.
+public func oauthRedirectIsOurs(_ query: [String: String], state: String) -> Bool {
+    query["state"] == state && (query["code"] != nil || query["error"] != nil)
+}
+
 /// The sender designed a dark version (a prefers-color-scheme: dark style, or a color-scheme that includes dark).
 public func emailHasOwnDarkMode(_ html: String) -> Bool {
     let h = html.lowercased()

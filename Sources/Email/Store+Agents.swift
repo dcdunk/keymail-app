@@ -52,14 +52,17 @@ extension AppStore {
         let name = req["name"] as? String ?? "", args = req["args"] as? [String: Any] ?? [:]
         do {
             let text = try await agentCall(name, args)
-            agentLog.insert(AgentLogEntry(tool: name, detail: agentDetail(args), ok: true), at: 0)
+            noteAgent(AgentLogEntry(tool: name, detail: agentDetail(args), ok: true))
             return ["text": text, "isError": false]
         } catch {
-            agentLog.insert(AgentLogEntry(tool: name, detail: error.localizedDescription, ok: false), at: 0)
+            noteAgent(AgentLogEntry(tool: name, detail: error.localizedDescription, ok: false))
             return ["text": error.localizedDescription, "isError": true]
         }
         // ponytail: the log lives for this session only; persist it if people want history across launches.
     }
+
+    /// Newest first, and no longer than Settings can usefully show: an agent in a loop mustn't grow this forever.
+    private func noteAgent(_ e: AgentLogEntry) { agentLog = Array(([e] + agentLog).prefix(200)) }
 
     func agentDetail(_ args: [String: Any]) -> String {
         ["query", "to", "subject", "thread_id", "email", "action", "when", "date"].compactMap { k in args[k].map { "\(k): \($0)" } }

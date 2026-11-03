@@ -117,7 +117,9 @@ final class PackageAITests: XCTestCase {
         allow(true)
         var f = PackageForm.new(); f.name = "Lamp"; f.order = "LAMP-998877"
         store.savePackage(f)
-        var m = try XCTUnwrap(store.messages.values.first); m.id = "lamp-1"; m.subject = "Lamp"; m.date = Date()
+        // A received email: AI never reads Sent, Draft or Spam, and a dictionary's "first" is a different one every run (this failed about 1 run in 10).
+        var m = try XCTUnwrap(store.messages.values.first { $0.labelIds.contains("INBOX") && !$0.labelIds.contains("SENT") && !$0.labelIds.contains("DRAFT") && !$0.labelIds.contains("SPAM") && $0.authFailed != true })
+        m.id = "lamp-1"; m.subject = "Lamp"; m.date = Date()
         m.text = "Order LAMP-998877 left us. Track 1Z111AA10123456789."
         store.messages[m.key] = m
         let work = store.packageEmailsToRead()

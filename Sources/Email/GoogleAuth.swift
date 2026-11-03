@@ -97,7 +97,7 @@ final class GoogleAuth {
         let verifier = (0..<2).map { _ in UUID().uuidString }.joined().replacingOccurrences(of: "-", with: "")
         let state = UUID().uuidString
         var redirect = ""
-        let params = try await receiveOAuthRedirect { port in
+        let params = try await receiveOAuthRedirect(state: state) { port in
             redirect = "http://127.0.0.1:\(port)"
             var c = URLComponents(string: "https://accounts.google.com/o/oauth2/v2/auth")!
             c.queryItems = [.init(name: "client_id", value: client.client_id), .init(name: "redirect_uri", value: redirect),
@@ -190,7 +190,7 @@ enum SignInPage {
 /// One-shot HTTP listener on 127.0.0.1 for browser sign-ins (Google and Microsoft). Gives up after 5 minutes.
 /// The provider sends the browser back here with a one-time code; we forward it to a clean, branded page.
 @MainActor
-func receiveOAuthRedirect(onReady: @escaping (UInt16) -> Void) async throws -> [String: String] {
+func receiveOAuthRedirect(state: String, onReady: @escaping (UInt16) -> Void) async throws -> [String: String] {
     let params = NWParameters.tcp
     params.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
     let listener = try NWListener(using: params)
@@ -219,7 +219,7 @@ func receiveOAuthRedirect(onReady: @escaping (UInt16) -> Void) async throws -> [
                     let resp = head + "\r\nContent-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n" + body
                     conn.send(content: Data(resp.utf8), completion: .contentProcessed { _ in conn.cancel() })
                 }
-                if q["code"] != nil || q["error"] != nil {
+                if oauthRedirectIsOurs(q, state: state) {
                     // Google's return address carries the one-time code; forward to a clean address so it
                     // doesn't sit in the address bar or browser history.
                     let target = q["code"] != nil ? "/signed-in" : "/not-signed-in?reason=" + (q["error"] ?? "").addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
