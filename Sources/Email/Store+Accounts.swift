@@ -68,6 +68,7 @@ extension AppStore {
         state.forget(a)
         messages = messages.filter { $0.value.account != a }
         saveCache()
+        try? FileManager.default.removeItem(at: FreezeRecorder.shared.log)   // its email IDs may be this account's
     }
 
     /// Your profile photo for each Google and Microsoft account. Google needs the "profile" permission, which accounts

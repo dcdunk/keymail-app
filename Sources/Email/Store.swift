@@ -303,9 +303,9 @@ final class AppStore: ObservableObject {
     }
     let calendar = CalendarService()
     // Calendar screen (g c). Its view, week start, default calendar and hidden calendars live in UserDefaults.
-    @Published var calendarOpen = false
+    @Published var calendarOpen = false { didSet { noteScreenForFreezes() } }
     @Published var searchFocus = 0                    // bumped by / to put the cursor back in an open search bar
-    @Published var toolScreen: ToolScreen?          // Clean up senders or Insights, in place of the inbox (⌘K)
+    @Published var toolScreen: ToolScreen? { didSet { noteScreenForFreezes() } }          // Clean up senders or Insights, in place of the inbox (⌘K)
     @Published var cleanupFilter = CleanupFilter.most
     @Published var cleanupIndex = 0
     @Published var cleanupSelected: Set<String> = []
@@ -341,8 +341,8 @@ final class AppStore: ObservableObject {
     @Published var inviteDay: InviteDay?                 // the open invite's day, for the strip and the context panel
     var openInvite: (message: Message, invite: Invite)?  // the invite in the email you're reading (Y / ? / N answer it)
     var pendingG: Date?
-    @Published var selectedID: String?
-    @Published var threadOpen = false
+    @Published var selectedID: String? { didSet { noteScreenForFreezes() } }
+    @Published var threadOpen = false { didSet { noteScreenForFreezes() } }
     @Published var paletteOpen = false { didSet { if !paletteOpen && oldValue { refreshHover(after: 0.1) } } }
     @Published var paletteText = ""
     @Published var paletteIndex = 0
@@ -378,6 +378,8 @@ final class AppStore: ObservableObject {
         let cache = Disk.load("cache2.json", as: Cache.self) ?? { state.historyIds = [:]; return Cache() }()
         messages = Dictionary(cache.messages.map { ($0.key, $0) }, uniquingKeysWith: { $1 })
         labelNames = cache.labelNames
+        // Here, not in start(): that runs after the first layout, and a freeze can begin during it.
+        if !AppFlavor.isTesting { FreezeRecorder.shared.start { [weak self] in self?.freezeSnapshot ?? "" } }
     }
 
     /// Settings slide in from the right inside the main window (⌘,). Esc or clicking the inbox closes them.

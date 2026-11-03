@@ -182,6 +182,18 @@ final class CoreFlowsTests: XCTestCase {
         XCTAssertFalse(store.allConversations.first { $0.id == id }!.inInbox, "Return runs the picked command")
     }
 
+    func testPaletteShowsFreezeLog() {
+        let log = FreezeRecorder.shared.log
+        try? FileManager.default.removeItem(at: log)
+        store.commands.first { $0.title == "Show freeze log" }!.run()
+        XCTAssertEqual(store.banner, "No freezes recorded on this Mac.")
+        store.banner = nil
+        FileManager.default.createFile(atPath: log.path, contents: Data("x\n".utf8))
+        defer { try? FileManager.default.removeItem(at: log) }
+        store.commands.first { $0.title == "Show freeze log" }!.run()
+        XCTAssertNil(store.banner, "with a log, it opens Finder instead of saying there's nothing")
+    }
+
     // MARK: Mouse (row buttons and menus call these same store actions)
 
     func testRowButtonsActOnThatRowNotTheSelection() {

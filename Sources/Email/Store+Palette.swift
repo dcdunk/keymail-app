@@ -201,6 +201,7 @@ extension AppStore {
         if !undoStack.isEmpty { list.append(Command(title: "Undo", key: "⌘Z") { self.undo() }) }
         list.append(Command(title: "Fetch mail", key: "⌘R") { Task { await self.tick() } })
         list.append(Command(title: "Settings…", key: "⌘,") { self.openSettings() })
+        list.append(Command(title: "Show freeze log") { self.showFreezeLog() })
         list += state.scheduled.map { j in Command(title: "Cancel scheduled: \(j.draft.subject)") { self.state.scheduled.removeAll { $0.id == j.id } } }
         return list
     }
