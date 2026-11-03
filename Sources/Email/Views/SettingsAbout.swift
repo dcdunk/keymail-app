@@ -6,6 +6,8 @@ import EmailCore
 import EventKit
 import QuickLook
 
+let privacyPolicyURL = URL(string: "https://keymailapp.com/privacy/")!
+
 // MARK: Settings → About
 
 struct AboutSettings: View {
@@ -37,7 +39,7 @@ struct AboutSettings: View {
             .background(RoundedRectangle(cornerRadius: 14).fill(Color.primary.opacity(0.04)))
 
             VStack(alignment: .leading, spacing: 8) {
-                info("Privacy", "Mail goes straight between this Mac and Google, Apple or Microsoft. Keymail has no servers.")
+                info("Privacy", "Mail goes straight between this Mac and Google, Apple, Microsoft or Yahoo. Keymail has no servers.")
                 info("AI", "Runs through the AI app you choose in AI Providers, signed in on this Mac.")
                 info("Requires", "macOS 14 or later")
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -54,6 +56,7 @@ struct AboutSettings: View {
                 Link("Report a problem", destination: URL(string: "https://github.com/dcdunk/keymail-app/issues/new")!)
             }
             .font(.scaled(.callout)).handCursor()
+            Link("Privacy policy", destination: privacyPolicyURL).font(.scaled(.callout)).handCursor()
             Spacer()
             Text("© 2026 Danny Chait. Updates by Sparkle (MIT license).").font(.scaled(.caption2)).foregroundStyle(.tertiary)
         }

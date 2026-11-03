@@ -99,8 +99,13 @@ struct OnboardingView: View {
                 providerCard("outlook", "Outlook", "Outlook.com, Hotmail or Microsoft 365", key: "3") { store.connectMicrosoft() }
                 providerCard("yahoo", "Yahoo Mail", "With an app password", key: "4") { showYahoo = true }
             }
+            privacyLink
             if !store.state.accounts.isEmpty { Button("Back") { step = .accounts }.quiet().keyboardShortcut(.cancelAction) }
         }
+    }
+
+    var privacyLink: some View {
+        Link("Privacy policy", destination: privacyPolicyURL).font(.scaled(.callout)).handCursor()
     }
 
     func providerCard(_ brand: String, _ name: String, _ detail: String, key: Character, _ action: @escaping () -> Void) -> some View {
@@ -124,6 +129,7 @@ struct OnboardingView: View {
                 Button("Back") { step = .connect }.quiet().keyboardShortcut(.cancelAction)
                 if store.hasClient { primary("Sign in with Google") { store.addAccount() } }
             }
+            privacyLink
         }
     }
 
