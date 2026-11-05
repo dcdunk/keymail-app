@@ -98,6 +98,7 @@ extension AppStore {
         guard let c = allConversations.first(where: { $0.id == id }) else { return false }
         switch target {
         case "Inbox":
+            if c.labels.contains("SPAM") { act(on: c) { markNotJunk() }; return true }
             guard !c.inInbox else { return false }
             modify(c, add: ["INBOX"]); banner = "Moved to Inbox."
         case "Starred": if !c.isStarred { modify(c, add: ["STARRED"]) }

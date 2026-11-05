@@ -121,11 +121,18 @@ extension AppStore {
         }
         selectedID = c.id
         banner = kind == .trash ? "Restored from Trash." : kind == .junk ? "Not junk. Moved back to inbox." : "Moved back to inbox."
+        moveToInboxOnServer(c, from: kind)
+    }
+
+    /// Tells the account's server to put these emails back in the inbox. `notMoved` runs if the server refused the move.
+    func moveToInboxOnServer(_ c: Conversation, from kind: UndoKind, notMoved: @escaping () -> Void = {}) {
         Task {
+            var moved = false
             do {
                 if isICloud(c.account) {
                     try await icloud(c.account).restore(messageIds: c.messages.map(\.messageIdHeader),
                                                              from: kind == .trash ? "trash" : kind == .junk ? "junk" : "archive")
+                    moved = true
                     // UIDs change when iCloud moves mail, so drop the old copies and re-fetch.
                     for m in c.messages { messages[m.key] = nil }
                     try await syncICloud(c.account)
@@ -142,7 +149,10 @@ extension AppStore {
                 } else {
                     try await gmail(c.account).modifyThread(c.threadId, add: ["INBOX"], remove: [])
                 }
-            } catch { report(error); try? await sync(c.account) }
+            } catch {
+                if !moved { notMoved() }
+                report(error); try? await sync(c.account)
+            }
         }
     }
 
@@ -193,5 +203,35 @@ extension AppStore {
                 else { try await gmail(c.account).modifyThread(c.threadId, add: ["SPAM"], remove: ["INBOX"]) }
             } catch { report(error) }
         }
+    }
+
+    /// Not junk: the emails in the spam folder go back to the inbox. If the server refuses, they return to Spam on screen too.
+    func markNotJunk() {
+        guard let c = selected, c.labels.contains("SPAM") else { return }
+        undoStack.removeAll()   // ! junks it again; ⌘Z must not undo some older action instead
+        let inSpamList = folder == "Spam"
+        if inSpamList {
+            advance(after: c)
+            searchResults?.remove(c.id)   // the list is a saved set of ids, so it would stay on screen otherwise
+        }
+        let spam = c.messages.filter { $0.labelIds.contains("SPAM") }
+        for var m in spam {
+            m.labelIds = m.labelIds.filter { $0 != "SPAM" && $0 != "INBOX" } + ["INBOX"]
+            messages[m.key] = m
+        }
+        banner = "Not junk. Moved back to inbox."
+        if inSpamList, threadOpen, let s = selected { open(s) }
+        var moving = c
+        moving.messages = spam
+        moveToInboxOnServer(moving, from: .junk) { [weak self] in
+            guard let self, !AppFlavor.isDemo else { return }   // demo accounts have no server, so every move "fails"
+            for m in spam { self.messages[m.key] = m }
+            if inSpamList, self.folder == "Spam" { self.searchResults?.insert(c.id) }
+        }
+    }
+
+    /// The ! key and the junk button: junk, or take it back out if it's already in Spam.
+    func toggleJunk() {
+        selected?.labels.contains("SPAM") == true ? markNotJunk() : markJunk()
     }
 }

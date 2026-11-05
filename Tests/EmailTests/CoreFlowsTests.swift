@@ -110,6 +110,59 @@ final class CoreFlowsTests: XCTestCase {
         XCTAssertNil(store.allConversations.first { $0.id == c.id }, "dropped on Spam: junked")
     }
 
+    func testNotJunkReturnsToInbox() {
+        let c = store.selected!
+        func putInSpam() {
+            for m in c.messages { store.messages[m.key]?.labelIds = ["SPAM"] }
+            store.folder = "Spam"; store.searchResults = [c.id]; store.selectedID = c.id
+        }
+        func assertBackInInbox(_ how: String) {
+            let back = store.allConversations.first { $0.id == c.id }
+            XCTAssertTrue(back?.inInbox == true, "\(how): back in the inbox")
+            XCTAssertFalse(back?.labels.contains("SPAM") == true, "\(how): no longer spam")
+            XCTAssertFalse(store.visible.contains { $0.id == c.id }, "\(how): gone from the Spam list")
+            XCTAssertEqual(store.banner, "Not junk. Moved back to inbox.", how)
+        }
+
+        putInSpam()
+        let titles = store.commands.map(\.title)
+        XCTAssertTrue(titles.contains("Not junk"), "in the ⌘K palette")
+        XCTAssertFalse(titles.contains("Mark as junk"), "spam can't be junked twice")
+        let menu = store.conversationEntries(store.selected!)
+        XCTAssertFalse(menu.contains { $0.title == "Mark as junk" })
+        let moves = menu.first { $0.title == "Move to" }?.submenu ?? []
+        XCTAssertTrue(moves.contains { $0.title == "Inbox" }, "Move to offers the inbox")
+        XCTAssertFalse(moves.contains { $0.title == "Spam" }, "and not the folder it's already in")
+
+        press("!", code: 18, .shift)
+        assertBackInInbox("the ! key")
+
+        putInSpam()
+        store.commands.first { $0.title == "Not junk" }!.run()
+        assertBackInInbox("the palette")
+
+        putInSpam()
+        store.conversationEntries(store.selected!).first { $0.title == "Not junk" }!.action()
+        assertBackInInbox("the right-click menu")
+
+        putInSpam()
+        XCTAssertTrue(store.drop(c.id, on: "Inbox"))
+        assertBackInInbox("dragging to Inbox")
+
+        // Spam dropped on Spam stays spam: the junk action must not flip it back out.
+        for m in c.messages { store.messages[m.key]?.labelIds = ["SPAM"] }
+        store.drop(c.id, on: "Spam")
+        XCTAssertTrue(store.allConversations.first { $0.id == c.id }?.labels.contains("SPAM") == true)
+
+        // Only what was in Spam moves: your sent reply in the same thread doesn't land in the inbox.
+        resetUI()
+        var sent = c.messages[0]; sent.id = "sent-copy"; sent.labelIds = ["SENT"]; sent.date = .distantPast
+        store.messages[sent.key] = sent
+        putInSpam()
+        store.markNotJunk()
+        XCTAssertEqual(store.messages[sent.key]?.labelIds, ["SENT"])
+    }
+
     func testStarAndUnread() {
         let id = store.selectedID!
         let starred = store.selected!.isStarred, unread = store.selected!.isUnread

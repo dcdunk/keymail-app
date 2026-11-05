@@ -297,7 +297,7 @@ struct ICloud {
     /// Undo: finds messages in Trash, Junk or Archive by Message-ID and moves them back to INBOX.
     func restore(messageIds: [String], from which: String) async throws {
         let ids = messageIds.filter { !$0.isEmpty }
-        guard !ids.isEmpty else { throw AppError("Can't undo: these emails have no Message-ID.") }
+        guard !ids.isEmpty else { throw AppError("Can't move these emails back: they have no Message-ID.") }
         try await session { c in
             let (use, fallback) = Self.mailbox(which)
             let src = try await folder(c, use, fallback: fallback)

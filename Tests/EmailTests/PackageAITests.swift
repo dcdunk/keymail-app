@@ -91,7 +91,7 @@ final class PackageAITests: XCTestCase {
     func testAFindingUpdatesThePackageAndSaysSo() async throws {
         allow(true)
         let p = try id(of: ups), day = Calendar.current.date(byAdding: .day, value: 4, to: Date())!
-        answer = #"[{"id": "\#(p)", "status": "out_for_delivery", "expected": "\#(day.formatted(.iso8601.year().month().day()))", "problem": "delayed", "item": "Ignored, it has a name"}]"#
+        answer = #"[{"id": "\#(p)", "status": "out_for_delivery", "expected": "\#(day.formatted(Date.ISO8601FormatStyle(timeZone: .current).year().month().day()))", "problem": "delayed", "item": "Ignored, it has a name"}]"#
         let before = try XCTUnwrap(shoes)
         await store.refreshPackages()
         let q = try XCTUnwrap(shoes)
@@ -108,7 +108,7 @@ final class PackageAITests: XCTestCase {
         store.savePackage(f)
         let typed = shoes?.eta
         let p = try id(of: ups), day = Calendar.current.date(byAdding: .day, value: 9, to: Date())!
-        answer = #"[{"id": "\#(p)", "expected": "\#(day.formatted(.iso8601.year().month().day()))", "item": "Pegasus"}]"#
+        answer = #"[{"id": "\#(p)", "expected": "\#(day.formatted(Date.ISO8601FormatStyle(timeZone: .current).year().month().day()))", "item": "Pegasus"}]"#
         await store.refreshPackages()
         XCTAssertEqual(shoes?.title, "My shoes"); XCTAssertEqual(shoes?.eta, typed)
     }
