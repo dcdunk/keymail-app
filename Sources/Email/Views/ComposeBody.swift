@@ -44,6 +44,7 @@ final class BodyFormatter: NSObject, ObservableObject, NSTextViewDelegate {
     var size = CGSize.zero
     weak var textView: NSTextView?
     var onChange: ((String) -> Void)?
+    var onFiles: (([URL]) -> Void)?   // files dropped on the text become attachments
     private var saved: String?
     private var pointSize: CGFloat = 0
     fileprivate var pendingFocus = false
@@ -232,6 +233,15 @@ private final class BodyTextView: NSTextView {
         }
     }
     override func paste(_ sender: Any?) { super.paste(sender); formatter?.normalize() }
+    // A file dropped on the message was ignored or pasted in as its file name; it's an attachment instead.
+    override func draggingEntered(_ s: NSDraggingInfo) -> NSDragOperation { droppedFiles(s.draggingPasteboard).isEmpty ? super.draggingEntered(s) : .copy }
+    override func draggingUpdated(_ s: NSDraggingInfo) -> NSDragOperation { droppedFiles(s.draggingPasteboard).isEmpty ? super.draggingUpdated(s) : .copy }
+    override func performDragOperation(_ s: NSDraggingInfo) -> Bool {
+        let files = droppedFiles(s.draggingPasteboard)
+        guard !files.isEmpty, let onFiles = formatter?.onFiles else { return super.performDragOperation(s) }
+        onFiles(files)
+        return true
+    }
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if formatter?.pendingFocus == true { DispatchQueue.main.async { self.formatter?.focus() } }

@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import EmailCore
 import CryptoKit
+import UniformTypeIdentifiers
 
 extension AppStore {
     // MARK: Compose / send
@@ -276,4 +277,24 @@ extension AppStore {
         state.scheduled.append(ScheduledSend(draft: d, at: at, remindDays: remindDays))
         banner = "Scheduled for \(at.formatted(date: .abbreviated, time: .shortened))."
     }
+
+    /// Adds files to a draft: from the Attach button, or dragged anywhere onto the compose window.
+    /// Stops at the account's size limit and says so, leaving the files already added.
+    func attach(_ urls: [URL], to model: ComposeModel) {
+        for url in urls {
+            guard let data = try? Data(contentsOf: url) else { model.error = "Couldn't read \(url.lastPathComponent)."; continue }
+            let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
+            let next = model.draft.files + [OutgoingFile(name: url.lastPathComponent, mimeType: mime, data: data)]
+            let acct = account(of: model.draft)
+            let cap = attachmentLimit(provider: isMicrosoft(acct) ? "outlook" : isICloud(acct) ? "icloud" : "gmail")
+            if attachmentsTooLarge(next, limit: cap.bytes) { model.error = "Attachments are over \(cap.label)."; return }
+            model.draft.files = next
+        }
+    }
+}
+
+/// Files (not folders) dragged from Finder or the desktop.
+func droppedFiles(_ pb: NSPasteboard) -> [URL] {
+    let urls = pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
+    return urls.filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) != true }
 }

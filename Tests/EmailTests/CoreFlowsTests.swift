@@ -381,6 +381,38 @@ final class CoreFlowsTests: XCTestCase {
         XCTAssertEqual(store.account(of: m.draft), a)
     }
 
+    func testDroppingFilesOnComposeAttachesThem() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let pdf = dir.appendingPathComponent("Invoice.pdf"), photo = dir.appendingPathComponent("photo.jpg")
+        try Data("%PDF-1.4".utf8).write(to: pdf); try Data([0xFF, 0xD8, 0xFF]).write(to: photo)
+        let folder = dir.appendingPathComponent("A folder"); try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+
+        // What Finder puts on the drag: two files and a folder. Folders aren't attachments.
+        let pb = NSPasteboard(name: .init("keymail-test-\(UUID().uuidString)")); defer { pb.releaseGlobally() }
+        pb.clearContents(); pb.writeObjects([pdf, photo, folder] as [NSURL])
+        let dropped = droppedFiles(pb)
+        XCTAssertEqual(dropped.map(\.lastPathComponent), ["Invoice.pdf", "photo.jpg"])
+
+        // Dragged text is still just text, not an attachment.
+        let text = NSPasteboard(name: .init("keymail-test-\(UUID().uuidString)")); defer { text.releaseGlobally() }
+        text.clearContents(); text.setString("hello", forType: .string)
+        XCTAssertTrue(droppedFiles(text).isEmpty)
+
+        let m = ComposeModel(draft: Draft(from: me), context: nil)
+        store.attach(dropped, to: m)
+        XCTAssertEqual(m.draft.files.map(\.name), ["Invoice.pdf", "photo.jpg"], "dropped files become attachments")
+        XCTAssertEqual(m.draft.files.map(\.mimeType), ["application/pdf", "image/jpeg"])
+        XCTAssertNil(m.error)
+
+        // Over the account's size limit: stops and says so, keeps what was already attached.
+        let big = dir.appendingPathComponent("huge.mov"); try Data(count: 25_000_000).write(to: big)
+        store.attach([big], to: m)
+        XCTAssertEqual(m.draft.files.count, 2)
+        XCTAssertTrue(m.error?.hasPrefix("Attachments are over") == true, m.error ?? "")
+    }
+
     func testUnreadOnlyKeepsTheOpenedEmailInPlace() {
         store.unreadOnly = true; defer { store.unreadOnly = false }
         let v = store.visible

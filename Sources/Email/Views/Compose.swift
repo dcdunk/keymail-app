@@ -62,6 +62,7 @@ struct ComposeView: View {
                 .padding(.horizontal, 19).padding(.vertical, 6)
                 .frame(minHeight: 140)
                 .onAppear {
+                    fmt.onFiles = { [store, model] urls in store.attach(urls, to: model) }   // files dropped on the message itself
                     showCc = !model.draft.cc.isEmpty; showBcc = !model.draft.bcc.isEmpty
                     // New email: start in To. Reply or forward with recipients filled in: start in the message.
                     // Next run loop, so the card's fields exist before focus moves (it opens as an overlay now).
@@ -320,17 +321,7 @@ struct ComposeView: View {
         if p.runModal() == .OK { attach(p.urls) }
     }
 
-    func attach(_ urls: [URL]) {
-        for url in urls {
-            guard let data = try? Data(contentsOf: url) else { model.error = "Couldn't read \(url.lastPathComponent)."; continue }
-            let mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
-            let next = model.draft.files + [OutgoingFile(name: url.lastPathComponent, mimeType: mime, data: data)]
-            let acct = store.account(of: model.draft)
-            let cap = attachmentLimit(provider: store.isMicrosoft(acct) ? "outlook" : store.isICloud(acct) ? "icloud" : "gmail")
-            if attachmentsTooLarge(next, limit: cap.bytes) { model.error = "Attachments are over \(cap.label)."; return }
-            model.draft.files = next
-        }
-    }
+    func attach(_ urls: [URL]) { store.attach(urls, to: model) }
 
     /// Keeps the window open until Gmail confirms, so a failed send never loses the draft.
     func send(at date: Date?) {
