@@ -67,6 +67,8 @@ struct RootView: View {
             else { MainView() }
         }
         .glassButtons()
+        // The hidden title bar no longer answers a double-click; this strip does, the way the person set it up.
+        .overlay(alignment: .top) { TitleBarStrip().frame(height: 28).ignoresSafeArea() }
         .modifier(WritingToolsSetting(on: writingToolsButton))
         .font(.scaled(.body))
         .id(textScale) // fonts read the size when drawn, so a new size redraws everything
@@ -80,4 +82,38 @@ struct WritingToolsSetting: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 15.0, *) { content.writingToolsBehavior(on ? .automatic : .disabled) } else { content }
     }
+}
+
+/// What double-clicking a title bar does, from System Settings → Desktop & Dock ("Fill", "Zoom", "Minimize", "None").
+enum TitleBarDoubleClick: Equatable { case zoom, minimize, nothing
+    static func from(action: String?, legacyMinimize: Bool) -> TitleBarDoubleClick {
+        switch action?.lowercased() {
+        case "minimize": return .minimize
+        case "none": return .nothing
+        case nil: return legacyMinimize ? .minimize : .zoom   // never changed: macOS zooms
+        default: return .zoom   // "Fill", "Maximize", "Zoom"
+        }
+    }
+    static var current: TitleBarDoubleClick {
+        let g = UserDefaults(suiteName: UserDefaults.globalDomain)
+        return from(action: g?.string(forKey: "AppleActionOnDoubleClick"), legacyMinimize: g?.bool(forKey: "AppleMiniaturizeOnDoubleClick") ?? false)
+    }
+}
+
+/// An invisible strip along the top edge: drag it to move the window, double-click it to zoom (or minimize).
+/// ponytail: "Fill" zooms the window to fill the screen, which looks the same; macOS has no public call for its own Fill.
+private struct TitleBarStrip: NSViewRepresentable {
+    final class Strip: NSView {
+        override var mouseDownCanMoveWindow: Bool { true }
+        override func mouseDown(with e: NSEvent) {
+            guard e.clickCount == 2, let w = window else { window?.performDrag(with: e); return }
+            switch TitleBarDoubleClick.current {
+            case .zoom: w.zoom(nil)
+            case .minimize: w.miniaturize(nil)
+            case .nothing: break
+            }
+        }
+    }
+    func makeNSView(context: Context) -> NSView { Strip() }
+    func updateNSView(_ v: NSView, context: Context) {}
 }
