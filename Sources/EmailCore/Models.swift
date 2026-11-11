@@ -103,6 +103,30 @@ public func linkify(_ escaped: String) -> String {
     escaped.replacingOccurrences(of: "(https?://[^\\s<>\"]+[^\\s<>\".,;:!?)\\]])", with: "<a href=\"$1\">$1</a>", options: .regularExpression)
 }
 
+/// The same for an HTML email: web addresses written as plain text become links, as Apple Mail and Gmail show them.
+/// Only text between tags changes; text already inside a link, or in style, script, title or head, is left alone.
+public func linkifyHTML(_ html: String) -> String {
+    guard html.range(of: "http", options: .caseInsensitive) != nil else { return html }
+    let tag = try! NSRegularExpression(pattern: "<!--[\\s\\S]*?-->|<[^>]*>")
+    let ns = html as NSString
+    var out = "", pos = 0, skip: String? = nil   // the closing tag we're waiting for, while inside <a>, <style>…
+    func text(_ r: NSRange) {
+        let t = ns.substring(with: r)
+        out += skip == nil && t.range(of: "http", options: .caseInsensitive) != nil ? linkify(t) : t
+    }
+    for m in tag.matches(in: html, range: NSRange(location: 0, length: ns.length)) {
+        if m.range.location > pos { text(NSRange(location: pos, length: m.range.location - pos)) }
+        let t = ns.substring(with: m.range)
+        let name = t.dropFirst().prefix { $0.isLetter || $0 == "/" }.lowercased()
+        if let s = skip { if name == "/" + s { skip = nil } }
+        else if ["a", "style", "script", "title", "head", "textarea"].contains(name) { skip = name }
+        out += t
+        pos = m.range.location + m.range.length
+    }
+    if pos < ns.length { text(NSRange(location: pos, length: ns.length - pos)) }
+    return out
+}
+
 /// Swaps `cid:` image references for data URLs. `images` maps content id → data URL.
 /// Bounded: only image data URLs and plain-token ids are used, and an image is skipped when inlining it
 /// would grow the email past `limit` bytes (a tiny email repeating one reference could otherwise need gigabytes).

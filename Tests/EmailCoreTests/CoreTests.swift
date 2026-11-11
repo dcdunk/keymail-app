@@ -126,6 +126,20 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(parseMessage(j, account: me)?.attachments, [AttachmentRef(id: "ATT1", name: "a.pdf", mimeType: "application/pdf", size: 1234)])
     }
 
+    func testLinkifyHTMLMakesBareAddressesClickable() {
+        // The shape of a recruiter's scheduling email: the link is plain text inside a paragraph.
+        let mail = "<div><p>Pick a time here: https://app9.greenhouse.io/schedule/AbC?utm_medium=email&amp;utm_source=Self. Thanks</p></div>"
+        XCTAssertEqual(linkifyHTML(mail), "<div><p>Pick a time here: <a href=\"https://app9.greenhouse.io/schedule/AbC?utm_medium=email&amp;utm_source=Self\">https://app9.greenhouse.io/schedule/AbC?utm_medium=email&amp;utm_source=Self</a>. Thanks</p></div>")
+        // Already a link, an attribute, styles and the head stay exactly as written.
+        let untouched = ["<a href=\"https://x.com\">https://x.com</a>", "<a href=\"https://x.com\"><b>see https://x.com</b></a>",
+                         "<img src=\"https://x.com/a.png\" alt=\"https://x.com\">", "<style>.a{background:url(https://x.com/b.png)}</style>",
+                         "<head><title>https://x.com</title></head>", "<!-- https://x.com -->", "<p>no links here</p>"]
+        for h in untouched { XCTAssertEqual(linkifyHTML(h), h) }
+        // After a link closes, later plain addresses still get linked; <abbr> isn't mistaken for <a>.
+        XCTAssertEqual(linkifyHTML("<a href=\"https://a.com\">a</a> and https://b.com"), "<a href=\"https://a.com\">a</a> and <a href=\"https://b.com\">https://b.com</a>")
+        XCTAssertEqual(linkifyHTML("<abbr>x</abbr> https://b.com"), "<abbr>x</abbr> <a href=\"https://b.com\">https://b.com</a>")
+    }
+
     func testLinkifyAndInlineImages() {
         XCTAssertEqual(linkify("See https://x.com/a?b=1. Thanks"), "See <a href=\"https://x.com/a?b=1\">https://x.com/a?b=1</a>. Thanks")
         XCTAssertEqual(linkify("no links here"), "no links here")

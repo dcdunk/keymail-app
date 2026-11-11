@@ -400,6 +400,7 @@ struct MessageCard: View {
     private var inlinedParts: [Part: (images: Int, html: String)] = [:]
 
     private init(_ html: String) {
+        let html = linkifyHTML(html)   // bare web addresses in the text become clickable, like the plain-text path
         self.html = html
         links = suspiciousLinks(html)
         flagged = Dictionary(links.map { (normalizedLink($0.href), $0.reason) }, uniquingKeysWith: { a, _ in a })
