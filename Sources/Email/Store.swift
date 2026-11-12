@@ -491,6 +491,7 @@ final class AppStore: ObservableObject {
         threads.formUnion(state.snoozes.map { $0.account + "|" + $0.threadId })
         threads.formUnion(state.followUps.map { $0.account + "|" + $0.threadId })
         threads.formUnion(recentlyOpened) // never pull an email out from under you while you're reading it
+        threads.formUnion(searchResults ?? [])   // nor search results while they're on screen (they vanished ~15s after a search)
         if let s = selectedID { threads.insert(s) }
         let keep = cacheKeys(Array(messages.values), keepThreads: threads)
         if keep.count < messages.count {

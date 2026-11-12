@@ -131,7 +131,9 @@ extension AppStore {
         let keep = Set(ids)
         // Drop cached messages that left the inbox, unless they belong to a thread still in it.
         let inboxThreads = Set(messages.values.filter { $0.account == a && keep.contains($0.id) }.map(\.threadId) + fetched.map(\.threadId))
-        messages = messages.filter { $0.value.account != a || keep.contains($0.value.id) || inboxThreads.contains($0.value.threadId) }
+        let shown = searchResults ?? []   // a search or folder on screen keeps its emails
+        messages = messages.filter { $0.value.account != a || keep.contains($0.value.id) || inboxThreads.contains($0.value.threadId)
+            || shown.contains(a + "|" + $0.value.threadId) }
         for m in fetched { messages[m.key] = m }
         state.historyIds[a] = history
         log("\(a): full sync done, \(ids.count) in inbox, \(fetched.count) new, \(ids.count - have.intersection(keep).count - fetched.count) failed")

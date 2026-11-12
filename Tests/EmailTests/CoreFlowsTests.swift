@@ -153,6 +153,20 @@ final class CoreFlowsTests: XCTestCase {
         XCTAssertNotNil(conv(c.id), "still in Trash")
     }
 
+    func testSearchResultsStayWhileOnScreen() throws {
+        // An old archived email found by search used to be tidied out of the cache ~15s later and vanish from the results.
+        var old = try XCTUnwrap(store.messages.values.first)
+        old.id = "old-1"; old.threadId = "old-t"; old.labelIds = []; old.date = Date(timeIntervalSinceNow: -400 * 86400)
+        store.messages[old.key] = old
+        store.searchResults = [me + "|old-t"]
+        store.pruneCache()
+        XCTAssertNotNil(store.messages[old.key], "kept while the search is on screen")
+        XCTAssertTrue(store.visible.contains { $0.id == me + "|old-t" })
+        store.clearSearch()
+        store.pruneCache()
+        XCTAssertNil(store.messages[old.key], "tidied once the search is closed")
+    }
+
     func testJunkAndUndo() {
         let c = store.selected!
         press("!", code: 18, .shift)
