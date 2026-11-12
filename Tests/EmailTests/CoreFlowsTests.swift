@@ -94,6 +94,65 @@ final class CoreFlowsTests: XCTestCase {
         XCTAssertNotNil(store.allConversations.first { $0.id == c.id }, "⌘Z restores from trash")
     }
 
+    func conv(_ id: String) -> Conversation? { store.allConversations.first { $0.id == id } }
+
+    func testUndoingADeleteBringsItBackWhereItWas() {
+        let c = store.selected!
+        press("#", code: 20, .shift)
+        press("z", code: 6, .command)
+        XCTAssertEqual(conv(c.id)?.inInbox, true, "deleted from the inbox: ⌘Z puts it back in the inbox")
+        XCTAssertEqual(conv(c.id)?.labels.contains("TRASH"), false)
+        XCTAssertEqual(store.banner, "Restored from Trash.")
+        // Deleted from Done: ⌘Z puts it back in Done, not the inbox.
+        store.selectedID = c.id; press("e", code: 14)
+        store.selectedID = c.id; press("#", code: 20, .shift)
+        XCTAssertNil(conv(c.id))
+        press("z", code: 6, .command)
+        XCTAssertEqual(conv(c.id)?.inInbox, false, "back in Done")
+    }
+
+    func testGmailUndoPutsTheInboxLabelBack() {
+        // Gmail drops INBOX when it trashes a thread, and untrash alone doesn't add it back (the email vanished into All Mail).
+        let t = AppStore.gmailRestore(from: .trash, toInbox: true)
+        XCTAssertTrue(t.untrash); XCTAssertEqual(t.add, ["INBOX"])
+        XCTAssertEqual(AppStore.gmailRestore(from: .trash, toInbox: false).add, [], "deleted from Done: back to Done")
+        let j = AppStore.gmailRestore(from: .junk, toInbox: true)
+        XCTAssertFalse(j.untrash); XCTAssertEqual(j.add, ["INBOX"]); XCTAssertEqual(j.remove, ["SPAM"])
+        XCTAssertEqual(AppStore.gmailRestore(from: .done, toInbox: true).add, ["INBOX"])
+    }
+
+    func testServerCallsForOneEmailRunInOrder() async {
+        // ⌘Z right after # must reach the server after the delete, or the delete wins.
+        var order: [String] = []
+        store.serially("x") { try? await Task.sleep(nanoseconds: 50_000_000); order.append("trash") }
+        store.serially("x") { order.append("undo") }
+        await store.serverWork["x"]?.value
+        XCTAssertEqual(order, ["trash", "undo"])
+    }
+
+    func testMoveToInboxFromTrashAndDone() {
+        let c = store.selected!
+        for m in c.messages { store.messages[m.key]?.labelIds = m.labelIds.filter { $0 != "INBOX" } + ["TRASH"] }
+        let menu = store.conversationEntries(conv(c.id)!)
+        XCTAssertTrue(menu.first { $0.title == "Move to" }?.submenu?.contains { $0.title == "Inbox" } == true)
+        XCTAssertTrue(store.drop(c.id, on: "Inbox"))
+        XCTAssertEqual(conv(c.id)?.inInbox, true, "Move to Inbox from Trash")
+        XCTAssertEqual(conv(c.id)?.labels.contains("TRASH"), false, "and out of Trash, or Gmail keeps it there")
+        store.selectedID = c.id; press("e", code: 14)
+        XCTAssertTrue(store.drop(c.id, on: "Inbox"))
+        XCTAssertEqual(conv(c.id)?.inInbox, true, "Move to Inbox from Done")
+    }
+
+    func testDeletingWhatsAlreadyInTrashSaysSo() {
+        let c = store.selected!
+        for m in c.messages { store.messages[m.key]?.labelIds = m.labelIds.filter { $0 != "INBOX" } + ["TRASH"] }
+        store.undoStack.removeAll()
+        store.trash()
+        XCTAssertEqual(store.banner, "That email is already in Trash.")
+        XCTAssertTrue(store.undoStack.isEmpty, "nothing for ⌘Z to push into the inbox")
+        XCTAssertNotNil(conv(c.id), "still in Trash")
+    }
+
     func testJunkAndUndo() {
         let c = store.selected!
         press("!", code: 18, .shift)

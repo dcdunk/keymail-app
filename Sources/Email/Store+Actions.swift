@@ -12,7 +12,7 @@ extension AppStore {
             if m.id == c.latest.id || !add.contains("INBOX") { labels += add.filter { !labels.contains($0) } }
             messages[m.key]?.labelIds = labels
         }
-        Task {
+        serially(c.id) { [self] in
             do {
                 if isICloud(c.account) { try await icloudModify(c, add: add, remove: remove) }
                 else if isMicrosoft(c.account) { try await graphModify(c, add: add, remove: remove) }
@@ -61,6 +61,24 @@ extension AppStore {
     // MARK: Undo (⌘Z) for delete and Done
 
     enum UndoKind { case trash, done, junk }
+
+    /// Runs one conversation's server calls in the order they were made. ⌘Z right after # used to race the trash:
+    /// if the undo reached the server first, the trash landed last and the email was gone.
+    func serially(_ id: String, _ work: @escaping @MainActor () async -> Void) {
+        let before = serverWork[id]
+        serverWork[id] = Task { await before?.value; await work() }
+    }
+
+    /// Gmail's steps to take a conversation back out of Trash, Spam or Done. Gmail drops INBOX when it trashes a thread
+    /// and untrash doesn't add it back, so without the INBOX step an undone delete landed in All Mail.
+    static func gmailRestore(from kind: UndoKind, toInbox: Bool) -> (untrash: Bool, add: [String], remove: [String]) {
+        let inbox = toInbox ? ["INBOX"] : []
+        switch kind {
+        case .trash: return (true, inbox, [])
+        case .junk: return (false, inbox, ["SPAM"])
+        case .done: return (false, inbox, [])
+        }
+    }
 
     // MARK: Undo send
 
@@ -114,24 +132,24 @@ extension AppStore {
             return
         }
         guard let (c, kind) = undoStack.popLast() else { banner = "Nothing to undo."; return }
-        // Put it back on screen right away, then tell the server.
-        for var m in c.messages {
-            if !m.labelIds.contains("INBOX"), m.id == c.latest.id { m.labelIds.append("INBOX") }
-            messages[m.key] = m
-        }
+        // Put it back on screen right away, exactly as it was (an email deleted from Done goes back to Done), then tell the server.
+        for m in c.messages { messages[m.key] = m }
         selectedID = c.id
-        banner = kind == .trash ? "Restored from Trash." : kind == .junk ? "Not junk. Moved back to inbox." : "Moved back to inbox."
-        moveToInboxOnServer(c, from: kind)
+        let place = c.inInbox ? "inbox" : "Done"
+        banner = kind == .trash ? "Restored from Trash." : kind == .junk ? "Not junk. Moved back to \(place)." : "Moved back to inbox."
+        moveToInboxOnServer(c, from: kind, toInbox: c.inInbox)
     }
 
-    /// Tells the account's server to put these emails back in the inbox. `notMoved` runs if the server refused the move.
-    func moveToInboxOnServer(_ c: Conversation, from kind: UndoKind, notMoved: @escaping () -> Void = {}) {
-        Task {
+    /// Tells the account's server to put these emails back in the inbox (or Done, `toInbox: false`).
+    /// `notMoved` runs if the server refused the move.
+    func moveToInboxOnServer(_ c: Conversation, from kind: UndoKind, toInbox: Bool = true, notMoved: @escaping () -> Void = {}) {
+        serially(c.id) { [self] in
             var moved = false
             do {
                 if isICloud(c.account) {
                     try await icloud(c.account).restore(messageIds: c.messages.map(\.messageIdHeader),
-                                                             from: kind == .trash ? "trash" : kind == .junk ? "junk" : "archive")
+                                                             from: kind == .trash ? "trash" : kind == .junk ? "junk" : "archive",
+                                                             to: toInbox ? "inbox" : "archive")
                     moved = true
                     // UIDs change when iCloud moves mail, so drop the old copies and re-fetch.
                     for m in c.messages { messages[m.key] = nil }
@@ -140,14 +158,12 @@ extension AppStore {
                     // IDs are immutable (see GraphMail), so the same IDs work after the move.
                     // Only what was in the inbox: your sent replies stay in Sent Items (Done and Trash skip them too).
                     for m in c.messages where !m.labelIds.contains("SENT") && !m.labelIds.contains("DRAFT") {
-                        try await graph(c.account).move(m.id, to: "inbox")
+                        try await graph(c.account).move(m.id, to: toInbox ? "inbox" : "archive")
                     }
-                } else if kind == .trash {
-                    try await gmail(c.account).untrashThread(c.threadId)
-                } else if kind == .junk {
-                    try await gmail(c.account).modifyThread(c.threadId, add: ["INBOX"], remove: ["SPAM"])
                 } else {
-                    try await gmail(c.account).modifyThread(c.threadId, add: ["INBOX"], remove: [])
+                    let g = gmail(c.account), steps = Self.gmailRestore(from: kind, toInbox: toInbox)
+                    if steps.untrash { try await g.untrashThread(c.threadId) }
+                    if !steps.add.isEmpty || !steps.remove.isEmpty { try await g.modifyThread(c.threadId, add: steps.add, remove: steps.remove) }
                 }
             } catch {
                 if !moved { notMoved() }
@@ -170,15 +186,17 @@ extension AppStore {
     func trash() {
         guard let c = selected else { return }
         if c.messages.allSatisfy({ $0.labelIds.contains("DRAFT") }) { discardDrafts(c); return }
+        // Gmail ignores trashing what's already there, so it would come back, and ⌘Z would push it into the inbox.
+        guard !c.labels.contains("TRASH") else { banner = "That email is already in Trash."; return }
         advance(after: c)
         undoStack.append((c, .trash))
         banner = "Moved to Trash. ⌘Z to undo."
         for m in c.messages { messages[m.key] = nil }
         state.readyDrafts[c.id] = nil   // a reply Keymail wrote for it goes too
         if threadOpen, let s = selected { open(s) }   // like Done: the next email opens (read, fully loaded)
-        Task {
+        serially(c.id) { [self] in
             do {
-                if isICloud(c.account) { try await icloud(c.account).move(c.messages.map(\.id).filter { Int($0) != nil }, to: "trash") }
+                if isICloud(c.account) { try await icloud(c.account).move(icloudMovable(c), to: "trash") }
                 else if isMicrosoft(c.account) { for m in c.messages where !m.labelIds.contains("SENT") { try await graph(c.account).move(m.id, to: "deleteditems") } }
                 else { try await gmail(c.account).trashThread(c.threadId) }
             } catch { report(error) }
@@ -196,9 +214,9 @@ extension AppStore {
         for m in c.messages { messages[m.key] = nil }
         state.readyDrafts[c.id] = nil
         if threadOpen, let s = selected { open(s) }
-        Task {
+        serially(c.id) { [self] in
             do {
-                if isICloud(c.account) { try await icloud(c.account).move(c.messages.map(\.id).filter { Int($0) != nil }, to: "junk") }
+                if isICloud(c.account) { try await icloud(c.account).move(icloudMovable(c), to: "junk") }
                 else if isMicrosoft(c.account) { for m in c.messages where !m.labelIds.contains("SENT") { try await graph(c.account).move(m.id, to: "junkemail") } }
                 else { try await gmail(c.account).modifyThread(c.threadId, add: ["SPAM"], remove: ["INBOX"]) }
             } catch { report(error) }
@@ -228,6 +246,12 @@ extension AppStore {
             for m in spam { self.messages[m.key] = m }
             if inSpamList, self.folder == "Spam" { self.searchResults?.insert(c.id) }
         }
+    }
+
+    /// iCloud ids that can move: inbox UIDs ("12") and copies in Done or Junk ("archive:12"). Your Sent copies stay put,
+    /// like Outlook's. Trashing a Done email used to skip it on the server, so it came back.
+    func icloudMovable(_ c: Conversation) -> [String] {
+        c.messages.map(\.id).filter { Int($0) != nil || $0.hasPrefix("archive:") || $0.hasPrefix("junk:") }
     }
 
     /// The ! key and the junk button: junk, or take it back out if it's already in Spam.

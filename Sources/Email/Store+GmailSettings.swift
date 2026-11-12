@@ -100,7 +100,17 @@ extension AppStore {
         case "Inbox":
             if c.labels.contains("SPAM") { act(on: c) { markNotJunk() }; return true }
             guard !c.inInbox else { return false }
-            modify(c, add: ["INBOX"]); banner = "Moved to Inbox."
+            // From Trash or Done: the same server move ⌘Z uses. Adding the INBOX label alone left Gmail's TRASH on
+            // and did nothing on iCloud, so the email bounced back on the next sync.
+            let fromTrash = c.labels.contains("TRASH")
+            for m in c.messages {
+                var l = m.labelIds.filter { $0 != "TRASH" }
+                if m.id == c.latest.id, !l.contains("INBOX") { l.append("INBOX") }
+                messages[m.key]?.labelIds = l
+            }
+            if folder != nil { searchResults?.remove(c.id) }   // Trash and Done are saved lists of ids
+            moveToInboxOnServer(c, from: fromTrash ? .trash : .done)
+            banner = "Moved to Inbox."
         case "Starred": if !c.isStarred { modify(c, add: ["STARRED"]) }
         case "Done": act(on: c) { markDone() }
         case "Spam": act(on: c) { markJunk() }

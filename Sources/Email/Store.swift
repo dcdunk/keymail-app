@@ -585,6 +585,7 @@ final class AppStore: ObservableObject {
     var lastSynced: [String: Date] = [:]
     var quotaHits: [String: Int] = [:]
     var undoStack: [(c: Conversation, kind: UndoKind)] = []
+    var serverWork: [String: Task<Void, Never>] = [:]   // per conversation: the last server call, so the next waits for it
     var lastCalendarRefresh = Date()
     var stickyRow: (tab: String, id: String, index: Int)?   // the opened email keeps its row (see `visible`)
     @Published var pendingSends: [PendingSend] = []

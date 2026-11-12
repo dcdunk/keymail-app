@@ -282,37 +282,39 @@ struct ICloud {
             let (use, fallback) = Self.mailbox(which)
             let dest = try await folder(c, use, fallback: fallback)
             let caps = try await c.command("CAPABILITY").map(\.line).joined()
-            try await c.command("SELECT INBOX")
-            let set = uids.joined(separator: ",")
-            if caps.contains(" MOVE") {
-                try await c.command("UID MOVE \(set) \(imapQuote(dest))")
-            } else {
-                try await c.command("UID COPY \(set) \(imapQuote(dest))")
-                try await c.command("UID STORE \(set) +FLAGS (\\Deleted)")
-                try await c.command("EXPUNGE")
+            // UIDs are per folder: inbox ones are plain ("12"), the rest carry their folder ("archive:12").
+            for (box, group) in Dictionary(grouping: uids, by: { $0.split(separator: ":").count == 2 ? String($0.split(separator: ":")[0]) : "" }) {
+                let src = box.isEmpty ? "INBOX" : try await folder(c, Self.mailbox(box).use, fallback: Self.mailbox(box).fallback)
+                guard src != dest else { continue }
+                try await c.command("SELECT \(imapQuote(src))")
+                try await moveSelected(c, group.map { String($0.split(separator: ":").last ?? "") }.joined(separator: ","), to: dest, caps: caps)
             }
         }
     }
 
-    /// Undo: finds messages in Trash, Junk or Archive by Message-ID and moves them back to INBOX.
-    func restore(messageIds: [String], from which: String) async throws {
+    private func moveSelected(_ c: IMAPConnection, _ set: String, to dest: String, caps: String) async throws {
+        if caps.contains(" MOVE") { try await c.command("UID MOVE \(set) \(imapQuote(dest))") }
+        else {
+            try await c.command("UID COPY \(set) \(imapQuote(dest))")
+            try await c.command("UID STORE \(set) +FLAGS (\\Deleted)")
+            try await c.command("EXPUNGE")
+        }
+    }
+
+    /// Undo: finds messages in Trash, Junk or Archive by Message-ID and moves them back to INBOX (or Archive, `to: "archive"`).
+    func restore(messageIds: [String], from which: String, to place: String = "inbox") async throws {
         let ids = messageIds.filter { !$0.isEmpty }
         guard !ids.isEmpty else { throw AppError("Can't move these emails back: they have no Message-ID.") }
         try await session { c in
             let (use, fallback) = Self.mailbox(which)
             let src = try await folder(c, use, fallback: fallback)
+            let dest = place == "inbox" ? "INBOX" : try await folder(c, Self.mailbox(place).use, fallback: Self.mailbox(place).fallback)
             let caps = try await c.command("CAPABILITY").map(\.line).joined()
             try await c.command("SELECT \(imapQuote(src))")
             var uids: [Int] = []
             for id in ids { uids += imapSearchUIDs(try await c.command("UID SEARCH HEADER Message-ID \(imapQuote(id))").map(\.line)) }
             guard !uids.isEmpty else { throw AppError("Couldn't find those emails in \(src) to restore.") }
-            let set = uids.map(String.init).joined(separator: ",")
-            if caps.contains(" MOVE") { try await c.command("UID MOVE \(set) INBOX") }
-            else {
-                try await c.command("UID COPY \(set) INBOX")
-                try await c.command("UID STORE \(set) +FLAGS (\\Deleted)")
-                try await c.command("EXPUNGE")
-            }
+            try await moveSelected(c, uids.map(String.init).joined(separator: ","), to: dest, caps: caps)
         }
     }
 
