@@ -59,7 +59,7 @@ struct ThreadView: View {
             group([(Hotkeys.label("e"), "Done", "checkmark", { store.markDone() }),
                    (Hotkeys.label("h"), "Remind", "clock", { store.openPalette("remind") }),
                    (Hotkeys.label("b"), "Event", "calendar.badge.plus", { store.createEventFromEmail() }),
-                   conversation.labels.contains("SPAM")
+                   conversation.inSpam
                        ? (Hotkeys.label("!"), "Not junk", "tray.and.arrow.down", { store.markNotJunk() })
                        : (Hotkeys.label("!"), "Junk", "xmark.bin", { store.markJunk() }),
                    ("⌫", "Delete", "trash", { store.trash() })], names: names, keys: keys)

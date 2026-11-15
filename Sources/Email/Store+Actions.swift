@@ -187,7 +187,7 @@ extension AppStore {
         guard let c = selected else { return }
         if c.messages.allSatisfy({ $0.labelIds.contains("DRAFT") }) { discardDrafts(c); return }
         // Gmail ignores trashing what's already there, so it would come back, and ⌘Z would push it into the inbox.
-        guard !c.labels.contains("TRASH") else { banner = "That email is already in Trash."; return }
+        guard !c.inTrash else { banner = "That email is already in Trash."; return }
         advance(after: c)
         undoStack.append((c, .trash))
         banner = "Moved to Trash. ⌘Z to undo."
@@ -207,7 +207,7 @@ extension AppStore {
     /// (Gmail's Report spam, iCloud's and Outlook's Junk). ⌘Z puts it back.
     func markJunk() {
         guard let c = selected else { return }
-        guard !c.labels.contains("SPAM") else { banner = "That email is already in Spam."; return }
+        guard !c.inSpam else { banner = "That email is already in Spam."; return }
         advance(after: c)
         undoStack.append((c, .junk))
         banner = "Marked as junk. ⌘Z to undo."
@@ -225,7 +225,7 @@ extension AppStore {
 
     /// Not junk: the emails in the spam folder go back to the inbox. If the server refuses, they return to Spam on screen too.
     func markNotJunk() {
-        guard let c = selected, c.labels.contains("SPAM") else { return }
+        guard let c = selected, c.inSpam else { return }
         undoStack.removeAll()   // ! junks it again; ⌘Z must not undo some older action instead
         let inSpamList = folder == "Spam"
         if inSpamList {
@@ -256,6 +256,6 @@ extension AppStore {
 
     /// The ! key and the junk button: junk, or take it back out if it's already in Spam.
     func toggleJunk() {
-        selected?.labels.contains("SPAM") == true ? markNotJunk() : markJunk()
+        selected?.inSpam == true ? markNotJunk() : markJunk()
     }
 }

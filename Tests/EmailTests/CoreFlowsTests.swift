@@ -167,6 +167,20 @@ final class CoreFlowsTests: XCTestCase {
         XCTAssertNil(store.messages[old.key], "tidied once the search is closed")
     }
 
+    func testDeletingAnInboxEmailWhoseOlderReplyIsInTrash() throws {
+        // Apple's emails share one thread: an earlier one in Trash made # refuse the new inbox one ("already in Trash").
+        for bin in ["TRASH", "SPAM"] {
+            resetUI()
+            let c = try XCTUnwrap(store.selected)
+            var old = c.latest; old.id = "old-\(bin)"; old.labelIds = [bin]; old.date = c.latest.date.addingTimeInterval(-86400)
+            store.messages[old.key] = old
+            XCTAssertEqual(conv(c.id)?.inTrash, false); XCTAssertEqual(conv(c.id)?.inSpam, false)
+            if bin == "TRASH" { press("#", code: 20, .shift) } else { press("!", code: 18, .shift) }
+            XCTAssertNil(conv(c.id), "\(bin): the inbox email goes, not 'already there'")
+            press("z", code: 6, .command)
+        }
+    }
+
     func testJunkAndUndo() {
         let c = store.selected!
         press("!", code: 18, .shift)

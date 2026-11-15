@@ -162,6 +162,10 @@ public struct Conversation: Identifiable, Hashable {
     public var isUnread: Bool { hasLabel("UNREAD") }
     public var isStarred: Bool { hasLabel("STARRED") }
     public var inInbox: Bool { hasLabel("INBOX") }
+    /// In Trash or Spam as a whole: an older email of the thread being there doesn't count while the thread is in the inbox
+    /// (1.0.49 refused to delete an inbox email because an earlier one in its thread was in Trash).
+    public var inTrash: Bool { !inInbox && hasLabel("TRASH") }
+    public var inSpam: Bool { !inInbox && hasLabel("SPAM") }
     public var sortDate: Date { max(latest.date, bumped ?? .distantPast) }
 }
 

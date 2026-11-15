@@ -98,11 +98,11 @@ extension AppStore {
         guard let c = allConversations.first(where: { $0.id == id }) else { return false }
         switch target {
         case "Inbox":
-            if c.labels.contains("SPAM") { act(on: c) { markNotJunk() }; return true }
+            if c.inSpam { act(on: c) { markNotJunk() }; return true }
             guard !c.inInbox else { return false }
             // From Trash or Done: the same server move ⌘Z uses. Adding the INBOX label alone left Gmail's TRASH on
             // and did nothing on iCloud, so the email bounced back on the next sync.
-            let fromTrash = c.labels.contains("TRASH")
+            let fromTrash = c.inTrash
             for m in c.messages {
                 var l = m.labelIds.filter { $0 != "TRASH" }
                 if m.id == c.latest.id, !l.contains("INBOX") { l.append("INBOX") }
