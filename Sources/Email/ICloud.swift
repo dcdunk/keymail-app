@@ -318,6 +318,39 @@ struct ICloud {
         }
     }
 
+    /// Server search in Inbox, Archive and Sent (Gmail's search leaves out Trash and Spam too), newest `limit` per folder.
+    /// Returns every match's id and full messages for the ones not cached yet. `more`: a folder had more than `limit`.
+    func search(_ criteria: String, limit: Int, have: Set<String>) async throws -> (ids: [String], new: [Message], more: Bool) {
+        try await session { c in
+            var ids: [String] = [], new: [Message] = [], more = false
+            // ponytail: UTF-8 in a quoted string, which iCloud accepts; strict servers want a literal. Switch if one refuses.
+            let charset = criteria.unicodeScalars.contains { !$0.isASCII } ? "CHARSET UTF-8 " : ""
+            for box in ["inbox", "archive", "sent"] {
+                let name = box == "inbox" ? "INBOX" : try await folder(c, Self.mailbox(box).use, fallback: Self.mailbox(box).fallback)
+                guard (try? await c.command("EXAMINE \(imapQuote(name))")) != nil else { continue }   // no Archive yet: skip it
+                let all = imapSearchUIDs(try await c.command("UID SEARCH \(charset)\(criteria)").map(\.line)).sorted()
+                if all.count > limit { more = true }
+                let uids = all.suffix(limit)
+                // Same ids as sync and folders use: plain for the inbox, "archive:12" elsewhere.
+                func id(_ u: Int) -> String { box == "inbox" ? "\(u)" : "\(box):\(u)" }
+                ids += uids.map(id)
+                let missing = uids.filter { !have.contains(id($0)) }
+                for start in stride(from: 0, to: missing.count, by: 25) {
+                    let chunk = missing[missing.startIndex + start..<missing.startIndex + min(start + 25, missing.count)]
+                    for r in try await c.command("UID FETCH \(chunk.map(String.init).joined(separator: ",")) (UID FLAGS BODY.PEEK[])") {
+                        guard let i = imapFetchInfo(r.line), let raw = r.literals.first else { continue }
+                        var m = messageFromRaw(raw, uid: i.uid, flags: i.flags, account: account, inInbox: box == "inbox")
+                        m.id = id(i.uid)
+                        if box != "inbox" { m.labelIds.removeAll { $0 == "IMPORTANT" } }
+                        if box == "sent" { m.labelIds = m.labelIds.filter { $0 != "UNREAD" } + ["SENT"] }
+                        new.append(m)
+                    }
+                }
+            }
+            return (ids, new, more)
+        }
+    }
+
     func attachment(uid: String, id: String) async throws -> Data {
         try await session { c in
             // Sent, Drafts and Archive copies have ids like "sent:12": open that folder and fetch by the plain UID.

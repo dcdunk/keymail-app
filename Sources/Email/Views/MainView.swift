@@ -287,11 +287,27 @@ struct ListView: View {
                                 .coachAnchor(c.id == items.first?.id ? "row" : "")
                                 .onTapGesture { store.open(c) }   // one click opens, like Superhuman
                         }
+                        ShowMoreRow()
                     }
                     .padding(.horizontal, layout.compact ? 8 : 24).padding(.bottom, 48)
                 }
                 .onChange(of: store.selectedID) { _, id in if let id { proxy.scrollTo(id) } }
             }
+        }
+    }
+}
+
+/// Under search results when a server had more than it sent: asks every account for the next page.
+struct ShowMoreRow: View {
+    @EnvironmentObject var store: AppStore
+    var body: some View {
+        if store.searchResults != nil, store.searchMayHaveMore {
+            Button { store.showMoreResults() } label: {
+                Label("Show more results", systemImage: "arrow.down.circle").font(.scaled(.callout).weight(.medium))
+            }
+            .buttonStyle(.plain).foregroundStyle(Theme.accent)
+            .frame(maxWidth: .infinity).padding(.vertical, 16)
+            .help("Load older matches from the server")
         }
     }
 }

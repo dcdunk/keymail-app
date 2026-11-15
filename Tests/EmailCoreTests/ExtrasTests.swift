@@ -154,6 +154,21 @@ final class ExtrasTests: XCTestCase {
         XCTAssertTrue(matchesSearch(m, words, calendar: cal))
     }
 
+    func testServerSearchQueriesForICloudAndOutlook() {
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        var q = SearchQuery()
+        XCTAssertEqual(imapSearchCriteria(q, calendar: cal), "ALL")
+        XCTAssertEqual(graphSearchText(q), "")
+        q.from = "True Linkswear"; q.subject = "your \"order\""; q.words = "golf  shoes"; q.unreadOnly = true
+        q.after = cal.date(from: DateComponents(year: 2026, month: 10, day: 1))
+        q.before = cal.date(from: DateComponents(year: 2026, month: 10, day: 12))
+        // IMAP: quoted values, English month names, BEFORE the day after (it excludes that day), one TEXT per word.
+        XCTAssertEqual(imapSearchCriteria(q, calendar: cal),
+                       #"FROM "True Linkswear" SUBJECT "your \"order\"" SINCE 1-Oct-2026 BEFORE 13-Oct-2026 UNSEEN TEXT "golf" TEXT "shoes""#)
+        // Outlook: every word in one plain search, quotes dropped (Keymail filters sender, subject and dates itself).
+        XCTAssertEqual(graphSearchText(q), "golf shoes True Linkswear your order")
+    }
+
     func testSearchSuggestions() {
         var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "America/Los_Angeles")!
         let now = cal.date(from: DateComponents(year: 2026, month: 10, day: 14, hour: 10))! // Wednesday

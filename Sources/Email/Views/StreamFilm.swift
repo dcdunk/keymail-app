@@ -19,6 +19,7 @@ struct StreamInbox: View {
                                 .id(c.id)
                                 .onTapGesture { store.open(c) }
                         }
+                        ShowMoreRow()
                     }
                     .frame(maxWidth: 800).frame(maxWidth: .infinity)
                     .padding(.horizontal, 24).padding(.vertical, 20).padding(.bottom, 60)

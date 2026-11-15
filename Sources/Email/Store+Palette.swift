@@ -199,6 +199,7 @@ extension AppStore {
         list.append(Command(title: "Add Email Account") { self.openSettings(tab: "accounts") })
         list += state.accounts.map { a in Command(title: "Sign out \(a)") { self.removeAccount(a) } }
         if !undoStack.isEmpty { list.append(Command(title: "Undo", key: "⌘Z") { self.undo() }) }
+        if searchResults != nil, searchMayHaveMore { list.append(Command(title: "Show more results") { self.showMoreResults() }) }
         list.append(Command(title: "Fetch mail", key: "⌘R") { Task { await self.tick() } })
         list.append(Command(title: "Settings…", key: "⌘,") { self.openSettings() })
         list.append(Command(title: "Show freeze log") { self.showFreezeLog() })

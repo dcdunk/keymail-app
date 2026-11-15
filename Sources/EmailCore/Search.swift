@@ -46,6 +46,30 @@ public func gmailQuery(_ q: SearchQuery, calendar: Calendar = .current) -> Strin
     return parts.joined(separator: " ")
 }
 
+/// IMAP SEARCH criteria for iCloud and Yahoo (RFC 3501 §6.4.4). IMAP has no attachment criterion: the caller filters those.
+public func imapSearchCriteria(_ q: SearchQuery, calendar: Calendar = .current) -> String {
+    let f = DateFormatter(); f.calendar = calendar; f.timeZone = calendar.timeZone
+    f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "d-MMM-yyyy"
+    let t = { (s: String) in s.trimmingCharacters(in: .whitespaces) }
+    var parts: [String] = []
+    if !t(q.from).isEmpty { parts.append("FROM " + imapQuote(t(q.from))) }
+    if !t(q.to).isEmpty { parts.append("TO " + imapQuote(t(q.to))) }
+    if !t(q.subject).isEmpty { parts.append("SUBJECT " + imapQuote(t(q.subject))) }
+    if let a = q.after { parts.append("SINCE " + f.string(from: a)) }
+    // BEFORE excludes that day, so ask for the day after to include it (same as Gmail's before:).
+    if let b = q.before { parts.append("BEFORE " + f.string(from: calendar.date(byAdding: .day, value: 1, to: b)!)) }
+    if q.unreadOnly { parts.append("UNSEEN") }
+    parts += t(q.words).split(separator: " ").map { "TEXT " + imapQuote(String($0)) }
+    return parts.isEmpty ? "ALL" : parts.joined(separator: " ")
+}
+
+/// Outlook's server search text: every word the person typed, in any field. Microsoft's docs don't show multi-word
+/// sender values or date ranges, so Keymail checks sender, recipient, subject, dates, unread and attachments itself.
+public func graphSearchText(_ q: SearchQuery) -> String {
+    [q.words, q.from, q.to, q.subject].joined(separator: " ")
+        .replacingOccurrences(of: "\"", with: " ").split(separator: " ").joined(separator: " ")
+}
+
 /// Local search for providers without server search (iCloud's cached mail).
 /// `hay` is the message's lowercased subject + sender + text when the caller has it cached (see AppStore.searchHay);
 /// building it means converting HTML to text, which is the slow part when searching hundreds of emails per keystroke.

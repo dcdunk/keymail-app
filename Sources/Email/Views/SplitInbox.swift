@@ -44,6 +44,7 @@ struct SplitList: View {
                             SplitRow(c: c, selected: c.id == sel).id(c.id)
                                 .onTapGesture { store.open(c) }
                         }
+                        ShowMoreRow()
                     }
                     .padding(.horizontal, 10).padding(.vertical, 6).padding(.bottom, 48)
                 }

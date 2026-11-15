@@ -181,6 +181,23 @@ final class CoreFlowsTests: XCTestCase {
         }
     }
 
+    func testShowMoreResultsAsksForTheNextPage() throws {
+        store.search.words = "plan"; store.runSearch()
+        XCTAssertEqual(store.searchLimit, AppStore.searchPage)
+        let shown = try XCTUnwrap(store.searchResults)
+        XCTAssertFalse(store.commands.contains { $0.title == "Show more results" }, "no full page yet: nothing to show more of")
+        store.searchMayHaveMore = true   // a server answered with a full page
+        let first = try XCTUnwrap(store.visible.first); store.selectedID = first.id
+        let cmd = try XCTUnwrap(store.commands.first { $0.title == "Show more results" }, "in the ⌘K palette")
+        cmd.run()
+        XCTAssertEqual(store.searchLimit, AppStore.searchPage * 2, "asks for 50 more")
+        XCTAssertEqual(store.selectedID, first.id, "keeps your place")
+        XCTAssertTrue(shown.isSubset(of: store.searchResults ?? []), "what was shown stays while more load")
+        store.clearSearch()
+        XCTAssertFalse(store.searchMayHaveMore)
+        XCTAssertFalse(store.commands.contains { $0.title == "Show more results" })
+    }
+
     func testJunkAndUndo() {
         let c = store.selected!
         press("!", code: 18, .shift)

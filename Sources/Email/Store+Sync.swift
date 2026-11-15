@@ -157,7 +157,11 @@ extension AppStore {
         }
         for m in mine where !result.reset {
             guard let uid = Int(m.id) else { continue }   // a Sent/Archive copy ("sent:12"): not part of the inbox sync
-            guard let flags = result.flags[uid] else { messages[m.key] = nil; continue } // left the inbox
+            guard let flags = result.flags[uid] else {
+                // Left the inbox, or an older inbox email a search found (beyond the newest 300): keep it while it's shown.
+                if searchResults?.contains(a + "|" + m.threadId) != true { messages[m.key] = nil }
+                continue
+            }
             var labels = m.labelIds.filter { !["UNREAD", "STARRED"].contains($0) }
             if !flags.contains("\\Seen") { labels.append("UNREAD") }
             if flags.contains("\\Flagged") { labels.append("STARRED") }
@@ -174,7 +178,8 @@ extension AppStore {
         let byId = Dictionary(list.compactMap { j in (j["id"] as? String).map { ($0, j) } }, uniquingKeysWith: { x, _ in x })
         for m in messages.values where m.account == a && m.labelIds.contains("INBOX") {   // Sent/Archive copies stay
             guard let j = byId[m.id], let fresh = messageFromGraph(j, account: a, inInbox: true) else {
-                messages[m.key] = nil // left the inbox (archived, deleted or moved anywhere)
+                // left the inbox (archived, deleted or moved anywhere), unless a search on screen found it
+                if searchResults?.contains(a + "|" + m.threadId) != true { messages[m.key] = nil }
                 continue
             }
             if messages[m.key]?.labelIds != fresh.labelIds { messages[m.key]?.labelIds = fresh.labelIds }

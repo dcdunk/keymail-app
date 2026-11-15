@@ -83,6 +83,24 @@ struct GraphMail {
         return Array(out.prefix(limit))
     }
 
+    /// Server search across the mailbox, newest first (Microsoft sorts by date). Matches in Deleted Items, Junk and Drafts
+    /// are left out, like Gmail's search. Metadata only, with the folder each one is in ("inbox", "sent" or "archive").
+    func search(_ text: String, limit: Int) async throws -> [(json: [String: Any], folder: String)] {
+        var boxes: [String: String] = [:]   // folder id → its well-known name
+        for name in ["inbox", "sentitems", "deleteditems", "junkemail", "drafts"] {
+            if let id = (try? await call("/mailFolders/\(name)?$select=id"))?["id"] as? String { boxes[id] = name }
+        }
+        // The whole $search value in double quotes; inner quotes and backslashes escaped; the rest URL-encoded.
+        let quoted = "\"" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
+        let enc = quoted.addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~")) ?? ""
+        let j = try await call("/messages?$search=\(enc)&$top=\(limit)&$select=\(graphListFields),parentFolderId")
+        return ((j["value"] as? [[String: Any]]) ?? []).compactMap { m in
+            let box = boxes[m["parentFolderId"] as? String ?? ""]
+            if box == "deleteditems" || box == "junkemail" || box == "drafts" { return nil }
+            return (m, box == "inbox" ? "inbox" : box == "sentitems" ? "sent" : "archive")
+        }
+    }
+
     /// A full message: body, raw headers, and its attachments' metadata.
     func message(_ id: String, inInbox: Bool) async throws -> Message? {
         let j = try await call("/messages/\(id)?$select=\(graphListFields),\(graphBodyFields)")

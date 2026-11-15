@@ -58,11 +58,16 @@ extension AppStore {
         }
     }
 
-    func runQuery(_ q: String, title: String, local: SearchQuery? = nil) {
+    func runQuery(_ q: String, title: String, local: SearchQuery? = nil, limit: Int = AppStore.searchPage) {
+        let more = limit > AppStore.searchPage   // "Show more results": same search, bigger page; keep your place
+        let before = more ? (searchResults ?? []) : []
         folder = title
+        lastQuery = (q, title, local); searchLimit = limit; searchMayHaveMore = false
+        searchRun += 1
+        let run = searchRun
         // Issue #4: Done used to sit on the previous email for ~10s while Gmail searched, looking empty.
         // Leave the email now and show archived mail already on this Mac at once; Gmail's results add to it.
-        threadOpen = false; selectedID = nil
+        if !more { threadOpen = false; selectedID = nil }
         let isDone = q.hasPrefix("-in:inbox")
         let localDone = isDone ? doneHere() : []
         // Empty right away, not the previous list: E on what looked like Starred archived an inbox email you never saw.
@@ -73,23 +78,30 @@ extension AppStore {
         let label = ["in:sent": "SENT", "is:starred": "STARRED", "in:trash": "TRASH", "in:spam": "SPAM", "in:drafts": "DRAFT"][q]
         let accounts = state.accounts.filter { state.activeAccount == nil || state.activeAccount == $0 }
         var found: [String: Set<String>] = [:]
-        for a in accounts { found[a] = cachedHits(label, account: a) }
+        for a in accounts { found[a] = cachedHits(label, account: a).union(before.filter { $0.hasPrefix(a + "|") }) }
         func show() { searchResults = found.values.reduce(localHits) { $0.union($1) }.union(isDone ? doneHere() : localDone) }
         show()
         Task {
             busy = "Searching…"
             // Every account at once, each one's results shown as soon as it answers (one slow account used to hold up all).
-            await withTaskGroup(of: (String, Set<String>?).self) { g in
-                for a in accounts { g.addTask { await (a, self.serverHits(q, account: a, isDone: isDone, local: local)) } }
-                for await (a, ids) in g {
-                    guard let ids else { continue }
-                    // Sent and Starred keep older cached mail past the server's newest 50; Trash, Spam and Drafts follow the server.
-                    found[a] = label == "SENT" || label == "STARRED" ? ids.union(found[a] ?? []) : ids
-                    if folder == title { show() }   // the person may have moved on while this searched
+            await withTaskGroup(of: (String, (ids: Set<String>, more: Bool)?).self) { g in
+                for a in accounts { g.addTask { await (a, self.serverHits(q, account: a, isDone: isDone, local: local, limit: limit)) } }
+                for await (a, hits) in g {
+                    guard let hits, searchRun == run else { continue }   // a newer search started: drop this one's answers
+                    // Sent and Starred keep older cached mail past the server's page; Trash, Spam and Drafts follow the server.
+                    found[a] = label == "SENT" || label == "STARRED" || more ? hits.ids.union(found[a] ?? []) : hits.ids
+                    if hits.more { searchMayHaveMore = true }
+                    show()
                 }
             }
-            busy = nil
+            if searchRun == run { busy = nil }
         }
+    }
+
+    /// The same search again with another page of results from each account's server.
+    func showMoreResults() {
+        guard let l = lastQuery, searchResults != nil else { return }
+        runQuery(l.q, title: l.title, local: l.local, limit: searchLimit + AppStore.searchPage)
     }
 
     /// Conversations already on this Mac with `label` (SENT, TRASH…).
@@ -98,47 +110,88 @@ extension AppStore {
         return Set(messages.values.filter { $0.account == a && $0.labelIds.contains(label) }.map { a + "|" + $0.threadId })
     }
 
-    /// One account's results from its server. Nil when it couldn't be reached (what's cached stays on screen).
-    func serverHits(_ q: String, account a: String, isDone: Bool, local: SearchQuery?) async -> Set<String>? {
-        var ids: Set<String> = []
+    /// One account's results from its server, and whether it had more than `limit`. Nil when it couldn't be reached
+    /// (what's cached stays on screen).
+    func serverHits(_ q: String, account a: String, isDone: Bool, local: SearchQuery?, limit: Int) async -> (ids: Set<String>, more: Bool)? {
         if !isGmail(a), q == "in:sent" || q == "in:drafts" || q == "in:trash" || q == "in:spam" || isDone {
             // Sent, Drafts, Trash, Spam and Done read those folders on the server (iCloud, Yahoo, Outlook), then list
             // what's here. Drafts and Trash used to search the cache for the words "in:drafts"/"in:trash" and showed nothing.
             let box = isDone ? "archive" : ["in:drafts": "drafts", "in:trash": "trash", "in:spam": "junk"][q] ?? "sent"
-            await fetchFolder(box, account: a)
+            await fetchFolder(box, account: a, limit: limit)
             let label = ["drafts": "DRAFT", "trash": "TRASH", "junk": "SPAM"][box] ?? "SENT"
-            return isDone ? [] : cachedHits(label, account: a)
+            let ids = isDone ? [] : cachedHits(label, account: a)
+            // ponytail: a full page on this Mac means there may be more; an exact 50 shows one "Show more" that adds nothing.
+            return (ids, ids.count >= limit)
+        }
+        if !isGmail(a), let local {
+            // A search on iCloud, Yahoo or Outlook asks their server, so older mail that isn't on this Mac is found too.
+            // If the server can't be reached, the cached matches already on screen stay.
+            do { return isMicrosoft(a) ? try await graphSearch(local, account: a, limit: limit) : try await icloudSearch(local, account: a, limit: limit) }
+            catch { log("\(a): search: \(error.localizedDescription.prefix(200))"); return nil }
         }
         if !isGmail(a) {
-            // No Gmail search on iCloud or Microsoft (yet): search what's cached locally.
-            let words = q.lowercased().split(separator: " ").map(String.init)
-            for m in messages.values where m.account == a {
-                let hay = (m.from + " " + m.to + " " + m.subject + " " + m.plainText).lowercased()
-                let hit: Bool
-                if let local { hit = matchesSearch(m, local) }
-                else if q == "is:starred" { hit = m.labelIds.contains("STARRED") }
-                else if isDone { hit = false }        // doneHere() already covers it
-                else { hit = words.allSatisfy { hay.contains($0) } }
-                if hit { ids.insert(a + "|" + m.threadId) }
-            }
-            return ids
+            // Starred and labels on iCloud and Outlook: what's cached.
+            var ids: Set<String> = []
+            for m in messages.values where m.account == a && (q == "is:starred" ? m.labelIds.contains("STARRED") : false) { ids.insert(a + "|" + m.threadId) }
+            return (ids, false)
         }
         do {
             let g = gmail(a)
-            let found = try await g.listIds(q, max: 50)
+            let found = try await g.listIds(q, max: limit)
             let missing = found.filter { messages["\(a)|\($0)"] == nil }
             for m in await g.messages(missing) { messages[m.key] = m }
+            var ids: Set<String> = []
             for id in found { if let m = messages["\(a)|\(id)"] { ids.insert(a + "|" + m.threadId) } }
-            return ids
+            return (ids, found.count >= limit)
         } catch { report(error); return nil }
     }
 
+    /// iCloud and Yahoo: the IMAP server searches Inbox, Archive and Sent.
+    func icloudSearch(_ q: SearchQuery, account a: String, limit: Int) async throws -> (ids: Set<String>, more: Bool) {
+        let have = Set(messages.values.filter { $0.account == a }.map(\.id))
+        let r = try await icloud(a).search(imapSearchCriteria(q), limit: limit, have: have)
+        for m in r.new { messages[m.key] = m }
+        log("\(a): search matched \(r.ids.count) on the server, downloaded \(r.new.count)")
+        let hits = r.ids.compactMap { messages[a + "|" + $0] }
+            .filter { !q.hasAttachment || $0.attachments.contains { !$0.isInline } }   // IMAP can't search for attachments
+        return (Set(hits.map { a + "|" + $0.threadId }), r.more)
+    }
+
+    /// Outlook: Microsoft searches the words; Keymail checks sender, recipient, subject, dates, unread and attachments.
+    func graphSearch(_ q: SearchQuery, account a: String, limit: Int) async throws -> (ids: Set<String>, more: Bool) {
+        let text = graphSearchText(q)
+        guard !text.isEmpty else { return ([], false) }   // filters only (dates, unread): the cached matches are shown
+        let g = graph(a)
+        let found = try await g.search(text, limit: limit)
+        var check = q; check.words = ""; check.hasAttachment = false   // words were matched in the body too, by Microsoft
+        var hits: [(id: String, folder: String)] = []
+        for (j, box) in found {
+            guard let m = messageFromGraph(j, account: a, inInbox: box == "inbox"), matchesSearch(m, check),
+                  !q.hasAttachment || j["hasAttachments"] as? Bool == true else { continue }
+            hits.append((m.id, box))
+        }
+        let missing = hits.filter { messages[a + "|" + $0.id] == nil }
+        for chunk in stride(from: 0, to: missing.count, by: 8).map({ Array(missing[$0..<min($0 + 8, missing.count)]) }) {
+            let got = await withTaskGroup(of: Message?.self) { group in
+                for h in chunk { group.addTask { try? await g.message(h.id, inInbox: h.folder == "inbox") } }
+                var out: [Message] = []
+                for await m in group { if let m { out.append(m) } }
+                return out
+            }
+            for var m in got {
+                if hits.first(where: { $0.id == m.id })?.folder == "sent" { m.labelIds = m.labelIds.filter { $0 != "UNREAD" } + ["SENT"] }
+                messages[m.key] = m
+            }
+        }
+        return (Set(hits.compactMap { messages[a + "|" + $0.id].map { a + "|" + $0.threadId } }), found.count >= limit)
+    }
+
     /// Pulls the newest emails from Sent or Archive on the server into Keymail, skipping ones already here.
-    func fetchFolder(_ which: String, account a: String) async {
+    func fetchFolder(_ which: String, account a: String, limit: Int = AppStore.searchPage) async {
         // Drafts are re-read in full each time, so ones sent or deleted elsewhere drop out of the folder.
         let have = which == "drafts" ? [] : Set(messages.values.filter { $0.account == a }.map(\.id))
         do {
-            let found = isMicrosoft(a) ? try await graph(a).recent(which, skip: have) : try await icloud(a).recent(which, skip: have)
+            let found = isMicrosoft(a) ? try await graph(a).recent(which, limit: limit, skip: have) : try await icloud(a).recent(which, limit: limit, skip: have)
             if which == "drafts" {
                 log("\(a): drafts folder has \(found.count)")
                 let keep = Set(found.map(\.key))
@@ -160,6 +213,6 @@ extension AppStore {
 
     func clearSearch() {
         searchOpen = false; searchFiltersOpen = false; searchText = ""; search = SearchQuery()
-        searchResults = nil; folder = nil; selectedID = nil; threadOpen = false
+        searchResults = nil; folder = nil; selectedID = nil; threadOpen = false; searchMayHaveMore = false
     }
 }

@@ -370,6 +370,11 @@ final class AppStore: ObservableObject {
     @Published var searchOpen = false
     @Published var searchText = ""
     @Published var searchResults: Set<String>?   // conversation ids
+    @Published var searchMayHaveMore = false     // a server returned a full page: "Show more results" asks for the next
+    var searchLimit = AppStore.searchPage
+    var lastQuery: (q: String, title: String, local: SearchQuery?)?
+    var searchRun = 0                            // each search's number, so a slower earlier one can't overwrite it
+    static let searchPage = 50
     @Published var composing: ComposeModel? { didSet {
         if composing == nil && oldValue != nil { refreshHover(after: 0.25) }
         ComposeWindow.shared.update(self)
